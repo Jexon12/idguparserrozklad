@@ -66,7 +66,28 @@
                     </button>
                 </div>
 
-                <!-- Filters -->
+                <!-- Search Bar -->
+                <div class="mb-6 relative">
+                    <label class="block text-sm font-bold mb-1">🔍 Швидкий пошук групи</label>
+                    <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
+                        placeholder="Наприклад: КН-21..."
+                        class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+
+                    <!-- Dropdown Results -->
+                    <div v-if="searchResults.length > 0"
+                        class="absolute z-50 w-full bg-white border rounded-b shadow-lg max-h-60 overflow-y-auto">
+                        <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)"
+                            class="p-2 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 text-sm">
+                            <span class="font-bold text-blue-700">{{ res.group.Value }}</span>
+                            <span class="text-gray-500 text-xs ml-2">{{ res.facultyName }}</span>
+                        </div>
+                    </div>
+                    <div v-if="isSearching && !isCacheLoaded" class="absolute right-2 top-8">
+                        <div class="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent">
+                        </div>
+                    </div>
+                </div>
+
                 <div v-if="loadingFilters" class="text-center py-4">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 </div>
@@ -217,21 +238,32 @@
                             <div v-for="(timeSlot, time) in dayData.slots" :key="time"
                                 class="grid grid-cols-12 hover:bg-gray-50 transition p-4">
                                 <!-- Time Column -->
-                                <div class="col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0">
+                                <div
+                                    class="col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0 flex flex-row md:flex-col items-center md:items-start gap-2 md:gap-1">
                                     <span
-                                        class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded">
+                                        class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded whitespace-nowrap">
                                         {{ time }}
+                                    </span>
+                                    <span v-if="timeSlot.start" class="text-sm text-gray-500 font-medium">
+                                        {{ timeSlot.start }} - {{ timeSlot.end }}
                                     </span>
                                 </div>
 
                                 <!-- Classes Column -->
                                 <div class="col-span-12 md:col-span-10 grid gap-4">
                                     <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
-                                        class="bg-white border rounded-lg p-3 shadow-sm relative pl-4 border-l-4"
-                                        :class="getColorClass(lesson.entityId)">
+                                        class="bg-white border rounded-lg p-3 shadow-sm relative pl-4 border-l-4 transition-all duration-500"
+                                        :class="[
+                                            getColorClass(lesson.entityId),
+                                            isActiveLesson(date, timeSlot.start, timeSlot.end) ? 'ring-4 ring-green-400 scale-[1.02] z-10' : ''
+                                        ]">
 
                                         <div class="flex justify-between items-start">
                                             <div>
+                                                <div v-if="isActiveLesson(date, timeSlot.start, timeSlot.end)"
+                                                    class="inline-block bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 animate-pulse">
+                                                    ЗАРАЗ
+                                                </div>
                                                 <h4 class="font-bold text-gray-900">{{ lesson.discipline }}</h4>
                                                 <p class="text-sm text-gray-600 block md:hidden mt-1 font-semibold">{{
                                                     lesson.entityName }}</p>
@@ -407,6 +439,8 @@
                         if (!days[lesson.full_date].slots[timeKey]) {
                             days[lesson.full_date].slots[timeKey] = {
                                 time: timeKey,
+                                start: lesson.study_time_begin,
+                                end: lesson.study_time_end,
                                 lessons: []
                             };
                         }
@@ -439,6 +473,7 @@
                 // --- Methods ---
 
                 const init = async () => {
+                    loadState();
                     loadingFilters.value = true;
                     // Initial load -> Get Faculties
                     const data = await fetchApi('GetStudentScheduleFiltersData');
@@ -607,6 +642,41 @@
                     XLSX.writeFile(wb, "rozklad.xlsx");
                 };
 
+                // --- Persistence ---
+                const STORAGE_KEY = 'schedule_app_v1';
+
+                const saveState = () => {
+                    const state = {
+                        mode: mode.value,
+                        activeEntities: activeEntities.value,
+                        selectedDisciplines: selectedDisciplines.value
+                    };
+                    try {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                    } catch (e) {
+                        console.error('Save failed', e);
+                    }
+                };
+
+                const loadState = () => {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (parsed.mode) mode.value = parsed.mode;
+                            if (parsed.activeEntities) activeEntities.value = parsed.activeEntities;
+                            if (parsed.selectedDisciplines) selectedDisciplines.value = parsed.selectedDisciplines;
+                        } catch (e) {
+                            console.error('Load failed', e);
+                        }
+                    }
+                };
+
+                // Watch for changes to auto-save
+                watch([mode, activeEntities, selectedDisciplines], () => {
+                    saveState();
+                }, { deep: true });
+
                 const toggleDiscipline = (disc) => {
                     if (selectedDisciplines.value.includes(disc)) {
                         selectedDisciplines.value = selectedDisciplines.value.filter(d => d !== disc);
@@ -641,6 +711,109 @@
                     }
                 });
 
+                // --- Smart Search ---
+                const searchQuery = ref('');
+                const searchResults = ref([]);
+                const allGroupsCache = ref([]); // Flattened list of { group: obj, facultyId: str, facultyName: str }
+                const isCacheLoaded = ref(false);
+                const isSearching = ref(false);
+
+                const buildGroupCache = async () => {
+                    if (isCacheLoaded.value) return;
+                    isSearching.value = true;
+
+                    const temp = [];
+                    // We need faculties first
+                    if (faculties.value.length === 0) {
+                        await init();
+                    }
+
+                    // Parallel fetch for all faculties
+                    const promises = faculties.value.map(async (fac) => {
+                        const data = await fetchApi('GetStudyGroups', { aFacultyID: fac.Key });
+                        if (data && data.studyGroups) {
+                            data.studyGroups.forEach(g => {
+                                temp.push({
+                                    group: g,
+                                    facultyId: fac.Key,
+                                    facultyName: fac.Value,
+                                    label: `${g.Value} (${fac.Value})`
+                                });
+                            });
+                        }
+                    });
+
+                    await Promise.all(promises);
+                    allGroupsCache.value = temp;
+                    isCacheLoaded.value = true;
+                    isSearching.value = false;
+                };
+
+                const onSearchInput = async () => {
+                    if (!isCacheLoaded.value) {
+                        await buildGroupCache();
+                    }
+                    const q = searchQuery.value.toLowerCase().trim();
+                    if (!q) {
+                        searchResults.value = [];
+                        return;
+                    }
+                    // Simple limit to 10 results
+                    searchResults.value = allGroupsCache.value
+                        .filter(item => item.label.toLowerCase().includes(q))
+                        .slice(0, 10);
+                };
+
+                const selectSearchResult = async (item) => {
+                    // Reset search
+                    searchQuery.value = '';
+                    searchResults.value = [];
+
+                    // Set State
+                    mode.value = 'student';
+                    // We need to wait for Vue to update watchers? 
+                    // No, we can just set values directly, but we need to ensure faculties are loaded.
+
+                    selectedFaculty.value = item.facultyId;
+                    await loadGroups(); // Fetch groups for this faculty to populate the dropdown (optional but good for consistency)
+
+                    selectedGroup.value = item.group;
+
+                    // Trigger add
+                    await addEntity();
+                };
+
+                // --- Time Highlighting ---
+                const currentTime = ref(new Date());
+
+                setInterval(() => {
+                    currentTime.value = new Date();
+                }, 60000); // Every minute
+
+                const isActiveLesson = (dateStr, start, end) => {
+                    if (!start || !end) return false;
+
+                    const now = currentTime.value;
+
+                    // Check Date
+                    // dateStr is dd.mm.yyyy
+                    const [d, m, y] = dateStr.split('.').map(Number);
+                    if (now.getDate() !== d || (now.getMonth() + 1) !== m || now.getFullYear() !== y) {
+                        return false;
+                    }
+
+                    // Check Time
+                    // start/end is "HH:mm"
+                    const [h1, m1] = start.split(':').map(Number);
+                    const [h2, m2] = end.split(':').map(Number);
+
+                    const nowMin = now.getHours() * 60 + now.getMinutes();
+                    const startMin = h1 * 60 + m1;
+                    const endMin = h2 * 60 + m2;
+
+                    return nowMin >= startMin && nowMin < endMin;
+                };
+
                 onMounted(init);
 
                 return {
@@ -674,6 +847,12 @@
                     availableDisciplines,
                     selectedDisciplines,
                     toggleDiscipline,
+                    isActiveLesson,
+                    searchQuery,
+                    searchResults,
+                    isSearching,
+                    onSearchInput,
+                    selectSearchResult,
                     getColorClass
                 };
             }
