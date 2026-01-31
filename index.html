@@ -91,6 +91,10 @@
                         <div class="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent">
                         </div>
                     </div>
+                    <div v-if="searchQuery && searchResults.length === 0 && !isSearching && isCacheLoaded"
+                        class="absolute z-50 w-full bg-white border rounded-b shadow-lg p-3 text-sm text-gray-500 text-center">
+                        Нічого не знайдено 😞
+                    </div>
                 </div>
 
                 <div v-if="loadingFilters" class="text-center py-4">
@@ -222,7 +226,19 @@
 
                 <!-- Global Controls (Discipline Filter) -->
                 <div v-if="activeEntities.length > 0" class="bg-white p-4 rounded-xl shadow">
-                    <div class="mb-2 font-bold text-gray-700">Фільтр по предметах:</div>
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="font-bold text-gray-700">Фільтр (Предмети, Викладачі):</div>
+                        <div class="flex gap-2">
+                            <button @click="selectedDisciplines = []" :disabled="selectedDisciplines.length === 0"
+                                :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
+                                Скинути фільтр
+                            </button>
+                            <button @click="clearAll"
+                                class="text-xs text-gray-400 hover:text-red-600 font-medium underline">
+                                Очистити все
+                            </button>
+                        </div>
+                    </div>
                     <div class="flex flex-wrap gap-2">
                         <!-- "All" Chip -->
                         <button @click="selectedDisciplines = []" :class="['px-3 py-1 rounded-full text-sm border transition', 
@@ -256,20 +272,20 @@
                 <!-- Schedule Grid -->
                 <!-- We group by DATE, then by TIME slot -->
                 <div v-if="Object.keys(groupedSchedule).length > 0" class="bg-white rounded-xl shadow overflow-hidden">
-                    <div v-for="(dayData, date) in groupedSchedule" :key="date" class="border-b last:border-b-0">
+                    <div v-for="dayData in groupedSchedule" :key="dayData.date" class="border-b last:border-b-0">
                         <div class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
-                            <h3 class="font-bold text-lg text-gray-800">{{ dayData.dayName }}, {{ date }}</h3>
+                            <h3 class="font-bold text-lg text-gray-800">{{ dayData.dayName }}, {{ dayData.date }}</h3>
                         </div>
 
                         <div class="divide-y divide-gray-100">
-                            <div v-for="(timeSlot, time) in dayData.slots" :key="time"
+                            <div v-for="timeSlot in dayData.slots" :key="timeSlot.time"
                                 class="grid grid-cols-12 hover:bg-gray-50 transition p-4">
                                 <!-- Time Column -->
                                 <div
                                     class="col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0 flex flex-row md:flex-col items-center md:items-start gap-2 md:gap-1">
                                     <span
                                         class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded whitespace-nowrap">
-                                        {{ time }}
+                                        {{ timeSlot.time }}
                                     </span>
                                     <span v-if="timeSlot.start" class="text-sm text-gray-500 font-medium">
                                         {{ timeSlot.start }} - {{ timeSlot.end }}
@@ -282,24 +298,38 @@
                                         class="bg-white border rounded-lg p-3 shadow-sm relative pl-4 border-l-4 transition-all duration-500"
                                         :class="[
                                             getColorClass(lesson.entityId),
-                                            isActiveLesson(date, timeSlot.start, timeSlot.end) ? 'ring-4 ring-green-400 scale-[1.02] z-10' : ''
+                                            isActiveLesson(dayData.date, timeSlot.start, timeSlot.end) ? 'ring-4 ring-green-400 scale-[1.02] z-10' : ''
                                         ]">
 
                                         <div class="flex justify-between items-start">
                                             <div>
-                                                <div v-if="isActiveLesson(date, timeSlot.start, timeSlot.end)"
+                                                <div v-if="isActiveLesson(dayData.date, timeSlot.start, timeSlot.end)"
                                                     class="inline-block bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 animate-pulse">
                                                     ЗАРАЗ
                                                 </div>
-                                                <h4 class="font-bold text-gray-900">{{ lesson.discipline }}</h4>
-                                                <p class="text-sm text-gray-600 block md:hidden mt-1 font-semibold">{{
-                                                    lesson.entityName }}</p>
-                                                <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-4">
-                                                    <span v-if="lesson.type">🏷️ {{ lesson.type }}</span>
-                                                    <span v-if="lesson.cabinet">📍 {{ lesson.cabinet }}</span>
-                                                    <span v-if="lesson.teacher">👨‍🏫 <span
-                                                            v-html="lesson.teacher"></span></span>
-                                                    <span v-if="lesson.group">🎓 {{ lesson.group }}</span>
+
+                                                <!-- 1. Discipline + Group -->
+                                                <h4 class="font-bold text-gray-900 text-base mb-1">
+                                                    {{ lesson.discipline }}
+                                                    <span v-if="lesson.group" class="text-blue-600 font-normal">
+                                                        ({{ lesson.group }})
+                                                    </span>
+                                                </h4>
+
+                                                <!-- 2. Type -->
+                                                <div class="text-sm text-gray-500 mb-1" v-if="lesson.type">
+                                                    🏷️ {{ lesson.type }}
+                                                </div>
+
+                                                <!-- 3. Teacher -->
+                                                <div
+                                                    class="text-sm text-gray-700 font-medium flex flex-wrap items-center gap-2">
+                                                    <span v-if="lesson.teacher" class="flex items-center">
+                                                        👨‍� <span v-html="lesson.teacher" class="ml-1"></span>
+                                                    </span>
+                                                    <span v-if="lesson.cabinet" class="text-gray-400 text-xs ml-2">
+                                                        📍 {{ lesson.cabinet }}
+                                                    </span>
                                                 </div>
                                             </div>
                                             <div class="hidden md:block text-right">
@@ -331,7 +361,7 @@
 
         <!-- Footer -->
         <footer class="mt-12 text-center pb-8">
-            <a href="http://wp-fuaid.zzz.com.ua/"
+            <a href="http://wp-fuaid.zzz.com.ua/r"
                 class="inline-block text-blue-600 hover:text-blue-800 font-semibold border-b-2 border-transparent hover:border-blue-600 transition">
                 ⬅ На головну
             </a>
@@ -339,7 +369,12 @@
     </div>
 
     <script>
-        const API_PROXY = '/api/';
+        // Auto-detect environment:
+        // - Port 3000 or Vercel -> Use Node Proxy (/api/)
+        // - Otherwise (PHP Hosting) -> Use PHP Proxy (proxy.php)
+        const isNode = window.location.port === '3000' || window.location.hostname.includes('vercel.app');
+        const API_PROXY = isNode ? '/api/' : 'proxy.php?action=';
+
         const VUZ_ID = 11927; // Hardcoded ID from analysis
 
         const { createApp, ref, computed, onMounted, watch } = Vue;
@@ -417,12 +452,27 @@
                 };
 
                 // --- Computed ---
+                // --- Computed ---
                 const availableDisciplines = computed(() => {
                     const set = new Set();
                     activeEntities.value.forEach(entity => {
                         if (!entity.scheduleData) return;
                         entity.scheduleData.forEach(item => {
                             if (item.discipline) set.add(item.discipline);
+
+                            // User requested NO groups in filter ("мне не нужен поиск по группам")
+                            // const g = item.group || item.groupName || item.study_group;
+                            // if (g) set.add(g);
+
+                            if (item.teacher) {
+                                let t = item.teacher;
+                                if (t.includes('<')) {
+                                    const temp = document.createElement("div");
+                                    temp.innerHTML = t;
+                                    t = temp.textContent || "";
+                                }
+                                if (t) set.add(t);
+                            }
                         });
                     });
                     return Array.from(set).sort();
@@ -461,7 +511,32 @@
 
                     merged.sort((a, b) => parseDate(a.full_date) - parseDate(b.full_date));
 
+                    // Helper to find group name dynamically
+                    const getGroupName = (obj) => {
+                        // 1. Try known keys
+                        if (obj.group) return obj.group;
+                        if (obj.groupName) return obj.groupName;
+                        if (obj.study_group) return obj.study_group;
+                        if (obj.stream) return obj.stream;
+
+                        // 2. Check 'contingent' field (Found via Debug: "Група: 121УЗ")
+                        if (obj.contingent) {
+                            // Try to clean it "Група: 121УЗ" -> "121УЗ"
+                            return obj.contingent.replace(/Група:\s*/i, '').trim();
+                        }
+
+                        // 3. Search for any key containing 'group' or 'stream'
+                        for (const key in obj) {
+                            const lower = key.toLowerCase();
+                            if ((lower.includes('group') || lower.includes('stream')) && obj[key]) {
+                                return obj[key];
+                            }
+                        }
+                        return "";
+                    };
+
                     merged.forEach(lesson => {
+                        // Create Day if not exists
                         if (!days[lesson.full_date]) {
                             days[lesson.full_date] = {
                                 date: lesson.full_date,
@@ -470,39 +545,68 @@
                             };
                         }
 
-                        const timeKey = lesson.study_time; // e.g. "1 парі (08:30-09:50)"
-                        if (!days[lesson.full_date].slots[timeKey]) {
-                            days[lesson.full_date].slots[timeKey] = {
-                                time: timeKey,
-                                start: lesson.study_time_begin,
-                                end: lesson.study_time_end,
-                                lessons: []
-                            };
-                        }
-
                         // normalize data for display
+                        const groupName = getGroupName(lesson);
+
                         const lessonData = {
                             discipline: lesson.discipline,
                             type: lesson.study_type,
                             cabinet: lesson.cabinet,
                             teacher: lesson.employee_short || lesson.employee, // For students seeing teacher
-                            group: lesson.group, // For teachers seeing group
+                            group: groupName,
                             entityName: lesson.entityName,
                             entityId: lesson.entityId,
                             timeStart: lesson.study_time_begin,
                             timeEnd: lesson.study_time_end
                         };
 
-                        if (selectedDisciplines.value.length > 0 && !selectedDisciplines.value.includes(lesson.discipline)) {
-                            return;
+                        // Filtering logic
+                        if (selectedDisciplines.value.length > 0) {
+                            const matchDiscipline = selectedDisciplines.value.includes(lesson.discipline);
+
+                            // Handle Teacher match
+                            let matchTeacher = false;
+                            if (lesson.teacher || lesson.employee) {
+                                if (selectedDisciplines.value.includes(lesson.teacher) || selectedDisciplines.value.includes(lesson.employee)) {
+                                    matchTeacher = true; // Direct match
+                                } else {
+                                    // Clean match
+                                    const raw = lesson.teacher || lesson.employee || "";
+                                    if (raw.includes('<')) {
+                                        const temp = document.createElement("div");
+                                        temp.innerHTML = raw;
+                                        if (selectedDisciplines.value.includes(temp.textContent)) matchTeacher = true;
+                                    }
+                                }
+                            }
+
+                            if (!matchDiscipline && !matchTeacher) {
+                                return;
+                            }
                         }
 
+                        const timeKey = lesson.study_time;
+                        if (!days[lesson.full_date].slots[timeKey]) {
+                            days[lesson.full_date].slots[timeKey] = {
+                                time: timeKey, // "1 пара (08:30-09:50)"
+                                start: lesson.study_time_begin,
+                                end: lesson.study_time_end,
+                                lessons: []
+                            };
+                        }
                         days[lesson.full_date].slots[timeKey].lessons.push(lessonData);
                     });
 
-                    // Sort times within days (simple string sort usually works if format is consistent "1 pair...")
-                    // But better to rely on structure. Let's return object.
-                    return days;
+                    // Convert days object to array and SORT by Date
+                    return Object.values(days).sort((a, b) => parseDate(a.date) - parseDate(b.date)).map(day => {
+                        // Convert slots object to array and SORT by Start Time
+                        const sortedSlots = Object.values(day.slots).sort((a, b) => {
+                            const [h1, m1] = a.start ? a.start.split(':') : [0, 0];
+                            const [h2, m2] = b.start ? b.start.split(':') : [0, 0];
+                            return (h1 * 60 + +m1) - (h2 * 60 + +m2);
+                        });
+                        return { ...day, slots: sortedSlots };
+                    });
                 });
 
                 // --- Methods ---
@@ -518,6 +622,11 @@
                         courses.value = data.courses || [];
                     }
                     loadingFilters.value = false;
+                };
+
+                const clearAll = () => {
+                    activeEntities.value = [];
+                    selectedDisciplines.value = [];
                 };
 
                 const onFacultyChange = () => {
@@ -937,7 +1046,13 @@
                     return nowMin >= startMin && nowMin < endMin;
                 };
 
-                onMounted(init);
+                onMounted(async () => {
+                    await init();
+                    // Start building search index in background immediately
+                    setTimeout(() => {
+                        buildUniversalCache();
+                    }, 500);
+                });
 
                 return {
                     mode,
@@ -978,7 +1093,8 @@
                     scheduleStats,
                     onSearchInput,
                     selectSearchResult,
-                    getColorClass
+                    getColorClass,
+                    clearAll
                 };
             }
         }).mount('#app');
