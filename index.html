@@ -77,12 +77,17 @@
                     <div v-if="searchResults.length > 0"
                         class="absolute z-50 w-full bg-white border rounded-b shadow-lg max-h-60 overflow-y-auto">
                         <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)"
-                            class="p-2 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 text-sm">
-                            <span class="font-bold text-blue-700">{{ res.group.Value }}</span>
-                            <span class="text-gray-500 text-xs ml-2">{{ res.facultyName }}</span>
+                            class="p-2 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 text-sm flex items-center">
+                            <span class="mr-2 text-lg">{{ res.type === 'group' ? '🎓' : '👨‍🏫' }}</span>
+                            <div>
+                                <div class="font-bold text-blue-700">{{ res.label ? res.label.split('(')[0] :
+                                    res.value.Value }}</div>
+                                <div class="text-gray-500 text-xs">{{ res.label }}</div>
+                            </div>
                         </div>
                     </div>
-                    <div v-if="isSearching && !isCacheLoaded" class="absolute right-2 top-8">
+                    <div v-if="isSearching" class="absolute right-2 top-8 flex items-center gap-2">
+                        <span class="text-xs text-gray-400 animate-pulse whitespace-nowrap">{{ cacheStatus }}</span>
                         <div class="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent">
                         </div>
                     </div>
@@ -185,6 +190,28 @@
 
             <!-- Main Panel: Results -->
             <div class="lg:col-span-3 space-y-6">
+
+                <!-- Statistics Block -->
+                <div v-if="activeEntities.length > 0" class="bg-white p-4 rounded-xl shadow mb-6">
+                    <h3 class="font-bold text-gray-700 mb-3 flex items-center">
+                        📊 Статистика розкладу
+                        <span class="ml-auto text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                            Всього пар: {{ scheduleStats.totalPairs }}
+                        </span>
+                    </h3>
+                    <div class="space-y-3">
+                        <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="truncate pr-2 font-medium text-gray-700">{{ subj.name }}</span>
+                                <span class="text-gray-500">{{ subj.count }} ({{ subj.percent }}%)</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full transition-all duration-1000"
+                                    :style="{ width: subj.percent + '%' }"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Helper message if empty -->
                 <div v-if="activeEntities.length === 0"
@@ -650,6 +677,45 @@
                     XLSX.writeFile(wb, "rozklad.xlsx");
                 };
 
+                // --- Statistics ---
+                const scheduleStats = computed(() => {
+                    const stats = {
+                        totalPairs: 0,
+                        bySubject: {},
+                        byType: {}
+                    };
+
+                    activeEntities.value.forEach(entity => {
+                        if (!entity.scheduleData) return;
+                        entity.scheduleData.forEach(item => {
+                            stats.totalPairs++;
+
+                            // By Subject
+                            const subj = item.discipline;
+                            stats.bySubject[subj] = (stats.bySubject[subj] || 0) + 1;
+
+                            // By Type
+                            const type = item.study_type || 'Інше';
+                            stats.byType[type] = (stats.byType[type] || 0) + 1;
+                        });
+                    });
+
+                    // Sort Subject by count
+                    const sortedSubjects = Object.entries(stats.bySubject)
+                        .map(([name, count]) => ({ name, count, percent: 0 }))
+                        .sort((a, b) => b.count - a.count)
+                        .slice(0, 5);
+
+                    if (stats.totalPairs > 0) {
+                        sortedSubjects.forEach(s => s.percent = Math.round((s.count / stats.totalPairs) * 100));
+                    }
+
+                    return {
+                        totalPairs: stats.totalPairs,
+                        topSubjects: sortedSubjects
+                    };
+                });
+
                 // --- Persistence ---
                 const STORAGE_KEY = 'schedule_app_v1';
 
@@ -722,72 +788,121 @@
                 // --- Smart Search ---
                 const searchQuery = ref('');
                 const searchResults = ref([]);
-                const allGroupsCache = ref([]); // Flattened list of { group: obj, facultyId: str, facultyName: str }
+                const allItemsCache = ref([]); // { type, value, id, facultyId, label, ... }
                 const isCacheLoaded = ref(false);
                 const isSearching = ref(false);
+                const cacheStatus = ref('');
 
-                const buildGroupCache = async () => {
+                const buildUniversalCache = async () => {
                     if (isCacheLoaded.value) return;
                     isSearching.value = true;
 
-                    const temp = [];
-                    // We need faculties first
-                    if (faculties.value.length === 0) {
-                        await init();
-                    }
+                    if (faculties.value.length === 0) await init();
 
-                    // Parallel fetch for all faculties
-                    const promises = faculties.value.map(async (fac) => {
-                        const data = await fetchApi('GetStudyGroups', { aFacultyID: fac.Key });
-                        if (data && data.studyGroups) {
-                            data.studyGroups.forEach(g => {
-                                temp.push({
-                                    group: g,
+                    // 1. Fetch Groups (Fast)
+                    cacheStatus.value = "Індексація груп...";
+                    const groupPromises = faculties.value.map(async (fac) => {
+                        try {
+                            const data = await fetchApi('GetStudyGroups', { aFacultyID: fac.Key });
+                            if (data && data.studyGroups) {
+                                return data.studyGroups.map(g => ({
+                                    type: 'group',
+                                    value: g,
                                     facultyId: fac.Key,
                                     facultyName: fac.Value,
                                     label: `${g.Value} (${fac.Value})`
-                                });
-                            });
-                        }
+                                }));
+                            }
+                        } catch (e) { return []; }
+                        return [];
                     });
 
-                    await Promise.all(promises);
-                    allGroupsCache.value = temp;
+                    const groupsArrays = await Promise.all(groupPromises);
+                    const groups = groupsArrays.flat();
+                    allItemsCache.value = [...allItemsCache.value, ...groups];
+
+                    // 2. Fetch Teachers (Slower)
+                    cacheStatus.value = "Індексація викладачів...";
+
+                    for (const fac of faculties.value) {
+                        try {
+                            const chairData = await fetchApi('GetEmployeeChairs', { aFacultyID: fac.Key });
+                            if (chairData && chairData.chairs) {
+                                const empPromises = chairData.chairs.map(async (chair) => {
+                                    try {
+                                        const empData = await fetchApi('GetEmployees', {
+                                            aFacultyID: fac.Key,
+                                            aChairID: chair.Key
+                                        });
+                                        if (empData) {
+                                            const list = Array.isArray(empData) ? empData : [];
+                                            return list.map(e => ({
+                                                type: 'teacher',
+                                                value: e,
+                                                facultyId: fac.Key,
+                                                chairId: chair.Key,
+                                                label: `${e.Value} (${chair.Value})`
+                                            }));
+                                        }
+                                    } catch (e) { return []; }
+                                    return [];
+                                });
+
+                                const empArrays = await Promise.all(empPromises);
+                                const emps = empArrays.flat();
+                                allItemsCache.value = [...allItemsCache.value, ...emps];
+                            }
+                        } catch (e) { console.error(e); }
+                        await new Promise(r => setTimeout(r, 100)); // Rate limit
+                    }
+
                     isCacheLoaded.value = true;
                     isSearching.value = false;
+                    cacheStatus.value = "";
                 };
 
                 const onSearchInput = async () => {
-                    if (!isCacheLoaded.value) {
-                        await buildGroupCache();
+                    if (!isCacheLoaded.value && !isSearching.value && searchQuery.value.length > 0) {
+                        buildUniversalCache();
                     }
+
                     const q = searchQuery.value.toLowerCase().trim();
                     if (!q) {
                         searchResults.value = [];
                         return;
                     }
-                    // Simple limit to 10 results
-                    searchResults.value = allGroupsCache.value
+
+                    searchResults.value = allItemsCache.value
                         .filter(item => item.label.toLowerCase().includes(q))
+                        .sort((a, b) => {
+                            // Prioritize startsWith
+                            const aStarts = a.label.toLowerCase().startsWith(q);
+                            const bStarts = b.label.toLowerCase().startsWith(q);
+                            if (aStarts && !bStarts) return -1;
+                            if (!aStarts && bStarts) return 1;
+                            return 0;
+                        })
                         .slice(0, 10);
                 };
 
                 const selectSearchResult = async (item) => {
-                    // Reset search
                     searchQuery.value = '';
                     searchResults.value = [];
 
-                    // Set State
-                    mode.value = 'student';
-                    // We need to wait for Vue to update watchers? 
-                    // No, we can just set values directly, but we need to ensure faculties are loaded.
+                    if (item.type === 'group') {
+                        mode.value = 'student';
+                        selectedFaculty.value = item.facultyId;
+                        await loadGroups();
+                        selectedGroup.value = item.value;
+                    } else {
+                        mode.value = 'teacher';
+                        selectedFaculty.value = item.facultyId;
+                        await loadChairs();
+                        selectedChair.value = item.chairId;
+                        await loadEmployees();
+                        selectedEmployee.value = item.value;
+                    }
 
-                    selectedFaculty.value = item.facultyId;
-                    await loadGroups(); // Fetch groups for this faculty to populate the dropdown (optional but good for consistency)
-
-                    selectedGroup.value = item.group;
-
-                    // Trigger add
                     await addEntity();
                 };
 
@@ -859,6 +974,8 @@
                     searchQuery,
                     searchResults,
                     isSearching,
+                    cacheStatus,
+                    scheduleStats,
                     onSearchInput,
                     selectSearchResult,
                     getColorClass
