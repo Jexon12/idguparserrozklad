@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Універсальний Розклад</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .fade-enter-active,
+        .fade-leave-active {
+            transition: opacity 0.5s ease;
+        }
+
+        .fade-enter-from,
+        .fade-leave-to {
+            opacity: 0;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen font-sans text-gray-800">
+    <div id="app" class="p-4 md:p-8">
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-700 mb-2">📅 Гнучкий Розклад</h1>
+            <p class="text-gray-600">Оберіть декілька груп або викладачів для порівняння</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+            <!-- Sidebar: Controls -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-fit">
+
+                <!-- Tabs: Student vs Teacher -->
+                <div class="flex mb-6 border-b">
+                    <button @click="mode = 'student'"
+                        :class="['flex-1 py-2 font-semibold transition', mode === 'student' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600']">
+                        Студент
+                    </button>
+                    <button @click="mode = 'teacher'"
+                        :class="['flex-1 py-2 font-semibold transition', mode === 'teacher' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600']">
+                        Викладач
+                    </button>
+                </div>
+
+                <!-- Filters -->
+                <div v-if="loadingFilters" class="text-center py-4">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                </div>
+
+                <div v-else class="space-y-4">
+                    <!-- Faculty Filter (Common) -->
+                    <div>
+                        <label class="block text-sm font-bold mb-1">Факультет</label>
+                        <select v-model="selectedFaculty" @change="onFacultyChange"
+                            class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                            <option value="">-- Оберіть факультет --</option>
+                            <option v-for="fac in faculties" :key="fac.Key" :value="fac.Key">{{ fac.Value }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Student Filters -->
+                    <div v-if="mode === 'student'">
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Форма навчання</label>
+                            <select v-model="selectedEduForm" @change="loadGroups"
+                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                                <option value="">-- Всі --</option>
+                                <option v-for="item in eduForms" :key="item.Key" :value="item.Key">{{ item.Value }}
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Курс</label>
+                            <select v-model="selectedCourse" @change="loadGroups"
+                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                                <option value="">-- Всі --</option>
+                                <option v-for="item in courses" :key="item.Key" :value="item.Key">{{ item.Value }}
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Група</label>
+                            <select v-model="selectedGroup"
+                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                                <option value="">-- Оберіть групу --</option>
+                                <option v-for="grp in groups" :key="grp.Key" :value="grp">{{ grp.Value }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Teacher Filters -->
+                    <div v-else>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Кафедра</label>
+                            <select v-model="selectedChair" @change="loadEmployees"
+                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                                <option value="">-- Оберіть кафедру --</option>
+                                <option v-for="chair in chairs" :key="chair.Key" :value="chair.Key">{{ chair.Value }}
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Викладач</label>
+                            <select v-model="selectedEmployee"
+                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                                <option value="">-- Оберіть викладача --</option>
+                                <option v-for="emp in employees" :key="emp.Key" :value="emp">{{ emp.Value }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Date Range -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-sm font-bold mb-1">З</label>
+                            <input type="date" v-model="dateStart" class="w-full border rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">По</label>
+                            <input type="date" v-model="dateEnd" class="w-full border rounded p-2 text-sm">
+                        </div>
+                    </div>
+
+                    <!-- Add Button -->
+                    <button @click="addEntity" :disabled="!canAdd"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        + Додати до порівняння
+                    </button>
+                    <p v-if="errorMessage" class="text-red-500 text-sm mt-2">{{ errorMessage }}</p>
+                </div>
+            </div>
+
+            <!-- Main Panel: Results -->
+            <div class="lg:col-span-3 space-y-6">
+
+                <!-- Helper message if empty -->
+                <div v-if="activeEntities.length === 0"
+                    class="bg-white p-12 rounded-xl shadow text-center text-gray-400">
+                    <p class="text-xl">Список порожній</p>
+                    <p>Додайте групу або викладача, щоб побачити розклад</p>
+                </div>
+
+                <!-- Active Entities List -->
+                <div v-else class="flex flex-wrap gap-3">
+                    <div v-for="(entity, index) in activeEntities" :key="index"
+                        class="flex items-center bg-white border border-blue-200 text-blue-800 px-4 py-2 rounded-full shadow-sm">
+                        <span class="font-medium mr-2">{{ entity.name }}</span>
+                        <span class="text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
+                        <button @click="removeEntity(index)"
+                            class="text-red-400 hover:text-red-700 font-bold">✕</button>
+                    </div>
+                </div>
+
+                <!-- Schedule Grid -->
+                <!-- We group by DATE, then by TIME slot -->
+                <div v-if="Object.keys(groupedSchedule).length > 0" class="bg-white rounded-xl shadow overflow-hidden">
+                    <div v-for="(dayData, date) in groupedSchedule" :key="date" class="border-b last:border-b-0">
+                        <div class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                            <h3 class="font-bold text-lg text-gray-800">{{ dayData.dayName }}, {{ date }}</h3>
+                        </div>
+
+                        <div class="divide-y divide-gray-100">
+                            <div v-for="(timeSlot, time) in dayData.slots" :key="time"
+                                class="grid grid-cols-12 hover:bg-gray-50 transition p-4">
+                                <!-- Time Column -->
+                                <div class="col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0">
+                                    <span
+                                        class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded">
+                                        {{ time }}
+                                    </span>
+                                </div>
+
+                                <!-- Classes Column -->
+                                <div class="col-span-12 md:col-span-10 grid gap-4">
+                                    <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
+                                        class="bg-white border rounded-lg p-3 shadow-sm relative pl-4 border-l-4"
+                                        :class="getColorClass(lesson.entityId)">
+
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h4 class="font-bold text-gray-900">{{ lesson.discipline }}</h4>
+                                                <p class="text-sm text-gray-600 block md:hidden mt-1 font-semibold">{{
+                                                    lesson.entityName }}</p>
+                                                <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-4">
+                                                    <span v-if="lesson.type">🏷️ {{ lesson.type }}</span>
+                                                    <span v-if="lesson.cabinet">📍 {{ lesson.cabinet }}</span>
+                                                    <span v-if="lesson.teacher">👨‍🏫 <span
+                                                            v-html="lesson.teacher"></span></span>
+                                                    <span v-if="lesson.group">🎓 {{ lesson.group }}</span>
+                                                </div>
+                                            </div>
+                                            <div class="hidden md:block text-right">
+                                                <span
+                                                    class="text-xs font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                                    {{ lesson.entityName }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0 && !loadingSchedule"
+                    class="text-center py-10 text-gray-500">
+                    На вибраний період розкладу немає.
+                </div>
+
+                <div v-if="loadingSchedule" class="text-center py-10">
+                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
+                    <p class="text-gray-500 mt-2">Завантаження розкладу...</p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_PROXY = '/api/';
+        const VUZ_ID = 11927; // Hardcoded ID from analysis
+
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                // State
+                const mode = ref('student'); // 'student' or 'teacher'
+                const loadingFilters = ref(false);
+                const loadingSchedule = ref(false);
+                const errorMessage = ref('');
+
+                // Dictionaries
+                const faculties = ref([]);
+                const eduForms = ref([]);
+                const courses = ref([]);
+                const chairs = ref([]);
+                const groups = ref([]); // List of groups for selected faculty
+                const employees = ref([]); // List of teachers
+
+                // Selections
+                const selectedFaculty = ref('');
+                const selectedEduForm = ref('');
+                const selectedCourse = ref('');
+                const selectedGroup = ref(''); // Object {Key, Value}
+                const selectedChair = ref('');
+                const selectedEmployee = ref(''); // Object {Key, Value}
+
+                // Dates (Default to current week)
+                const dateStart = ref(new Date().toISOString().split('T')[0]);
+                const nextWeek = new Date();
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                const dateEnd = ref(nextWeek.toISOString().split('T')[0]);
+
+                // Active Data
+                const activeEntities = ref([]); // Array of { id, name, type, scheduleData }
+
+                // --- API Helpers ---
+                const fetchApi = async (action, params = {}) => {
+                    // Append action to the path for the Node server to parse correctly
+                    // e.g. /api/GetStudentScheduleFiltersData
+                    const url = new URL(API_PROXY + action, window.location.origin);
+
+                    url.searchParams.append('aVuzID', VUZ_ID);
+
+                    // Only needed for dictionaries
+                    if (!action.startsWith('GetScheduleData')) {
+                        url.searchParams.append('aGiveStudyTimes', 'true');
+                    }
+
+                    const quoteIfNeeded = (val) => {
+                        if (typeof val === 'string') return `"${val}"`;
+                        return val;
+                    };
+
+                    for (const [key, value] of Object.entries(params)) {
+                        if (value !== undefined && value !== null) {
+                            url.searchParams.append(key, quoteIfNeeded(value));
+                        }
+                    }
+
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error('Network error');
+                        const json = await res.json();
+                        return json.d; // The API wraps result in 'd'
+                    } catch (e) {
+                        console.error("API Error", e);
+                        errorMessage.value = "Помилка завантаження даних";
+                        return null;
+                    }
+                };
+
+                // --- Computed ---
+                const canAdd = computed(() => {
+                    if (mode.value === 'student') return !!selectedGroup.value;
+                    if (mode.value === 'teacher') return !!selectedEmployee.value;
+                    return false;
+                });
+
+                const groupedSchedule = computed(() => {
+                    // Merge all schedules from activeEntities
+                    const merged = [];
+
+                    activeEntities.value.forEach(entity => {
+                        if (!entity.scheduleData) return;
+                        entity.scheduleData.forEach(item => {
+                            merged.push({
+                                ...item,
+                                entityName: entity.name,
+                                entityId: entity.id, // For coloring
+                                entityType: entity.type
+                            });
+                        });
+                    });
+
+                    // Group by Date -> Time
+                    const days = {};
+
+                    // Sorting helper
+                    const parseDate = (str) => { // dd.mm.yyyy
+                        const [d, m, y] = str.split('.');
+                        return new Date(`${y}-${m}-${d}`);
+                    };
+
+                    merged.sort((a, b) => parseDate(a.full_date) - parseDate(b.full_date));
+
+                    merged.forEach(lesson => {
+                        if (!days[lesson.full_date]) {
+                            days[lesson.full_date] = {
+                                date: lesson.full_date,
+                                dayName: lesson.week_day,
+                                slots: {}
+                            };
+                        }
+
+                        const timeKey = lesson.study_time; // e.g. "1 парі (08:30-09:50)"
+                        if (!days[lesson.full_date].slots[timeKey]) {
+                            days[lesson.full_date].slots[timeKey] = {
+                                time: timeKey,
+                                lessons: []
+                            };
+                        }
+
+                        // normalize data for display
+                        days[lesson.full_date].slots[timeKey].lessons.push({
+                            discipline: lesson.discipline,
+                            type: lesson.study_type,
+                            cabinet: lesson.cabinet,
+                            teacher: lesson.employee_short || lesson.employee, // For students seeing teacher
+                            group: lesson.group, // For teachers seeing group (API might need check)
+                            entityName: lesson.entityName,
+                            entityId: lesson.entityId,
+                            timeStart: lesson.study_time_begin,
+                            timeEnd: lesson.study_time_end
+                        });
+                    });
+
+                    // Sort times within days (simple string sort usually works if format is consistent "1 pair...")
+                    // But better to rely on structure. Let's return object.
+                    return days;
+                });
+
+                // --- Methods ---
+
+                const init = async () => {
+                    loadingFilters.value = true;
+                    // Initial load -> Get Faculties
+                    const data = await fetchApi('GetStudentScheduleFiltersData');
+                    if (data) {
+                        faculties.value = data.faculties || [];
+                        eduForms.value = data.educForms || [];
+                        courses.value = data.courses || [];
+                    }
+                    loadingFilters.value = false;
+                };
+
+                const onFacultyChange = () => {
+                    // Reset dependants
+                    groups.value = [];
+                    chairs.value = [];
+                    selectedGroup.value = '';
+                    selectedEmployee.value = '';
+                    selectedChair.value = '';
+
+                    if (!selectedFaculty.value) return;
+
+                    if (mode.value === 'student') loadGroups();
+                    else loadChairs();
+                };
+
+                const loadGroups = async () => {
+                    if (mode.value !== 'student' || !selectedFaculty.value) return;
+
+                    const data = await fetchApi('GetStudyGroups', {
+                        aFacultyID: selectedFaculty.value,
+                        aEducationForm: selectedEduForm.value || "",
+                        aCourse: selectedCourse.value || ""
+                    });
+
+                    if (data && data.studyGroups) {
+                        groups.value = data.studyGroups;
+                    }
+                };
+
+                const loadChairs = async () => {
+                    const data = await fetchApi('GetEmployeeChairs', {
+                        aFacultyID: selectedFaculty.value
+                    });
+                    if (data) {
+                        chairs.value = data.chairs || [];
+                        // Some endpoints return employees right away if chair is null, but we usually pick chair first
+                    }
+                };
+
+                const loadEmployees = async () => {
+                    if (!selectedChair.value) return;
+                    const data = await fetchApi('GetEmployees', {
+                        aFacultyID: selectedFaculty.value,
+                        aChairID: selectedChair.value
+                    });
+                    if (data) {
+                        employees.value = data || []; // Sometimes it's direct array or {d: ...}
+                    }
+                };
+
+                const addEntity = async () => {
+                    let id, name, type, payload, action;
+                    const startDate = dateStart.value.split('-').reverse().join('.'); // YYYY-MM-DD -> DD.MM.YYYY
+                    const endDate = dateEnd.value.split('-').reverse().join('.');
+
+                    if (mode.value === 'student') {
+                        id = selectedGroup.value.Key;
+                        name = selectedGroup.value.Value;
+                        type = 'Група';
+                        action = 'GetScheduleDataX'; // Student schedule
+                        payload = {
+                            aStudyGroupID: id,
+                            aStartDate: startDate,
+                            aEndDate: endDate,
+                            aStudyTypeID: "" // Required by API even if empty
+                        };
+                    } else {
+                        id = selectedEmployee.value.Key;
+                        name = selectedEmployee.value.Value;
+                        type = 'Викладач';
+                        action = 'GetScheduleDataEmp'; // Teacher schedule
+                        payload = {
+                            aEmployeeID: id,
+                            aStartDate: startDate,
+                            aEndDate: endDate,
+                            aStudyTypeID: "" // Required by API even if empty
+                        };
+                    }
+
+                    // Check if already exists
+                    if (activeEntities.value.find(e => e.id === id && e.type === type)) {
+                        errorMessage.value = "Вже додано!";
+                        setTimeout(() => errorMessage.value = '', 2000);
+                        return;
+                    }
+
+                    loadingSchedule.value = true;
+                    const data = await fetchApi(action, payload);
+                    loadingSchedule.value = false;
+
+                    if (data) {
+                        activeEntities.value.push({
+                            id,
+                            name,
+                            type,
+                            scheduleData: data
+                        });
+                    }
+                };
+
+                const removeEntity = (index) => {
+                    activeEntities.value.splice(index, 1);
+                };
+
+                // Color generator for different entities
+                const getColorClass = (id) => {
+                    const colors = [
+                        'border-red-400 bg-red-50',
+                        'border-green-400 bg-green-50',
+                        'border-yellow-400 bg-yellow-50',
+                        'border-purple-400 bg-purple-50',
+                        'border-pink-400 bg-pink-50',
+                        'border-indigo-400 bg-indigo-50'
+                    ];
+                    // Simple hash
+                    const num = String(id).split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+                    return colors[num % colors.length];
+                };
+
+                // Watchers
+                watch(mode, () => {
+                    // Clear deeper selections when switching mode, but keep faculty
+                    selectedGroup.value = '';
+                    selectedEmployee.value = '';
+                    if (selectedFaculty.value) {
+                        if (mode.value === 'student') loadGroups();
+                        else loadChairs();
+                    }
+                });
+
+                onMounted(init);
+
+                return {
+                    mode,
+                    loadingFilters,
+                    loadingSchedule,
+                    errorMessage,
+                    faculties,
+                    eduForms,
+                    courses,
+                    chairs,
+                    groups,
+                    employees,
+                    selectedFaculty,
+                    selectedEduForm,
+                    selectedCourse,
+                    selectedGroup,
+                    selectedChair,
+                    selectedEmployee,
+                    dateStart,
+                    dateEnd,
+                    activeEntities,
+                    onFacultyChange,
+                    loadGroups,
+                    loadEmployees,
+                    addEntity,
+                    removeEntity,
+                    canAdd,
+                    groupedSchedule,
+                    getColorClass
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
