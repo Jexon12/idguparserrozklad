@@ -27,9 +27,51 @@ if (isset($_GET['action'])) {
         echo json_encode(['error' => 'Invalid action']);
         exit;
     }
-} else {
     http_response_code(400);
     echo json_encode(['error' => 'Missing action parameter']);
+    exit;
+}
+
+// --- Local Links Logic (CORS friendly) ---
+if ($action === 'GetLinks') {
+    $file = __DIR__ . '/data/links.json';
+    if (!file_exists(__DIR__ . '/data')) { mkdir(__DIR__ . '/data', 0777, true); }
+    
+    if (file_exists($file)) {
+        echo file_get_contents($file);
+    } else {
+        echo '{}';
+    }
+    exit;
+}
+if ($action === 'SaveLinks' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!isset($input['password']) || $input['password'] !== 'admin123') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Wrong password']);
+        exit;
+    }
+
+    $file = __DIR__ . '/data/links.json';
+    if (!file_exists(__DIR__ . '/data')) { mkdir(__DIR__ . '/data', 0777, true); }
+
+    $links = [];
+    if (file_exists($file)) {
+        $links = json_decode(file_get_contents($file), true) ?? [];
+    }
+
+    if ($input['value'] === null) {
+        unset($links[$input['key']]);
+    } else {
+        $links[$input['key']] = $input['value'];
+    }
+
+    if (file_put_contents($file, json_encode($links, JSON_PRETTY_PRINT))) {
+        echo json_encode(['success' => true]);
+    } else {
+        http_response_code(500);
+        echo json_encode(['error' => 'Write failed']);
+    }
     exit;
 }
 
