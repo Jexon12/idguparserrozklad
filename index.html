@@ -64,10 +64,14 @@
                         :class="['flex-1 py-2 font-semibold transition', mode === 'teacher' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600']">
                         Викладач
                     </button>
+                    <button @click="mode = 'occupancy'"
+                        :class="['flex-1 py-2 font-semibold transition', mode === 'occupancy' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600']">
+                        Зайнятість
+                    </button>
                 </div>
 
-                <!-- Search Bar -->
-                <div class="mb-6 relative">
+                <!-- Search Bar (Standard Mode Only) -->
+                <div v-if="mode !== 'occupancy'" class="mb-6 relative">
                     <label class="block text-sm font-bold mb-1">🔍 Швидкий пошук групи</label>
                     <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
                         placeholder="Наприклад: КН-21..."
@@ -102,8 +106,8 @@
                 </div>
 
                 <div v-else class="space-y-4">
-                    <!-- Faculty Filter (Common) -->
-                    <div>
+                    <!-- Faculty Filter (Common) - Hide in Occupancy -->
+                    <div v-if="mode !== 'occupancy'">
                         <label class="block text-sm font-bold mb-1">Факультет</label>
                         <select v-model="selectedFaculty" @change="onFacultyChange"
                             class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
@@ -143,7 +147,7 @@
                     </div>
 
                     <!-- Teacher Filters -->
-                    <div v-else>
+                    <div v-else-if="mode === 'teacher'">
                         <div>
                             <label class="block text-sm font-bold mb-1">Кафедра</label>
                             <select v-model="selectedChair" @change="loadEmployees"
@@ -163,24 +167,67 @@
                         </div>
                     </div>
 
-                    <!-- Date Range -->
-                    <div class="grid grid-cols-2 gap-2">
+                    <!-- Occupancy Controls -->
+                    <div v-if="mode === 'occupancy'">
                         <div>
-                            <label class="block text-sm font-bold mb-1">З</label>
-                            <input type="date" v-model="dateStart" class="w-full border rounded p-2 text-sm">
+                            <label class="block text-sm font-bold mb-1">Дата аналізу</label>
+                            <input type="date" v-model="occupancyDate" class="w-full border rounded p-2 text-sm">
                         </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1">По</label>
-                            <input type="date" v-model="dateEnd" class="w-full border rounded p-2 text-sm">
+
+                        <div v-if="isScanning" class="mt-4">
+                            <div class="text-sm font-bold text-blue-600 mb-1">Сканування...</div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                                <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                                    :style="{ width: (scanProgress.total ? (scanProgress.current / scanProgress.total * 100) : 0) + '%' }">
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-500 text-center">
+                                {{ scanProgress.current }} / {{ scanProgress.total }}
+                                <br>
+                                {{ scanProgress.text }}
+                                <span v-if="scanErrors > 0" class="text-red-500 font-bold ml-1">
+                                    (Помилок: {{ scanErrors }})
+                                </span>
+                            </div>
+                            <button @click="stopScan = true"
+                                class="mt-2 text-xs text-red-500 underline w-full text-center">
+                                Зупинити
+                            </button>
                         </div>
+
+                        <div v-else class="mt-4">
+                            <button @click="startOccupancyScan"
+                                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition">
+                                🚀 Почати сканування
+                            </button>
+                            <p class="text-xs text-gray-500 mt-2 text-center">
+                                Увага: Це займе певний час (~30с). Ми перевіримо розклад усіх груп.
+                            </p>
+                        </div>
+                        <p v-if="errorMessage" class="text-red-500 text-sm mt-2">{{ errorMessage }}</p>
                     </div>
 
-                    <!-- Add Button -->
-                    <button @click="addEntity" :disabled="!canAdd"
-                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed">
-                        + Додати до порівняння
-                    </button>
-                    <p v-if="errorMessage" class="text-red-500 text-sm mt-2">{{ errorMessage }}</p>
+                    <!-- Date Range and Add Button (Standard Mode Only) -->
+                    <div v-if="mode !== 'occupancy'" class="space-y-4 pt-4 border-t">
+                        <!-- Date Range -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-sm font-bold mb-1">З</label>
+                                <input type="date" v-model="dateStart" class="w-full border rounded p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">По</label>
+                                <input type="date" v-model="dateEnd" class="w-full border rounded p-2 text-sm">
+                            </div>
+                        </div>
+
+                        <!-- Add Button -->
+                        <button @click="addEntity" :disabled="!canAdd"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+                            + Додати до порівняння
+                        </button>
+                        <p v-if="errorMessage" class="text-red-500 text-sm mt-2">{{ errorMessage }}</p>
+                    </div>
                 </div>
 
                 <!-- Export -->
@@ -195,148 +242,208 @@
             <!-- Main Panel: Results -->
             <div class="lg:col-span-3 space-y-6">
 
-                <!-- Statistics Block -->
-                <div v-if="activeEntities.length > 0" class="bg-white p-4 rounded-xl shadow mb-6">
-                    <h3 class="font-bold text-gray-700 mb-3 flex items-center">
-                        📊 Статистика розкладу
-                        <span class="ml-auto text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                            Всього пар: {{ scheduleStats.totalPairs }}
-                        </span>
-                    </h3>
-                    <div class="space-y-3">
-                        <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="truncate pr-2 font-medium text-gray-700">{{ subj.name }}</span>
-                                <span class="text-gray-500">{{ subj.count }} ({{ subj.percent }}%)</span>
-                            </div>
-                            <div class="w-full bg-gray-100 rounded-full h-2">
-                                <div class="bg-blue-500 h-2 rounded-full transition-all duration-1000"
-                                    :style="{ width: subj.percent + '%' }"></div>
+                <!-- OCCUPANCY VIEW -->
+                <div v-if="mode === 'occupancy'">
+                    <div v-if="occupancyResults.length > 0" class="bg-white p-4 rounded-xl shadow">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h3 class="font-bold text-lg text-gray-800">Зайнятість аудиторій ({{ occupancyDate }})</h3>
+
+                            <div class="flex gap-2 w-full md:w-auto">
+                                <input type="text" v-model="occupancySearch" placeholder="Пошук (напр. 110)..."
+                                    class="border rounded px-3 py-1 text-sm focus:ring focus:ring-blue-200 flex-grow">
+                                <button @click="exportOccupancy"
+                                    class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-1 px-3 rounded transition flex items-center gap-2 whitespace-nowrap">
+                                    <span>📥</span> Excel
+                                </button>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Helper message if empty -->
-                <div v-if="activeEntities.length === 0"
-                    class="bg-white p-12 rounded-xl shadow text-center text-gray-400">
-                    <p class="text-xl">Список порожній</p>
-                    <p>Додайте групу або викладача, щоб побачити розклад</p>
-                </div>
-
-                <!-- Global Controls (Discipline Filter) -->
-                <div v-if="activeEntities.length > 0" class="bg-white p-4 rounded-xl shadow">
-                    <div class="flex justify-between items-center mb-2">
-                        <div class="font-bold text-gray-700">Фільтр (Предмети, Викладачі):</div>
-                        <div class="flex gap-2">
-                            <button @click="selectedDisciplines = []" :disabled="selectedDisciplines.length === 0"
-                                :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
-                                Скинути фільтр
-                            </button>
-                            <button @click="clearAll"
-                                class="text-xs text-gray-400 hover:text-red-600 font-medium underline">
-                                Очистити все
-                            </button>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <!-- "All" Chip -->
-                        <button @click="selectedDisciplines = []" :class="['px-3 py-1 rounded-full text-sm border transition', 
-                                selectedDisciplines.length === 0 
-                                ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-md' 
-                                : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200']">
-                            Всі предмети
-                        </button>
-
-                        <!-- Discipline Chips -->
-                        <button v-for="disc in availableDisciplines" :key="disc" @click="toggleDiscipline(disc)" :class="['px-3 py-1 rounded-full text-sm border transition text-left', 
-                                selectedDisciplines.includes(disc) 
-                                ? 'bg-blue-100 text-blue-800 border-blue-300 font-semibold shadow-sm ring-1 ring-blue-300' 
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50']">
-                            {{ disc }}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Active Entities List -->
-                <div v-else class="flex flex-wrap gap-3">
-                    <div v-for="(entity, index) in activeEntities" :key="index"
-                        class="flex items-center bg-white border border-blue-200 text-blue-800 px-4 py-2 rounded-full shadow-sm">
-                        <span class="font-medium mr-2">{{ entity.name }}</span>
-                        <span class="text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
-                        <button @click="removeEntity(index)"
-                            class="text-red-400 hover:text-red-700 font-bold">✕</button>
-                    </div>
-                </div>
-
-                <!-- Schedule Grid -->
-                <!-- We group by DATE, then by TIME slot -->
-                <div v-if="Object.keys(groupedSchedule).length > 0" class="bg-white rounded-xl shadow overflow-hidden">
-                    <div v-for="dayData in groupedSchedule" :key="dayData.date" class="border-b last:border-b-0">
-                        <div class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
-                            <h3 class="font-bold text-lg text-gray-800">{{ dayData.dayName }}, {{ dayData.date }}</h3>
-                        </div>
-
-                        <div class="divide-y divide-gray-100">
-                            <div v-for="timeSlot in dayData.slots" :key="timeSlot.time"
-                                class="grid grid-cols-12 hover:bg-gray-50 transition p-4">
-                                <!-- Time Column -->
-                                <div
-                                    class="col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0 flex flex-row md:flex-col items-center md:items-start gap-2 md:gap-1">
-                                    <span
-                                        class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded whitespace-nowrap">
-                                        {{ timeSlot.time }}
-                                    </span>
-                                    <span v-if="timeSlot.start" class="text-sm text-gray-500 font-medium">
-                                        {{ timeSlot.start }} - {{ timeSlot.end }}
-                                    </span>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div v-for="cab in filteredOccupancyResults" :key="cab.name"
+                                class="border rounded-lg p-3 hover:shadow-md transition bg-gray-50">
+                                <div class="font-bold text-lg text-gray-800 mb-2 flex justify-between">
+                                    {{ cab.name }}
+                                    <span class="text-xs font-normal bg-white border px-1 rounded text-gray-500">{{
+                                        cab.building || '?' }}</span>
                                 </div>
+                                <div class="space-y-1">
+                                    <div v-for="slot in [1,2,3,4,5,6,7]" :key="slot" class="flex items-center text-xs">
+                                        <div class="w-6 font-bold text-gray-400">{{ slot }}</div>
+                                        <div class="flex-1 h-6 rounded px-2 flex items-center overflow-hidden whitespace-nowrap"
+                                            :class="cab.slots[slot] ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200'">
+                                            <span v-if="cab.slots[slot]" class="truncate">
+                                                {{ cab.slots[slot].group }} ({{ cab.slots[slot].teacher }})
+                                            </span>
+                                            <span v-else class="text-green-600 font-bold">Вільна</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                                <!-- Classes Column -->
-                                <div class="col-span-12 md:col-span-10 grid gap-4">
-                                    <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
-                                        class="bg-white border rounded-lg p-3 shadow-sm relative pl-4 border-l-4 transition-all duration-500"
-                                        :class="[
-                                            getColorClass(lesson.entityId),
-                                            isActiveLesson(dayData.date, timeSlot.start, timeSlot.end) ? 'ring-4 ring-green-400 scale-[1.02] z-10' : ''
-                                        ]">
+                        <!-- Scan Empty State or No Matches -->
+                        <div v-if="occupancyResults.length > 0 && filteredOccupancyResults.length === 0"
+                            class="text-center py-8 text-gray-500">
+                            Нічого не знайдено за запитом "{{ occupancySearch }}" 😞
+                        </div>
 
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <div v-if="isActiveLesson(dayData.date, timeSlot.start, timeSlot.end)"
-                                                    class="inline-block bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 animate-pulse">
-                                                    ЗАРАЗ
+                    </div>
+
+                    <div v-else-if="!isScanning" class="bg-white p-12 rounded-xl shadow text-center text-gray-400">
+                        <p class="text-xl">Дані відсутні</p>
+                        <p>Натисніть "Почати сканування", щоб перевірити зайнятість</p>
+                    </div>
+                </div>
+
+                <!-- STANDARD VIEW -->
+                <div v-else>
+                    <!-- Statistics Block -->
+                    <div v-if="activeEntities.length > 0" class="bg-white p-4 rounded-xl shadow mb-6">
+                        <h3 class="font-bold text-gray-700 mb-3 flex items-center">
+                            📊 Статистика розкладу
+                            <span class="ml-auto text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                                Всього пар: {{ scheduleStats.totalPairs }}
+                            </span>
+                        </h3>
+                        <div class="space-y-3">
+                            <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="truncate pr-2 font-medium text-gray-700">{{ subj.name }}</span>
+                                    <span class="text-gray-500">{{ subj.count }} ({{ subj.percent }}%)</span>
+                                </div>
+                                <div class="w-full bg-gray-100 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full transition-all duration-1000"
+                                        :style="{ width: subj.percent + '%' }"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Helper message if empty -->
+                    <div v-if="activeEntities.length === 0"
+                        class="bg-white p-12 rounded-xl shadow text-center text-gray-400">
+                        <p class="text-xl">Список порожній</p>
+                        <p>Додайте групу або викладача, щоб побачити розклад</p>
+                    </div>
+
+                    <!-- Global Controls (Discipline Filter) -->
+                    <div v-if="activeEntities.length > 0" class="bg-white p-4 rounded-xl shadow">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="font-bold text-gray-700">Фільтр (Предмети, Викладачі):</div>
+                            <div class="flex gap-2">
+                                <button @click="selectedDisciplines = []" :disabled="selectedDisciplines.length === 0"
+                                    :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
+                                    Скинути фільтр
+                                </button>
+                                <button @click="clearAll"
+                                    class="text-xs text-gray-400 hover:text-red-600 font-medium underline">
+                                    Очистити все
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <!-- "All" Chip -->
+                            <button @click="selectedDisciplines = []" :class="['px-3 py-1 rounded-full text-sm border transition', 
+                                    selectedDisciplines.length === 0 
+                                    ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-md' 
+                                    : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200']">
+                                Всі предмети
+                            </button>
+
+                            <!-- Discipline Chips -->
+                            <button v-for="disc in availableDisciplines" :key="disc" @click="toggleDiscipline(disc)"
+                                :class="['px-3 py-1 rounded-full text-sm border transition text-left', 
+                                    selectedDisciplines.includes(disc) 
+                                    ? 'bg-blue-100 text-blue-800 border-blue-300 font-semibold shadow-sm ring-1 ring-blue-300' 
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50']">
+                                {{ disc }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active Entities List -->
+                    <div v-else class="flex flex-wrap gap-3">
+                        <div v-for="(entity, index) in activeEntities" :key="index"
+                            class="flex items-center bg-white border border-blue-200 text-blue-800 px-4 py-2 rounded-full shadow-sm">
+                            <span class="font-medium mr-2">{{ entity.name }}</span>
+                            <span class="text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
+                            <button @click="removeEntity(index)"
+                                class="text-red-400 hover:text-red-700 font-bold">✕</button>
+                        </div>
+                    </div>
+
+                    <!-- Schedule Grid -->
+                    <!-- We group by DATE, then by TIME slot -->
+                    <div v-if="Object.keys(groupedSchedule).length > 0"
+                        class="bg-white rounded-xl shadow overflow-hidden">
+                        <div v-for="dayData in groupedSchedule" :key="dayData.date" class="border-b last:border-b-0">
+                            <div
+                                class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                                <h3 class="font-bold text-lg text-gray-800">{{ dayData.dayName }}, {{ dayData.date }}
+                                </h3>
+                            </div>
+
+                            <div class="divide-y divide-gray-100">
+                                <div v-for="timeSlot in dayData.slots" :key="timeSlot.time"
+                                    class="grid grid-cols-12 hover:bg-gray-50 transition p-4">
+                                    <!-- Time Column -->
+                                    <div
+                                        class="col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0 flex flex-row md:flex-col items-center md:items-start gap-2 md:gap-1">
+                                        <span
+                                            class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded whitespace-nowrap">
+                                            {{ timeSlot.time }}
+                                        </span>
+                                        <span v-if="timeSlot.start" class="text-sm text-gray-500 font-medium">
+                                            {{ timeSlot.start }} - {{ timeSlot.end }}
+                                        </span>
+                                    </div>
+
+                                    <!-- Classes Column -->
+                                    <div class="col-span-12 md:col-span-10 grid gap-4">
+                                        <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
+                                            class="bg-white border rounded-lg p-3 shadow-sm relative pl-4 border-l-4 transition-all duration-500"
+                                            :class="[
+                                                getColorClass(lesson.entityId),
+                                                isActiveLesson(dayData.date, timeSlot.start, timeSlot.end) ? 'ring-4 ring-green-400 scale-[1.02] z-10' : ''
+                                            ]">
+
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <div v-if="isActiveLesson(dayData.date, timeSlot.start, timeSlot.end)"
+                                                        class="inline-block bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 animate-pulse">
+                                                        ЗАРАЗ
+                                                    </div>
+
+                                                    <!-- 1. Discipline + Group -->
+                                                    <h4 class="font-bold text-gray-900 text-base mb-1">
+                                                        {{ lesson.discipline }}
+                                                        <span v-if="lesson.group" class="text-blue-600 font-normal">
+                                                            ({{ lesson.group }})
+                                                        </span>
+                                                    </h4>
+
+                                                    <!-- 2. Type -->
+                                                    <div class="text-sm text-gray-500 mb-1" v-if="lesson.type">
+                                                        🏷️ {{ lesson.type }}
+                                                    </div>
+
+                                                    <!-- 3. Teacher -->
+                                                    <div
+                                                        class="text-sm text-gray-700 font-medium flex flex-wrap items-center gap-2">
+                                                        <span v-if="lesson.teacher" class="flex items-center">
+                                                            👨‍ <span v-html="lesson.teacher" class="ml-1"></span>
+                                                        </span>
+                                                        <span v-if="lesson.cabinet" class="text-gray-400 text-xs ml-2">
+                                                            📍 {{ lesson.cabinet }}
+                                                        </span>
+                                                    </div>
                                                 </div>
-
-                                                <!-- 1. Discipline + Group -->
-                                                <h4 class="font-bold text-gray-900 text-base mb-1">
-                                                    {{ lesson.discipline }}
-                                                    <span v-if="lesson.group" class="text-blue-600 font-normal">
-                                                        ({{ lesson.group }})
-                                                    </span>
-                                                </h4>
-
-                                                <!-- 2. Type -->
-                                                <div class="text-sm text-gray-500 mb-1" v-if="lesson.type">
-                                                    🏷️ {{ lesson.type }}
-                                                </div>
-
-                                                <!-- 3. Teacher -->
-                                                <div
-                                                    class="text-sm text-gray-700 font-medium flex flex-wrap items-center gap-2">
-                                                    <span v-if="lesson.teacher" class="flex items-center">
-                                                        👨‍� <span v-html="lesson.teacher" class="ml-1"></span>
-                                                    </span>
-                                                    <span v-if="lesson.cabinet" class="text-gray-400 text-xs ml-2">
-                                                        📍 {{ lesson.cabinet }}
+                                                <div class="hidden md:block text-right">
+                                                    <span
+                                                        class="text-xs font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                                        {{ lesson.entityName }}
                                                     </span>
                                                 </div>
-                                            </div>
-                                            <div class="hidden md:block text-right">
-                                                <span
-                                                    class="text-xs font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                                                    {{ lesson.entityName }}
-                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -344,16 +451,16 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div v-if="activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0 && !loadingSchedule"
-                    class="text-center py-10 text-gray-500">
-                    На вибраний період розкладу немає.
-                </div>
+                    <div v-if="activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0 && !loadingSchedule"
+                        class="text-center py-10 text-gray-500">
+                        На вибраний період розкладу немає.
+                    </div>
 
-                <div v-if="loadingSchedule" class="text-center py-10">
-                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-                    <p class="text-gray-500 mt-2">Завантаження розкладу...</p>
+                    <div v-if="loadingSchedule" class="text-center py-10">
+                        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
+                        <p class="text-gray-500 mt-2">Завантаження розкладу...</p>
+                    </div>
                 </div>
 
             </div>
@@ -415,20 +522,74 @@
                 // Active Data
                 const activeEntities = ref([]); // Array of { id, name, type, scheduleData }
 
+                // --- Occupancy State ---
+                const occupancyDate = ref(new Date().toISOString().split('T')[0]);
+                const isScanning = ref(false);
+                const stopScan = ref(false);
+                const scanProgress = ref({ current: 0, total: 0, text: '' });
+                const occupancyResults = ref([]); // Array of { name, building, slots: { 1: ... } }
+                const occupancySearch = ref('');
+
+                const filteredOccupancyResults = computed(() => {
+                    let q = occupancySearch.value.toLowerCase().trim();
+                    if (!q) return occupancyResults.value;
+
+                    // Advanced Normalize: remove separators AND map Latin to Cyrillic
+                    const normalize = (str) => {
+                        let out = str.toLowerCase().replace(/[^a-zа-я0-9іїєґ]/gi, '');
+                        // Map Latin lookalikes to Cyrillic
+                        const map = {
+                            'a': 'а', 'b': 'ь', 'c': 'с', 'd': 'д', 'e': 'е', 'f': 'ф',
+                            'g': 'г', 'h': 'н', 'i': 'і', 'j': 'й', 'k': 'к', 'l': 'л',
+                            'm': 'м', 'n': 'н', 'o': 'о', 'p': 'р', 'q': 'я', 'r': 'р',
+                            's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'w': 'в', 'x': 'х',
+                            'y': 'у', 'z': 'з',
+                            // Common specific:
+                            '3': 'з', '0': 'о'
+                        };
+                        // We do a simple Replace for common letters that look IDENTICAL or are common typos
+                        // Focus on: k->к, i->і, c->с, x->х, p->р, a->а, o->о, e->е
+                        const typoMap = {
+                            'k': 'к', 'c': 'с', 'x': 'х', 'p': 'р', 'a': 'а', 'o': 'о', 'e': 'е', 'i': 'і', 'y': 'у'
+                        };
+
+                        return out.split('').map(c => typoMap[c] || c).join('');
+                    };
+
+                    const qNorm = normalize(q);
+
+                    return occupancyResults.value.filter(c => {
+                        return normalize(c.name).includes(qNorm);
+                    });
+                });
+
+                const scanErrors = ref(0);
+
                 // --- API Helpers ---
-                const fetchApi = async (action, params = {}) => {
+                const fetchApi = async (action, params = {}, options = {}) => {
                     // Append action to the path for the Node server to parse correctly
-                    // e.g. /api/GetStudentScheduleFiltersData
                     const url = new URL(API_PROXY + action, window.location.origin);
 
                     url.searchParams.append('aVuzID', VUZ_ID);
 
-                    // Only needed for dictionaries
-                    if (!action.startsWith('GetScheduleData')) {
+                    // Filters needs GiveStudyTimes. 
+                    if (action === 'GetStudyGroups') {
+                        url.searchParams.append('aGiveStudyTimes', 'false');
+                    } else if (!action.startsWith('GetScheduleData') && action !== 'GetEmployees') {
                         url.searchParams.append('aGiveStudyTimes', 'true');
                     }
 
+                    // Force JSONP params to satisfy the server
+                    // The server seems to require these to function correctly (avoids 500/401)
+                    // We use a fixed callback name or random.
+                    const callbackName = 'jsonp' + Date.now();
+                    url.searchParams.append('callback', callbackName);
+                    url.searchParams.append('_', Date.now());
+
                     const quoteIfNeeded = (val) => {
+                        if (options.noQuote) return val;
+                        // Avoid double quoting if already quoted
+                        if (typeof val === 'string' && val.startsWith('"') && val.endsWith('"')) return val;
                         if (typeof val === 'string') return `"${val}"`;
                         return val;
                     };
@@ -441,12 +602,30 @@
 
                     try {
                         const res = await fetch(url);
-                        if (!res.ok) throw new Error('Network error');
-                        const json = await res.json();
-                        return json.d; // The API wraps result in 'd'
+                        if (!res.ok) throw new Error('Network error: ' + res.status);
+
+                        const text = await res.text();
+
+                        // Parse JSONP or JSON
+                        // expected: jsonp123({...}) or {...}
+                        let json;
+                        const jsonpMatch = text.match(/^\s*([a-zA-Z0-9_]+)\s*\((.*)\)\s*;?\s*$/s);
+                        if (jsonpMatch) {
+                            // It is JSONP
+                            json = JSON.parse(jsonpMatch[2]);
+                        } else {
+                            // Try standard JSON
+                            json = JSON.parse(text);
+                        }
+
+                        return json.d || json; // The API wraps result in 'd' usually
                     } catch (e) {
-                        console.error("API Error", e);
-                        errorMessage.value = "Помилка завантаження даних";
+                        if (!options.silent) {
+                            console.error("API Error", e);
+                            errorMessage.value = "Помилка завантаження даних";
+                        } else {
+                            console.warn("Silent API Fail:", action);
+                        }
                         return null;
                     }
                 };
@@ -734,47 +913,21 @@
 
                 const exportExcel = () => {
                     const rows = [];
+                    // Headers
+                    rows.push(["Дата", "День тижня", "Час", "Дисципліна", "Тип", "Викладач", "Кабінет", "Група/Викладач"]);
 
-                    // Header
-                    rows.push(["Дата", "День", "Час", "Дисципліна", "Тип", "Аудиторія", "Викладач/Група", "Для кого"]);
-
-                    // Iterate grouped schedule
-                    // groupedSchedule is Object: "dd.mm.yyyy": { date, dayName, slots: { "time": { lessons: [] } } }
-
-                    // Sort dates
-                    const dates = Object.keys(groupedSchedule.value).sort((a, b) => {
-                        const [d1, m1, y1] = a.split('.');
-                        const [d2, m2, y2] = b.split('.');
-                        return new Date(`${y1}-${m1}-${d1}`) - new Date(`${y2}-${m2}-${d2}`);
-                    });
-
-                    dates.forEach(date => {
-                        const dayData = groupedSchedule.value[date];
-                        const dayName = dayData.dayName;
-
-                        // Sort times
-                        const times = Object.keys(dayData.slots).sort();
-
-                        times.forEach(time => {
-                            const slot = dayData.slots[time];
-                            slot.lessons.forEach(lesson => {
-                                // Clean HTML from teacher name if present
-                                let teacherText = lesson.teacher || "";
-                                if (teacherText.includes('<')) {
-                                    const temp = document.createElement("div");
-                                    temp.innerHTML = teacherText;
-                                    teacherText = temp.textContent || temp.innerText || "";
-                                }
-
+                    groupedSchedule.value.forEach(dayData => {
+                        dayData.slots.forEach(timeSlot => {
+                            timeSlot.lessons.forEach(lesson => {
                                 rows.push([
-                                    date,
-                                    dayName,
-                                    time,
+                                    dayData.date,
+                                    dayData.dayName,
+                                    timeSlot.time,
                                     lesson.discipline,
                                     lesson.type,
+                                    lesson.teacher.replace(/<[^>]*>?/gm, ''), // Remove HTML from teacher name
                                     lesson.cabinet,
-                                    teacherText || lesson.group, // Show whoever is relevant
-                                    lesson.entityName // Who this schedule belongs to
+                                    lesson.entityName
                                 ]);
                             });
                         });
@@ -784,6 +937,214 @@
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Розклад");
                     XLSX.writeFile(wb, "rozklad.xlsx");
+                };
+
+                // --- Occupancy Logic ---
+                const startOccupancyScan = async () => {
+                    if (isScanning.value) return;
+                    isScanning.value = true;
+                    stopScan.value = false;
+                    occupancyResults.value = [];
+                    errorMessage.value = '';
+
+                    const dateVal = occupancyDate.value.split('-').reverse().join('.'); // DD.MM.YYYY
+
+                    try {
+                        // 1. Get Filters if not loaded
+                        scanProgress.value = { current: 0, total: 0, text: 'Отримання списку факультетів та параметрів...' };
+                        scanErrors.value = 0;
+
+                        if (faculties.value.length === 0 || courses.value.length === 0 || eduForms.value.length === 0) {
+                            const data = await fetchApi('GetStudentScheduleFiltersData');
+                            if (data) {
+                                faculties.value = data.faculties || [];
+                                eduForms.value = data.educForms || [];
+                                courses.value = data.courses || [];
+                            } else {
+                                throw new Error("Не вдалося завантажити параметри (факультети/курси)");
+                            }
+                        }
+
+                        // 2. Get All Groups
+                        // Iterate usage of parameters: aFacultyID, aEducationForm, aCourse
+                        scanProgress.value.text = 'Збір списку груп (це може зайняти час)...';
+                        let allGroups = [];
+
+                        // Flatten the tasks to a list of combinations
+                        const tasks = [];
+                        for (const fac of faculties.value) {
+                            // Some faculties might not have all courses, but we must try all combinations
+                            // because the API provides global lists.
+                            for (const form of eduForms.value) {
+                                for (const course of courses.value) {
+                                    tasks.push({ fac, form, course });
+                                }
+                            }
+                        }
+
+                        // Process tasks in chunks
+                        const TASK_CHUNK = 5; // Parallel requests
+                        for (let i = 0; i < tasks.length; i += TASK_CHUNK) {
+                            if (stopScan.value) break;
+                            const chunk = tasks.slice(i, i + TASK_CHUNK);
+
+                            const chunkPromises = chunk.map(async ({ fac, form, course }) => {
+                                try {
+                                    // Parameters must be strings. fetchApi will quote them if they are strings.
+                                    // IDs are likely strings in JSON "1", "2".
+                                    const res = await fetchApi('GetStudyGroups', {
+                                        aFacultyID: fac.Key,
+                                        aEducationForm: form.Key,
+                                        aCourse: course.Key
+                                    }, { silent: true });
+
+                                    if (res && res.studyGroups) {
+                                        return res.studyGroups.map(g => ({ ...g, _fac: fac.Value })); // Attach faculty name for context if needed
+                                    }
+                                    return [];
+                                } catch (e) {
+                                    return [];
+                                }
+                            });
+
+                            const chunkRes = await Promise.all(chunkPromises);
+                            chunkRes.forEach(g => {
+                                if (g.length > 0) allGroups.push(...g);
+                            });
+
+                            // Update progress text occasionally
+                            if (i % 20 === 0) {
+                                scanProgress.value.text = `Збір груп: перевірено ${Math.min(i + TASK_CHUNK, tasks.length)} з ${tasks.length} комбінацій...`;
+                            }
+
+                            // Delay to prevent overwhelming server
+                            await new Promise(r => setTimeout(r, 100)); // 100ms
+                        }
+
+                        // Deduplicate groups (just in case) based on Key
+                        const uniqueGroups = [];
+                        const seenKeys = new Set();
+                        for (const g of allGroups) {
+                            if (!seenKeys.has(g.Key)) {
+                                seenKeys.add(g.Key);
+                                uniqueGroups.push(g);
+                            }
+                        }
+                        allGroups = uniqueGroups;
+
+                        if (stopScan.value) throw new Error("Сканування зупинено");
+                        if (allGroups.length === 0) throw new Error("Не вдалося знайти жодної групи. Спробуйте змінити фільтри або сервер недоступний.");
+
+                        scanProgress.value = { current: 0, total: allGroups.length, text: 'Сканування розкладу...' };
+
+                        // 3. Scan Process
+                        // Map: CabinetName -> { slots: { pairNumber: Data } }
+                        const cabinetMap = {};
+
+                        // Chunking to avoid rate limits / browser hang
+                        const CHUNK_SIZE = 5;
+                        for (let i = 0; i < allGroups.length; i += CHUNK_SIZE) {
+                            if (stopScan.value) break;
+
+                            const chunk = allGroups.slice(i, i + CHUNK_SIZE);
+                            const promises = chunk.map(async group => {
+                                const data = await fetchApi('GetScheduleDataX', {
+                                    aStudyGroupID: group.Key,
+                                    aStartDate: dateVal,
+                                    aEndDate: dateVal,
+                                    aStudyTypeID: ""
+                                }, { silent: true });
+
+                                if (!data) scanErrors.value++;
+                                return { group, data };
+                            });
+
+                            const results = await Promise.all(promises);
+
+                            results.forEach(({ group, data }) => {
+                                if (!data) return;
+
+                                data.forEach(lesson => {
+                                    if (!lesson.cabinet) return;
+                                    const cabName = lesson.cabinet.trim();
+                                    if (!cabName) return;
+
+                                    // Parse pair number "1 пара..." -> 1
+                                    const pairStr = lesson.study_time.split(' ')[0];
+                                    const pairNum = parseInt(pairStr);
+                                    if (isNaN(pairNum)) return;
+
+                                    if (!cabinetMap[cabName]) {
+                                        // Heuristic for building: "1-203" -> 1, "k2-304" -> 2
+                                        let building = '?';
+                                        const match = cabName.match(/^(\d+|[a-zA-Zа-яА-Я0-9]+)[-\s]/);
+                                        if (match) building = match[1];
+
+                                        cabinetMap[cabName] = {
+                                            name: cabName,
+                                            building: building,
+                                            slots: {}
+                                        };
+                                    }
+
+                                    // Make sure we don't overwrite if multiple groups share (lecture)
+                                    // For now, just taking the first one found or appending
+                                    if (!cabinetMap[cabName].slots[pairNum]) {
+                                        cabinetMap[cabName].slots[pairNum] = {
+                                            group: group.Value,
+                                            teacher: lesson.employee_short || lesson.employee,
+                                            discipline: lesson.discipline
+                                        };
+                                    } else {
+                                        // If already occupied, maybe append group name?
+                                        const existing = cabinetMap[cabName].slots[pairNum];
+                                        if (!existing.group.includes(group.Value)) {
+                                            existing.group += ", " + group.Value;
+                                        }
+                                    }
+                                });
+                            });
+
+                            // Update UI
+                            scanProgress.value.current = Math.min(i + CHUNK_SIZE, allGroups.length);
+                            occupancyResults.value = Object.values(cabinetMap).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+                            // Gentle delay to avoid DoS detection
+                            await new Promise(r => setTimeout(r, 300));
+                        }
+
+                        // Convert map to array and sort
+                        occupancyResults.value = Object.values(cabinetMap).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+                    } catch (e) {
+                        console.error(e);
+                        errorMessage.value = e.message;
+                    } finally {
+                        isScanning.value = false;
+                    }
+                };
+
+                const exportOccupancy = () => {
+                    const rows = [];
+                    // Header
+                    rows.push(["Аудиторія", "1 пара", "2 пара", "3 пара", "4 пара", "5 пара", "6 пара", "7 пара"]);
+
+                    occupancyResults.value.forEach(cab => {
+                        const row = [cab.name];
+                        for (let i = 1; i <= 7; i++) {
+                            if (cab.slots[i]) {
+                                row.push(`${cab.slots[i].group} (${cab.slots[i].teacher})`);
+                            } else {
+                                row.push("");
+                            }
+                        }
+                        rows.push(row);
+                    });
+
+                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Зайнятість");
+                    XLSX.writeFile(wb, `occupancy_${occupancyDate.value}.xlsx`);
                 };
 
                 // --- Statistics ---
@@ -908,41 +1269,52 @@
 
                     if (faculties.value.length === 0) await init();
 
-                    // 1. Fetch Groups (Fast)
+                    // 1. Fetch Groups (Batch)
                     cacheStatus.value = "Індексація груп...";
-                    const groupPromises = faculties.value.map(async (fac) => {
-                        try {
-                            const data = await fetchApi('GetStudyGroups', { aFacultyID: fac.Key });
-                            if (data && data.studyGroups) {
-                                return data.studyGroups.map(g => ({
-                                    type: 'group',
-                                    value: g,
-                                    facultyId: fac.Key,
-                                    facultyName: fac.Value,
-                                    label: `${g.Value} (${fac.Value})`
-                                }));
-                            }
-                        } catch (e) { return []; }
-                        return [];
-                    });
 
-                    const groupsArrays = await Promise.all(groupPromises);
-                    const groups = groupsArrays.flat();
-                    allItemsCache.value = [...allItemsCache.value, ...groups];
+                    // Chunk faculties to avoid 500 errors
+                    const FAC_CHUNK = 3;
+                    for (let i = 0; i < faculties.value.length; i += FAC_CHUNK) {
+                        const chunk = faculties.value.slice(i, i + FAC_CHUNK);
+                        const chunkPromises = chunk.map(async (fac) => {
+                            try {
+                                const data = await fetchApi('GetStudyGroups', { aFacultyID: fac.Key }, { silent: true });
+                                if (data && data.studyGroups) {
+                                    return data.studyGroups.map(g => ({
+                                        type: 'group',
+                                        value: g,
+                                        facultyId: fac.Key,
+                                        facultyName: fac.Value,
+                                        label: `${g.Value} (${fac.Value})`
+                                    }));
+                                }
+                            } catch (e) { return []; }
+                            return [];
+                        });
+
+                        const chunkRes = await Promise.all(chunkPromises);
+                        chunkRes.forEach(arr => {
+                            allItemsCache.value.push(...arr);
+                        });
+
+                        // Delay between chunks
+                        await new Promise(r => setTimeout(r, 200));
+                    }
+
 
                     // 2. Fetch Teachers (Slower)
                     cacheStatus.value = "Індексація викладачів...";
 
                     for (const fac of faculties.value) {
                         try {
-                            const chairData = await fetchApi('GetEmployeeChairs', { aFacultyID: fac.Key });
+                            const chairData = await fetchApi('GetEmployeeChairs', { aFacultyID: fac.Key }, { silent: true });
                             if (chairData && chairData.chairs) {
                                 const empPromises = chairData.chairs.map(async (chair) => {
                                     try {
                                         const empData = await fetchApi('GetEmployees', {
                                             aFacultyID: fac.Key,
                                             aChairID: chair.Key
-                                        });
+                                        }, { silent: true });
                                         if (empData) {
                                             const list = Array.isArray(empData) ? empData : [];
                                             return list.map(e => ({
@@ -962,7 +1334,7 @@
                                 allItemsCache.value = [...allItemsCache.value, ...emps];
                             }
                         } catch (e) { console.error(e); }
-                        await new Promise(r => setTimeout(r, 100)); // Rate limit
+                        await new Promise(r => setTimeout(r, 200)); // Rate limit
                     }
 
                     isCacheLoaded.value = true;
@@ -1049,9 +1421,10 @@
                 onMounted(async () => {
                     await init();
                     // Start building search index in background immediately
-                    setTimeout(() => {
-                        buildUniversalCache();
-                    }, 500);
+                    // DISABLED: Causes server overload (500 errors). Only build when user types.
+                    // setTimeout(() => {
+                    //    buildUniversalCache();
+                    // }, 500);
                 });
 
                 return {
@@ -1065,36 +1438,54 @@
                     chairs,
                     groups,
                     employees,
+
                     selectedFaculty,
                     selectedEduForm,
                     selectedCourse,
                     selectedGroup,
                     selectedChair,
                     selectedEmployee,
+                    selectedDisciplines,
+
                     dateStart,
                     dateEnd,
                     activeEntities,
-                    onFacultyChange,
-                    loadGroups,
-                    loadEmployees,
-                    addEntity,
-                    removeEntity,
-                    exportExcel,
-                    canAdd,
-                    groupedSchedule,
-                    availableDisciplines,
-                    selectedDisciplines,
-                    toggleDiscipline,
-                    isActiveLesson,
+                    onSearchInput,
                     searchQuery,
                     searchResults,
                     isSearching,
+                    isCacheLoaded,
                     cacheStatus,
-                    scheduleStats,
-                    onSearchInput,
                     selectSearchResult,
+
+                    availableDisciplines,
+                    canAdd,
+                    groupedSchedule,
+                    scheduleStats,
+
+                    onFacultyChange,
+                    loadGroups,
+                    loadChairs,
+                    loadEmployees,
+                    addEntity,
+                    removeEntity,
+                    clearAll,
+                    exportExcel,
+                    toggleDiscipline,
                     getColorClass,
-                    clearAll
+                    isActiveLesson,
+
+                    // Occupancy
+                    occupancyDate,
+                    isScanning,
+                    scanProgress,
+                    stopScan,
+                    occupancyResults,
+                    startOccupancyScan,
+                    exportOccupancy,
+                    occupancySearch,
+                    filteredOccupancyResults,
+                    scanErrors
                 };
             }
         }).mount('#app');
