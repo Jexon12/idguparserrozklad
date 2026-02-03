@@ -13,6 +13,9 @@
   "type": "commonjs",
   "dependencies": {
     "@vercel/kv": "^3.0.0",
-    "node-fetch": "^2.7.0"
+    "dotenv": "^17.2.3",
+    "ioredis": "^5.9.2",
+    "node-fetch": "^2.7.0",
+    "redis": "^5.10.0"
   }
 }

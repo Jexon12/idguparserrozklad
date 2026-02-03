@@ -1,3 +1,7 @@
+// Load environment variables locally
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config(); // Fallback to .env
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -12,6 +16,40 @@ const MIME_TYPES = {
     '.css': 'text/css',
     '.js': 'text/javascript',
     '.json': 'application/json'
+};
+
+// Global DB Clients (Lazy init)
+let kvClient = null;
+let redisClient = null;
+
+const getDb = async () => {
+    // 1. Vercel KV (@vercel/kv) - HTTP based
+    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+        if (!kvClient) {
+            try {
+                kvClient = require('@vercel/kv').kv;
+            } catch (e) { console.error("KV init error", e); }
+        }
+        if (kvClient) return { type: 'kv', client: kvClient };
+    }
+
+    // 2. Standard Redis (redis package) - TCP based
+    if (process.env.REDIS_URL) {
+        if (!redisClient) {
+            try {
+                const { createClient } = require('redis');
+                redisClient = createClient({ url: process.env.REDIS_URL });
+                redisClient.on('error', (err) => console.error('Redis Client Error', err));
+                await redisClient.connect();
+            } catch (e) {
+                console.error("Redis init error", e);
+                redisClient = null;
+            }
+        }
+        if (redisClient && redisClient.isOpen) return { type: 'redis', client: redisClient };
+    }
+
+    return null;
 };
 
 const server = http.createServer(async (req, res) => {
@@ -42,36 +80,24 @@ const server = http.createServer(async (req, res) => {
     // 2. Data Persistence (Links & Notes)
     if (req.url === '/api/links' || req.url.startsWith('/api/links?')) {
 
-        let kv;
-        try {
-            // Lazy load - only if needed
-            if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-                kv = require('@vercel/kv').kv;
-            }
-        } catch (e) {
-            console.error("Vercel KV not found or not configured", e);
-        }
-
-        // Local Fallback
+        const db = await getDb();
         const LINKS_FILE = path.join(__dirname, 'data', 'links.json');
 
         if (req.method === 'GET') {
             try {
                 let data = '{}';
 
-                if (kv) {
-                    // Try Vercel KV
-                    const remote = await kv.get('links');
-                    if (remote) data = JSON.stringify(remote);
-                }
-
-                // Fallback to local if no KV or if KV gave null (and we want to support local dev)
-                // Note: If KV is active, we usually ignore local file, OR we can merge.
-                // For simplicity: If KV is present, use it. If not, use file.
-                if (!kv) {
-                    if (fs.existsSync(LINKS_FILE)) {
-                        data = fs.readFileSync(LINKS_FILE, 'utf8');
+                if (db) {
+                    if (db.type === 'kv') {
+                        const remote = await db.client.get('links');
+                        if (remote) data = JSON.stringify(remote);
+                    } else if (db.type === 'redis') {
+                        const remoteStr = await db.client.get('links');
+                        if (remoteStr) data = remoteStr;
                     }
+                } else if (fs.existsSync(LINKS_FILE)) {
+                    // Fallback to local
+                    data = fs.readFileSync(LINKS_FILE, 'utf8');
                 }
 
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -92,17 +118,24 @@ const server = http.createServer(async (req, res) => {
                     const payload = JSON.parse(body);
                     const { password, key, value } = payload;
 
-                    // Simple Auth
                     if (password !== 'admin123') {
                         res.writeHead(403, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'Wrong password' }));
                         return;
                     }
 
-                    // READ
+                    // READ OLD
                     let links = {};
-                    if (kv) {
-                        links = (await kv.get('links')) || {};
+                    if (db) {
+                        let str;
+                        if (db.type === 'kv') {
+                            const obj = await db.client.get('links');
+                            // KV returns obj automatically?
+                            links = obj || {};
+                        } else if (db.type === 'redis') {
+                            str = await db.client.get('links');
+                            try { links = str ? JSON.parse(str) : {}; } catch (e) { }
+                        }
                     } else if (fs.existsSync(LINKS_FILE)) {
                         try {
                             links = JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8'));
@@ -117,12 +150,16 @@ const server = http.createServer(async (req, res) => {
                     }
 
                     // SAVE
-                    if (kv) {
-                        await kv.set('links', links);
+                    if (db) {
+                        if (db.type === 'kv') {
+                            await db.client.set('links', links);
+                        } else if (db.type === 'redis') {
+                            await db.client.set('links', JSON.stringify(links));
+                        }
                         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-                        res.end(JSON.stringify({ success: true, storage: 'kv' }));
+                        res.end(JSON.stringify({ success: true, storage: db.type }));
                     } else {
-                        // Ensure data dir exists
+                        // LOCAL SAVE
                         if (!fs.existsSync(path.join(__dirname, 'data'))) {
                             fs.mkdirSync(path.join(__dirname, 'data'));
                         }
@@ -140,7 +177,7 @@ const server = http.createServer(async (req, res) => {
                 } catch (e) {
                     console.error(e);
                     res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'Invalid JSON or Server Error' }));
+                    res.end(JSON.stringify({ error: 'Invalid JSON/Server Error' }));
                 }
             });
             return;
