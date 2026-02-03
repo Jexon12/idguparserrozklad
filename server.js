@@ -53,40 +53,18 @@ const getDb = async () => {
 };
 
 const server = http.createServer(async (req, res) => {
-    // Parse URL once
+    // Parse URL
     const parsedUrl = url.parse(req.url, true);
-    const pathname = parsedUrl.pathname;
+    // Lowercase path to be robust (some servers normalize differently)
+    const pathname = (parsedUrl.pathname || '/').toLowerCase();
 
-    // ---------------------------------------------------------
-    // 1. serve Static Files (index.html, styles)
-    // ---------------------------------------------------------
-    if (!pathname.startsWith('/api/')) {
-        let filePath = pathname === '/' ? '/index.html' : pathname;
-        filePath = path.join(__dirname, filePath);
+    console.log(`[Request] Method: ${req.method} Path: ${pathname}`);
 
-        const ext = path.extname(filePath);
-
-        fs.readFile(filePath, (err, content) => {
-            if (err) {
-                if (err.code == 'ENOENT') {
-                    res.writeHead(404);
-                    res.end('File not found');
-                } else {
-                    res.writeHead(500);
-                    res.end('Server error');
-                }
-            } else {
-                res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'text/plain' });
-                res.end(content, 'utf-8');
-            }
-        });
-        return;
-    }
-
-    // ---------------------------------------------------------
-    // 2. Data Persistence (Links & Notes)
-    // ---------------------------------------------------------
-    if (pathname === '/api/links' || pathname === '/api/links/') {
+    // =========================================================
+    // ROUTE 1: API - Database (Links & Notes)
+    // =========================================================
+    // Check this FIRST to prevent falling through to generic proxy
+    if (pathname.startsWith('/api/links')) {
 
         // Handle CORS Preflight
         if (req.method === 'OPTIONS') {
@@ -202,14 +180,21 @@ const server = http.createServer(async (req, res) => {
             });
             return;
         }
-    }
 
-    // ---------------------------------------------------------
-    // 3. API Proxy Logic (Osvita)
-    // ---------------------------------------------------------
-    if (pathname.startsWith('/api/')) {
+        // =========================================================
+        // ROUTE 2: API - Proxy (Osvita)
+        // =========================================================
+        // Matches any OTHER /api/... request
+    } else if (pathname.startsWith('/api/')) {
         const action = pathname.replace('/api/', '');
-        const search = parsedUrl.search || ''; // keep query string
+        const search = parsedUrl.search || '';
+
+        // Fix: Ensure we don't accidentally fetch 'links' from remote if logic failed
+        if (action === 'links') {
+            res.writeHead(404);
+            res.end("Generic API Proxy should not handle 'links' endpoint.");
+            return;
+        }
 
         const targetUrl = `${API_URL}${action}${search}`;
 
@@ -243,6 +228,30 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Proxy request failed' }));
         }
+
+        // =========================================================
+        // ROUTE 3: Static Files
+        // =========================================================
+    } else {
+        let filePath = pathname === '/' ? '/index.html' : pathname;
+        filePath = path.join(__dirname, filePath);
+
+        const ext = path.extname(filePath);
+
+        fs.readFile(filePath, (err, content) => {
+            if (err) {
+                if (err.code == 'ENOENT') {
+                    res.writeHead(404);
+                    res.end('File not found');
+                } else {
+                    res.writeHead(500);
+                    res.end('Server error');
+                }
+            } else {
+                res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'text/plain' });
+                res.end(content, 'utf-8');
+            }
+        });
     }
 });
 
