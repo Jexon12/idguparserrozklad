@@ -166,7 +166,7 @@ const server = http.createServer(async (req, res) => {
                         fs.writeFile(LINKS_FILE, JSON.stringify(links, null, 2), (err) => {
                             if (err) {
                                 res.writeHead(500);
-                                res.end(JSON.stringify({ error: 'Save failed' }));
+                                res.end(JSON.stringify({ error: 'Local FS Save failed: ' + err.message }));
                             } else {
                                 res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
                                 res.end(JSON.stringify({ success: true, storage: 'local' }));
@@ -176,8 +176,12 @@ const server = http.createServer(async (req, res) => {
 
                 } catch (e) {
                     console.error(e);
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'Invalid JSON/Server Error' }));
+                } catch (e) {
+                    console.error("Server API Error:", e);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    // Return connection details to help debug
+                    const dbStatus = db ? `Connected to ${db.type}` : 'No DB (using Local FS)';
+                    res.end(JSON.stringify({ error: `Internal Error: ${e.message}. DB Status: ${dbStatus}` }));
                 }
             });
             return;

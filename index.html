@@ -1983,7 +1983,12 @@
                                     value: val
                                 })
                             });
-                            if (!res.ok) alert("Помилка збереження на сервері!");
+                            const data = await res.json();
+                            if (!res.ok) {
+                                alert("Помилка збереження: " + (data.error || "Невідома помилка"));
+                            } else {
+                                // Success
+                            }
                         } catch (e) {
                             alert("Помилка мережі");
                         }
