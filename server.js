@@ -53,9 +53,15 @@ const getDb = async () => {
 };
 
 const server = http.createServer(async (req, res) => {
-    // 1. Serve Static Files (index.html, styles)
-    if (req.url === '/' || !req.url.startsWith('/api/')) {
-        let filePath = req.url === '/' ? '/index.html' : req.url;
+    // Parse URL once
+    const parsedUrl = url.parse(req.url, true);
+    const pathname = parsedUrl.pathname;
+
+    // ---------------------------------------------------------
+    // 1. serve Static Files (index.html, styles)
+    // ---------------------------------------------------------
+    if (!pathname.startsWith('/api/')) {
+        let filePath = pathname === '/' ? '/index.html' : pathname;
         filePath = path.join(__dirname, filePath);
 
         const ext = path.extname(filePath);
@@ -77,8 +83,21 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ---------------------------------------------------------
     // 2. Data Persistence (Links & Notes)
-    if (req.url === '/api/links' || req.url.startsWith('/api/links?')) {
+    // ---------------------------------------------------------
+    if (pathname === '/api/links' || pathname === '/api/links/') {
+
+        // Handle CORS Preflight
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            });
+            res.end();
+            return;
+        }
 
         const db = await getDb();
         const LINKS_FILE = path.join(__dirname, 'data', 'links.json');
@@ -130,7 +149,6 @@ const server = http.createServer(async (req, res) => {
                         let str;
                         if (db.type === 'kv') {
                             const obj = await db.client.get('links');
-                            // KV returns obj automatically?
                             links = obj || {};
                         } else if (db.type === 'redis') {
                             str = await db.client.get('links');
@@ -186,13 +204,14 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // ---------------------------------------------------------
     // 3. API Proxy Logic (Osvita)
-    if (req.url.startsWith('/api/')) {
-        const parsedUrl = url.parse(req.url, true);
-        const action = parsedUrl.pathname.replace('/api/', ''); // e.g. "GetStudentScheduleFiltersData"
-        const queryParams = new URLSearchParams(parsedUrl.query).toString();
+    // ---------------------------------------------------------
+    if (pathname.startsWith('/api/')) {
+        const action = pathname.replace('/api/', '');
+        const search = parsedUrl.search || ''; // keep query string
 
-        const targetUrl = `${API_URL}${action}${queryParams ? '?' + queryParams : ''}`;
+        const targetUrl = `${API_URL}${action}${search}`;
 
         console.log(`[Proxy] Forwarding to: ${targetUrl}`);
 
@@ -202,7 +221,7 @@ const server = http.createServer(async (req, res) => {
             const apiRes = await fetch(targetUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Referer': 'http://wp-fuaid.zzz.com.ua/', // Critical: Mimic allowed referer
+                    'Referer': 'http://wp-fuaid.zzz.com.ua/',
                     'Content-Type': 'application/json'
                 }
             });
@@ -211,7 +230,6 @@ const server = http.createServer(async (req, res) => {
 
             if (!apiRes.ok) {
                 console.error(`[Proxy Error] Status: ${apiRes.status}`);
-                console.error(`[Proxy Response]: ${data}`);
             }
 
             res.writeHead(apiRes.status, {
