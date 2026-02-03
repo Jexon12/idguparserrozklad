@@ -175,8 +175,6 @@ const server = http.createServer(async (req, res) => {
                     }
 
                 } catch (e) {
-                    console.error(e);
-                } catch (e) {
                     console.error("Server API Error:", e);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     // Return connection details to help debug
