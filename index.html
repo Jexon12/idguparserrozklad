@@ -1983,11 +1983,18 @@
                                     value: val
                                 })
                             });
-                            const data = await res.json();
+                            let data;
+                            try {
+                                data = await res.json();
+                            } catch (err) {
+                                alert(`Помилка: Статус ${res.status}. Відповідь не є JSON.`);
+                                return;
+                            }
+
                             if (!res.ok) {
-                                alert("Помилка збереження: " + (data.error || "Невідома помилка"));
+                                alert(`Помилка збереження (${res.status}): ${data.error || JSON.stringify(data)}`);
                             } else {
-                                // Success
+                                alert("Збережено успішно!");
                             }
                         } catch (e) {
                             alert("Помилка мережі");
