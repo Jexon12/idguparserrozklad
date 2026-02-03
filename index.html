@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="uk">
 
 <head>
@@ -107,12 +107,24 @@
 
                 <div v-else class="space-y-4">
                     <!-- Faculty Filter (Common) - Hide in Occupancy -->
+                    <!-- Faculty Filter (Common) - Hide in Occupancy -->
                     <div v-if="mode !== 'occupancy'">
                         <label class="block text-sm font-bold mb-1">Факультет</label>
                         <select v-model="selectedFaculty" @change="onFacultyChange"
                             class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
                             <option value="">-- Оберіть факультет --</option>
                             <option v-for="fac in faculties" :key="fac.Key" :value="fac.Key">{{ fac.Value }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Common Filter: Study Type -->
+                    <div v-if="mode !== 'occupancy'">
+                        <label class="block text-sm font-bold mb-1">Тип заняття</label>
+                        <select v-model="selectedStudyType"
+                            class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                            <option value="">-- Всі типи --</option>
+                            <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value }}
                             </option>
                         </select>
                     </div>
@@ -137,16 +149,6 @@
                                 </option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1">Тип заняття</label>
-                            <select v-model="selectedStudyType"
-                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
-                                <option value="">-- Всі типи --</option>
-                                <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value }}
-                                </option>
-                            </select>
-                        </div>
-
 
                         <div>
                             <label class="block text-sm font-bold mb-1">Група</label>
