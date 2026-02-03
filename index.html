@@ -137,6 +137,15 @@
                                 </option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Тип заняття</label>
+                            <select v-model="selectedStudyType"
+                                class="w-full border rounded p-2 focus:ring focus:ring-blue-200">
+                                <option value="">-- Всі типи --</option>
+                                <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value }}
+                                </option>
+                            </select>
+                        </div>
 
 
                         <div>
@@ -729,6 +738,14 @@
                     const chairs = ref([]);
                     const groups = ref([]); // List of groups for selected faculty
                     const employees = ref([]); // List of teachers
+                    const studyTypes = ref([
+                        { Key: '10', Value: 'Лекції' },
+                        { Key: '11', Value: 'Практичні' },
+                        { Key: '12', Value: 'Лабораторні' },
+                        { Key: '14', Value: 'Консультації' },
+                        { Key: '21', Value: 'Семінарські' },
+                        { Key: '23', Value: 'Індивідуальні заняття' }
+                    ]);
 
                     // Selections
                     const selectedFaculty = ref('');
@@ -737,6 +754,7 @@
                     const selectedGroup = ref(''); // Object {Key, Value}
                     const selectedChair = ref('');
                     const selectedEmployee = ref(''); // Object {Key, Value}
+                    const selectedStudyType = ref('');
 
                     // Filter within results
                     const selectedDisciplines = ref([]);
@@ -1108,7 +1126,7 @@
                                 aStudyGroupID: id,
                                 aStartDate: startDate,
                                 aEndDate: endDate,
-                                aStudyTypeID: "" // Required by API even if empty
+                                aStudyTypeID: selectedStudyType.value ? `"${selectedStudyType.value}"` : "" // API expects quoted ID or empty
                             };
                         } else {
                             id = selectedEmployee.value.Key;
@@ -1119,7 +1137,7 @@
                                 aEmployeeID: id,
                                 aStartDate: startDate,
                                 aEndDate: endDate,
-                                aStudyTypeID: "" // Required by API even if empty
+                                aStudyTypeID: selectedStudyType.value ? `"${selectedStudyType.value}"` : "" // API expects quoted ID or empty
                             };
                         }
 
@@ -1492,6 +1510,53 @@
                             if (mode.value === 'student') loadGroups();
                             else loadChairs();
                         }
+                    });
+
+                    // Watch for Study Type changes -> Reload all active entities
+                    watch(selectedStudyType, async () => {
+                        if (activeEntities.value.length === 0) return;
+
+                        // We need to re-fetch data for all active entities with the new filter
+                        const entities = [...activeEntities.value];
+                        activeEntities.value = []; // Clear current list to force re-render/re-fetch logic
+
+                        // Re-add them one by one (this reuses the addEntity logic which now reads the new filter)
+                        // This is a bit hacky but ensures consistency with minimal code duplication
+                        // Better approach: Iterate and update data in place.
+
+                        loadingSchedule.value = true;
+
+                        const promises = entities.map(async (entity) => {
+                            let action, payload;
+                            const startDate = dateStart.value.split('-').reverse().join('.');
+                            const endDate = dateEnd.value.split('-').reverse().join('.');
+                            const typeIdParam = selectedStudyType.value ? `"${selectedStudyType.value}"` : "";
+
+                            if (entity.type === 'Група') {
+                                action = 'GetScheduleDataX';
+                                payload = {
+                                    aStudyGroupID: entity.id,
+                                    aStartDate: startDate,
+                                    aEndDate: endDate,
+                                    aStudyTypeID: typeIdParam
+                                };
+                            } else {
+                                action = 'GetScheduleDataEmp';
+                                payload = {
+                                    aEmployeeID: entity.id,
+                                    aStartDate: startDate,
+                                    aEndDate: endDate,
+                                    aStudyTypeID: typeIdParam
+                                };
+                            }
+
+                            const data = await fetchApi(action, payload);
+                            return { ...entity, scheduleData: data };
+                        });
+
+                        const updatedEntities = await Promise.all(promises);
+                        activeEntities.value = updatedEntities;
+                        loadingSchedule.value = false;
                     });
 
                     // --- Smart Search ---
@@ -1963,6 +2028,8 @@
                         selectedChair,
                         selectedEmployee,
                         selectedDisciplines,
+                        studyTypes,
+                        selectedStudyType,
 
                         dateStart,
                         dateEnd,
