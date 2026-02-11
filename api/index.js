@@ -1,4 +1,30 @@
 const fetch = require('node-fetch');
+const path = require('path');
+const fs = require('fs');
+
+const DB_FILE = path.join(__dirname, '../db.json');
+
+// Helper for local DB
+const getLocalDb = () => {
+    try {
+        if (fs.existsSync(DB_FILE)) {
+            return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.error("Local DB Read Error", e);
+    }
+    return {};
+};
+
+const saveLocalDb = (data) => {
+    try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        return true;
+    } catch (e) {
+        console.error("Local DB Write Error", e);
+        return false;
+    }
+};
 
 // Global DB Clients (Lazy init) needed for Serverless function cold starts
 let kvClient = null;
@@ -52,6 +78,78 @@ module.exports = async (req, res) => {
     const pathname = (urlObj.pathname || '').toLowerCase();
 
     console.log(`[Vercel API] Method: ${req.method} Path: ${pathname}`);
+
+    // =========================================================
+    // ROUTE: Global Times (/api/times)
+    // =========================================================
+    if (pathname.includes('/times')) {
+        const db = await getDb();
+        // Fallback to local file if no cloud DB
+        const useLocal = !db;
+
+        if (req.method === 'GET') {
+            let times = {};
+            if (useLocal) {
+                const localData = getLocalDb();
+                times = localData.times || {};
+            } else {
+                if (db.type === 'kv') {
+                    times = await db.client.get('times') || {};
+                } else if (db.type === 'redis') {
+                    const str = await db.client.get('times');
+                    times = str ? JSON.parse(str) : {};
+                }
+            }
+            res.status(200).json(times);
+            return;
+        }
+
+        if (req.method === 'POST') {
+            console.log("API Times POST received");
+            let payload;
+            try {
+                payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+                console.log("Payload parsed:", payload ? "OK" : "NULL");
+            } catch (e) {
+                console.error("Payload parse error:", e);
+                res.status(400).json({ error: 'Invalid JSON body: ' + e.message });
+                return;
+            }
+
+            if (!payload) {
+                res.status(400).json({ error: 'Missing body' });
+                return;
+            }
+
+            const { password, times } = payload;
+            if (password !== 'admin123') {
+                console.log("Wrong password");
+                res.status(403).json({ error: 'Wrong password' });
+                return;
+            }
+
+            try {
+                if (useLocal) {
+                    const data = getLocalDb();
+                    data.times = times;
+                    if (!saveLocalDb(data)) {
+                        throw new Error("Failed to write local DB");
+                    }
+                } else {
+                    if (db.type === 'kv') {
+                        await db.client.set('times', times);
+                    } else if (db.type === 'redis') {
+                        await db.client.set('times', JSON.stringify(times));
+                    }
+                }
+                res.status(200).json({ success: true });
+            } catch (e) {
+                console.error("DB Save Error:", e);
+                res.status(500).json({ error: 'Database error: ' + e.message });
+            }
+            return;
+        }
+    }
 
     // =========================================================
     // ROUTE 1: DATABASE (Links)
