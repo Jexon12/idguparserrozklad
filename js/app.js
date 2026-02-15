@@ -286,31 +286,41 @@ try {
 
                 // Count free windows per day
                 const lessonsByDate = {};
+                const uniquePairs = new Set(); // Track unique slots (date + time + discipline)
 
                 activeEntities.value.forEach(entity => {
                     if (!entity.scheduleData) return;
                     entity.scheduleData.forEach(item => {
-                        stats.totalPairs++;
-                        daySet.add(item.full_date);
+                        // Unique identifier for a "pair" regardless of how many groups attend
+                        // Key: date + time + discipline + type (to differentiate lecture vs practice if concurrent)
+                        const uniqueKey = `${item.full_date}-${item.study_time}-${item.discipline}-${item.study_type}`;
 
-                        // By subject
-                        const subj = item.discipline;
-                        stats.bySubject[subj] = (stats.bySubject[subj] || 0) + 1;
+                        // Only count metrics if this is a new unique pair
+                        if (!uniquePairs.has(uniqueKey)) {
+                            uniquePairs.add(uniqueKey);
+                            stats.totalPairs++;
 
-                        // By type
-                        const type = item.study_type || 'Інше';
-                        stats.byType[type] = (stats.byType[type] || 0) + 1;
+                            // By subject (only count once per pair)
+                            const subj = item.discipline;
+                            stats.bySubject[subj] = (stats.bySubject[subj] || 0) + 1;
 
-                        // Day of week
-                        const [d, m, y] = item.full_date.split('.');
-                        const date = new Date(`${y}-${m}-${d}`);
-                        const dow = dayNames[date.getDay()];
-                        dayOfWeekCount[dow] = (dayOfWeekCount[dow] || 0) + 1;
+                            // Day of week
+                            const [d, m, y] = item.full_date.split('.');
+                            const date = new Date(`${y}-${m}-${d}`);
+                            const dow = dayNames[date.getDay()];
+                            dayOfWeekCount[dow] = (dayOfWeekCount[dow] || 0) + 1;
 
-                        // Track time slots per date for free window calc
-                        if (!lessonsByDate[item.full_date]) lessonsByDate[item.full_date] = [];
-                        const pairMatch = item.study_time.match(/(\d+)/);
-                        if (pairMatch) lessonsByDate[item.full_date].push(parseInt(pairMatch[1]));
+                            daySet.add(item.full_date);
+
+                            // By type 
+                            const type = item.study_type || 'Інше';
+                            stats.byType[type] = (stats.byType[type] || 0) + 1;
+
+                            // Track time slots per date for free window calc
+                            if (!lessonsByDate[item.full_date]) lessonsByDate[item.full_date] = [];
+                            const pairMatch = item.study_time.match(/(\d+)/);
+                            if (pairMatch) lessonsByDate[item.full_date].push(parseInt(pairMatch[1]));
+                        }
                     });
                 });
 
