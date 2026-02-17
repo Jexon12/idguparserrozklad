@@ -1,24 +1,23 @@
-const http = require('http');
 
-const params = new URLSearchParams({
-    aVuzID: '11927',
-    aFacultyID: '"LEMCCKL238XH"', // Quoted as per previous success on other endpoints? Or try raw? 
-    // Proxy.php sends raw get query. 
-    // Browser sends quoted string in JSON? No, GET params are strings.
-    // "LEMCCKL238XH" (with quotes) seems to be the format used by the site?
-    // Let's try QUOTED first.
-    aEducationForm: '"1"',
-    aCourse: '"1"',
-    aGiveStudyTimes: 'false'
-});
+async function testApi() {
+    const teacherId = 'I9D5X0DC3PWM';
+    const startDate = '01.02.2026';
+    const endDate = '28.02.2026';
+    const url = `http://vnz.osvita.net/WidgetSchedule.asmx/GetScheduleDataEmp?aVuzID=11927&aEmployeeID=${teacherId}&aStartDate=${startDate}&aEndDate=${endDate}&aStudyTypeID=&aGiveStudyTimes=true`;
 
-const url = `http://vnz.osvita.net/WidgetSchedule.asmx/GetStudyGroups?${params.toString()}`;
+    console.log("Fetching:", url);
+    try {
+        const res = await fetch(url);
+        console.log("Status:", res.status);
+        if (!res.ok) {
+            console.log("Error Body:", await res.text());
+        } else {
+            const json = await res.json();
+            console.log("Success! Items:", (json.d || json).length);
+        }
+    } catch (e) {
+        console.error("Fetch failed:", e);
+    }
+}
 
-console.log("Fetching: " + url);
-
-http.get(url, (res) => {
-    console.log("Status:", res.statusCode);
-    let data = '';
-    res.on('data', c => data += c);
-    res.on('end', () => console.log(data.substring(0, 500)));
-});
+testApi();

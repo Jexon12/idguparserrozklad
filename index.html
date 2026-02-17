@@ -32,16 +32,6 @@
     </script>
 </head>
 
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-MQJNLFQ5RJ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-MQJNLFQ5RJ');
-</script>
-
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
     <div id="app" class="min-h-screen">
         <!-- Toast Notification -->
@@ -352,6 +342,82 @@
                 </div>
             </div>
 
+
+            <!-- Modal: Report Download -->
+            <div v-if="showReportModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4"
+                @click.self="showReportModal = false">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full flex flex-col">
+                    <div class="p-4 border-b dark:border-gray-700 bg-green-50 dark:bg-green-900/20 rounded-t-xl">
+                        <h3 class="font-bold text-lg text-green-800 dark:text-green-300">📊 Завантажити звіт</h3>
+                        <p class="text-xs text-green-600 dark:text-green-400">Формування Excel-звіту для викладача</p>
+                    </div>
+
+                    <div class="p-4 space-y-4">
+                        <!-- Faculty -->
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Факультет</label>
+                            <select v-model="reportForm.faculty" @change="loadReportChairs"
+                                class="w-full border rounded p-2 focus:ring focus:ring-green-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-green-900 transition-colors">
+                                <option value="">-- Оберіть факультет --</option>
+                                <option v-for="fac in faculties" :key="fac.Key" :value="fac">{{ fac.Value }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Chair -->
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Кафедра</label>
+                            <select v-model="reportForm.chair" @change="loadReportEmployees"
+                                :disabled="!reportForm.faculty"
+                                class="w-full border rounded p-2 focus:ring focus:ring-green-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-green-900 transition-colors disabled:opacity-50">
+                                <option value="">-- Оберіть кафедру --</option>
+                                <option v-for="chair in reportChairs" :key="chair.Key" :value="chair">{{ chair.Value }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Teacher -->
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Викладач</label>
+                            <select v-model="reportForm.teacher" :disabled="!reportForm.chair"
+                                class="w-full border rounded p-2 focus:ring focus:ring-green-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-green-900 transition-colors disabled:opacity-50">
+                                <option value="">-- Оберіть викладача --</option>
+                                <option v-for="emp in reportEmployees" :key="emp.Key" :value="emp">{{ emp.Value }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Month Range -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">З місяця</label>
+                                <input type="month" v-model="reportForm.monthStart"
+                                    class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">По місяць</label>
+                                <input type="month" v-model="reportForm.monthEnd"
+                                    class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-2">
+                        <button @click="showReportModal = false"
+                            class="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold py-2 px-4 rounded">
+                            Скасувати
+                        </button>
+                        <button @click="downloadReport" :disabled="!isReportFormValid || isDownloadingReport"
+                            class="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-bold py-2 px-4 rounded flex items-center gap-2">
+                            <span v-if="isDownloadingReport"
+                                class="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></span>
+                            <span v-else>📥</span>
+                            Завантажити
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Main Content -->
             <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
@@ -381,6 +447,13 @@
                                         @click.stop="removeFavorite(fav.id)">✕</button>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <button @click="openReportModal"
+                                class="w-full bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
+                                📊 Завантажити звіт
+                            </button>
                         </div>
 
                         <!-- Tabs: Student vs Teacher -->
@@ -648,16 +721,14 @@
                     <div v-if="favorites.length > 0" class="mb-4 pb-4 border-b dark:border-gray-700">
                         <div class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">⭐
                             Обране</div>
-                        <div class="flex flex-wrap gap-2">
-                            <div v-for="fav in favorites" :key="fav.id + fav.type"
-                                class="favorites-chip bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700"
-                                @click="loadFromFavorite(fav)">
-                                <span>{{ fav.type === 'Група' ? '🎓' : '👨‍🏫' }}</span>
-                                <span>{{ fav.name }}</span>
-                                <button class="remove-fav text-red-400 hover:text-red-600"
-                                    @click.stop="removeFavorite(fav.id)">✕</button>
-                            </div>
-                        </div>
+                        <button class="remove-fav text-red-400 hover:text-red-600"
+                            @click.stop="removeFavorite(fav.id)">✕</button>
+                    </div>
+                    <div class="mb-6">
+                        <button @click="openReportModal"
+                            class="w-full bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
+                            📊 Завантажити звіт
+                        </button>
                     </div>
 
                     <!-- Tabs: Student vs Teacher -->
@@ -909,6 +980,8 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Main Panel: Results -->
 
                 <!-- Main Panel: Results -->
                 <div class="lg:col-span-3 space-y-6">
@@ -1438,6 +1511,5 @@
         }
     </script>
 </body>
-
 
 </html>

@@ -107,11 +107,52 @@ try {
             const showFreeTimeModal = ref(false);
             const commonFreeSlots = ref([]);
 
+            // Report Download
+            const showReportModal = ref(false);
+            const reportForm = ref({ faculty: '', chair: '', teacher: '', monthStart: '', monthEnd: '' });
+            const reportChairs = ref([]);
+            const reportEmployees = ref([]);
+            const isDownloadingReport = ref(false);
+
+            const isReportFormValid = computed(() => {
+                return reportForm.value.faculty && reportForm.value.chair && reportForm.value.teacher && reportForm.value.monthStart && reportForm.value.monthEnd;
+            });
+
             // Auto-Refresh
             const autoRefreshEnabled = ref(localStorage.getItem('schedule_autoRefresh') === 'true');
             const autoRefreshInterval = ref(parseInt(localStorage.getItem('schedule_autoRefreshInterval') || '10'));
             const lastRefreshTime = ref(null);
             let autoRefreshTimer = null;
+
+            // Local Notifications
+            const notificationsEnabled = ref(localStorage.getItem('schedule_notifications') === 'true');
+            const notifiedLessons = ref(new Set());
+
+            const requestNotificationPermission = async () => {
+                if (!("Notification" in window)) {
+                    showToast("Ваш браузер не підтримує сповіщення");
+                    return;
+                }
+                if (notificationsEnabled.value) {
+                    // Toggle off
+                    notificationsEnabled.value = false;
+                    localStorage.setItem('schedule_notifications', 'false');
+                    showToast("🔕 Сповіщення вимкнено");
+                    return;
+                }
+                // Request permission
+                const permission = await Notification.requestPermission();
+                if (permission === "granted") {
+                    notificationsEnabled.value = true;
+                    localStorage.setItem('schedule_notifications', 'true');
+                    showToast("🔔 Сповіщення увімкнено!");
+                    new Notification("Розклад", { body: "Тестове сповіщення: все працює!" });
+                } else {
+                    notificationsEnabled.value = false;
+                    localStorage.setItem('schedule_notifications', 'false');
+                    showToast("🚫 Сповіщення заборонено браузером");
+                }
+            };
 
             // === NEW UI STATE ===
             const favorites = ref(JSON.parse(localStorage.getItem('schedule_favorites') || '[]'));
@@ -121,6 +162,7 @@ try {
             const toastMessage = ref('');
             const toastVisible = ref(false);
             const nextLessonInfo = ref(null);
+            const currentLessonInfo = ref(null);
             let nextLessonTimer = null;
 
             // Dark Mode
@@ -723,6 +765,90 @@ try {
             const saveGlobalTimes = () => SA.saveGlobalTimes(adminRefs);
             const getGlobalLink = (lesson, type) => SA.getGlobalLink(lesson, type, adminRefs);
 
+            // Report Methods
+            const openReportModal = () => {
+                showReportModal.value = true;
+                // Pre-fill months
+                const now = new Date();
+                const yyyy = now.getFullYear();
+                const mm = String(now.getMonth() + 1).padStart(2, '0');
+                const currentMonth = `${yyyy}-${mm}`;
+
+                if (!reportForm.value.monthStart) reportForm.value.monthStart = currentMonth;
+                if (!reportForm.value.monthEnd) reportForm.value.monthEnd = currentMonth;
+            };
+
+            const loadReportChairs = async () => {
+                reportForm.value.chair = '';
+                reportForm.value.teacher = '';
+                reportChairs.value = [];
+                if (!reportForm.value.faculty) return;
+
+                console.log("[Report] Loading chairs for faculty:", reportForm.value.faculty);
+                loadingFilters.value = true;
+                const data = await fetchApi('GetEmployeeChairs', { aFacultyID: reportForm.value.faculty.Key });
+                console.log("[Report] Chairs loaded:", data);
+                reportChairs.value = data?.chairs || [];
+                loadingFilters.value = false;
+            };
+
+            const loadReportEmployees = async () => {
+                reportForm.value.teacher = '';
+                reportEmployees.value = [];
+                if (!reportForm.value.chair) return;
+
+                console.log("[Report] Loading employees for chair:", reportForm.value.chair);
+                loadingFilters.value = true;
+                const data = await fetchApi('GetEmployees', {
+                    aFacultyID: reportForm.value.faculty.Key,
+                    aChairID: reportForm.value.chair.Key
+                });
+                console.log("[Report] Employees loaded:", data);
+                reportEmployees.value = Array.isArray(data) ? data : [];
+                loadingFilters.value = false;
+            };
+
+            const downloadReport = async () => {
+                if (!isReportFormValid.value) return;
+                isDownloadingReport.value = true;
+                try {
+                    const params = new URLSearchParams({
+                        faculty: reportForm.value.faculty.Value,
+                        department: reportForm.value.chair.Value,
+                        teacherName: reportForm.value.teacher.Value,
+                        teacherId: reportForm.value.teacher.Key,
+                        monthStart: reportForm.value.monthStart,
+                        monthEnd: reportForm.value.monthEnd
+                    });
+
+                    const response = await fetch(`${SA.API_PROXY}report/download?${params.toString()}`);
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'Failed to download');
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    // Filename usually set by Content-Disposition, but fallback here
+                    a.download = `Report_${reportForm.value.teacher.Value}_${reportForm.value.monthStart}_${reportForm.value.monthEnd}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    showToast("✅ Звіт успішно завантажено!");
+                    showReportModal.value = false;
+                } catch (e) {
+                    errorMessage.value = "Помилка завантаження звіту: " + e.message;
+                    setTimeout(() => errorMessage.value = '', 5000);
+                } finally {
+                    isDownloadingReport.value = false;
+                }
+            };
+
 
 
 
@@ -779,9 +905,7 @@ try {
                 // Auto refresh every 5 minutes
                 setInterval(refreshAllSchedules, 5 * 60 * 1000);
 
-                // Next lesson countdown timer
-                nextLessonTimer = setInterval(computeNextLesson, 30000);
-                computeNextLesson();
+                // Next lesson countdown timer handled by updateTimeBasedInfo
 
                 // Keyboard shortcuts
                 document.addEventListener('keydown', (e) => {
@@ -927,27 +1051,91 @@ try {
             };
 
             // Next lesson countdown
-            const computeNextLesson = () => {
+            // Time-based updates (Next & Current Lesson)
+            const updateTimeBasedInfo = () => {
                 const now = new Date();
                 let nearest = null;
                 let nearestDiff = Infinity;
+                let current = null;
                 const gs = groupedSchedule.value;
-                if (!gs || gs.length === 0) { nextLessonInfo.value = null; return; }
+
+                if (!gs || gs.length === 0) {
+                    nextLessonInfo.value = null;
+                    currentLessonInfo.value = null;
+                    return;
+                }
+
                 for (const dayData of gs) {
                     for (const slot of dayData.slots) {
-                        if (!slot.start) continue;
-                        for (const lesson of slot.lessons) {
-                            const parts = dayData.date.split('.');
-                            if (parts.length !== 3) continue;
-                            const dt = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${slot.start}:00`);
-                            const diff = dt - now;
-                            if (diff > 0 && diff < nearestDiff) {
-                                nearestDiff = diff;
-                                nearest = { discipline: lesson.discipline, teacher: lesson.teacher || '', cabinet: lesson.cabinet || '', time: `${slot.start} - ${slot.end}` };
+                        if (!slot.start || !slot.end) continue;
+
+                        const parts = dayData.date.split('.');
+                        if (parts.length !== 3) continue;
+
+                        // Create Date objects (assuming current year/month/day context matches schedule date)
+                        const lessonStart = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${slot.start}:00`);
+                        const lessonEnd = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${slot.end}:00`);
+
+                        // Check Current Lesson
+                        if (now >= lessonStart && now < lessonEnd) {
+                            if (!current && slot.lessons.length > 0) {
+                                const l = slot.lessons[0];
+                                const totalDuration = lessonEnd - lessonStart;
+                                const elapsed = now - lessonStart;
+                                const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100)));
+                                const timeLeft = Math.ceil((lessonEnd - now) / 60000);
+                                const totalMins = Math.floor(totalDuration / 60000);
+
+                                current = {
+                                    discipline: l.discipline,
+                                    teacher: l.teacher || l.group || '',
+                                    cabinet: l.cabinet || '',
+                                    type: l.type,
+                                    time: slot.time,
+                                    percent,
+                                    timeLeft, // mins
+                                    timeLeftStr: timeLeft > 60 ? `${Math.floor(timeLeft / 60)}г ${timeLeft % 60}хв` : `${timeLeft} хв`,
+                                    totalMins
+                                };
+                            }
+                        }
+
+                        // Check Next Lesson
+                        const diff = lessonStart - now;
+                        if (diff > 0 && diff < nearestDiff) {
+                            nearestDiff = diff;
+                            if (slot.lessons.length > 0) {
+                                const l = slot.lessons[0];
+                                nearest = {
+                                    discipline: l.discipline,
+                                    teacher: l.teacher || '',
+                                    cabinet: l.cabinet || '',
+                                    time: slot.time
+                                };
+                            }
+                        }
+
+                        // Notification Logic (5 mins before)
+                        const diffMins = Math.floor(diff / 60000);
+                        if (notificationsEnabled.value && diffMins <= 5 && diffMins > 0) {
+                            const l = slot.lessons[0];
+                            const notifKey = `${dayData.date}-${slot.start}-${l.discipline}`;
+                            if (!notifiedLessons.value.has(notifKey)) {
+                                notifiedLessons.value.add(notifKey);
+                                if (Notification.permission === "granted") {
+                                    new Notification(`🔔 Скоро пара: ${l.discipline}`, {
+                                        body: `Початок о ${slot.start} (через ${diffMins} хв). ${l.cabinet || ''}`,
+                                        requireInteraction: false
+                                    });
+                                }
                             }
                         }
                     }
                 }
+
+                // Update state
+                currentLessonInfo.value = current;
+
                 if (nearest && nearestDiff < 24 * 60 * 60 * 1000) {
                     const mins = Math.floor(nearestDiff / 60000);
                     const hrs = Math.floor(mins / 60);
@@ -958,6 +1146,11 @@ try {
                     nextLessonInfo.value = null;
                 }
             };
+
+            // Start timer
+            if (nextLessonTimer) clearInterval(nextLessonTimer);
+            nextLessonTimer = setInterval(updateTimeBasedInfo, 60000); // Check every minute
+            setTimeout(updateTimeBasedInfo, 1000); // Initial check
 
             // --- Return all template bindings ---
             return {
@@ -993,10 +1186,18 @@ try {
                 toastMessage, toastVisible, nextLessonInfo,
                 setDateRange, shiftWeek,
                 addToFavorites, removeFavorite, loadFromFavorite,
-                exportICal, shareSchedule, showToast, computeNextLesson,
+                exportICal, shareSchedule, showToast,
                 // Auto-Refresh
                 autoRefreshEnabled, autoRefreshInterval, lastRefreshTime,
-                toggleAutoRefresh, setAutoRefreshInterval
+                toggleAutoRefresh, setAutoRefreshInterval,
+                // Time info
+                nextLessonInfo, currentLessonInfo,
+                // Notifications
+                notificationsEnabled, requestNotificationPermission,
+
+                // Methods
+                openReportModal, loadReportChairs, loadReportEmployees, downloadReport,
+                reportForm, reportChairs, reportEmployees, showReportModal, isReportFormValid, isDownloadingReport
             };
         }
     }).mount('#app');
