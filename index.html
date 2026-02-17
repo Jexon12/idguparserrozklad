@@ -412,7 +412,7 @@
                             <span v-if="isDownloadingReport"
                                 class="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></span>
                             <span v-else>📥</span>
-                            Завантажити
+                            {{ isDownloadingReport ? 'Генерація...' : 'Завантажити' }}
                         </button>
                     </div>
                 </div>
@@ -1498,6 +1498,7 @@
     <script src="js/occupancy.js"></script>
     <script src="js/notes.js"></script>
     <script src="js/admin.js"></script>
+    <script src="js/report.js"></script>
     <script src="js/app.js"></script>
 
     <!-- Service Worker Registration -->
