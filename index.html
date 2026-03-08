@@ -38,7 +38,7 @@
         <div class="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
 
         <!-- Global Sticky Status Bar (Component) -->
-        <current-lesson-banner :current-lesson-info="currentLessonInfo" />
+        <current-lesson-banner :current-lesson-info="currentLessonInfo"></current-lesson-banner>
 
         <div class="p-4 md:p-8">
             <!-- Header -->
@@ -386,10 +386,12 @@
 
                         <!-- Progress bar -->
                         <div v-if="isDownloadingReport && reportProgress" class="space-y-2">
-                            <div class="text-sm font-bold text-green-700 dark:text-green-400">{{ reportProgress.progress }}</div>
+                            <div class="text-sm font-bold text-green-700 dark:text-green-400">{{ reportProgress.progress
+                                }}</div>
                             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                                 <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300"
-                                    :style="{ width: (reportProgress.total ? (reportProgress.current / reportProgress.total * 100) : 0) + '%' }"></div>
+                                    :style="{ width: (reportProgress.total ? (reportProgress.current / reportProgress.total * 100) : 0) + '%' }">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -538,7 +540,8 @@
                                 <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип пари</label>
                                 <select v-model="lessonTypeFilter"
                                     class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
-                                    <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                                    <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{
+                                        opt.label }}</option>
                                 </select>
                             </div>
 
@@ -828,7 +831,8 @@
                             <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип пари</label>
                             <select v-model="lessonTypeFilter"
                                 class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
-                                <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                                <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{
+                                    opt.label }}</option>
                             </select>
                         </div>
 
@@ -1166,7 +1170,7 @@
                                         <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
                                             <div class="flex justify-between text-xs mb-1">
                                                 <span class="truncate pr-2 font-medium text-gray-700 dark:text-gray-300"
-                                                    title="{{ subj.name }}">{{ subj.name }}</span>
+                                                    :title="subj.name">{{ subj.name }}</span>
                                                 <span class="text-gray-500 dark:text-gray-400">{{ subj.count }}</span>
                                             </div>
                                             <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">

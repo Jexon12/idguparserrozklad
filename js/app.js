@@ -165,7 +165,17 @@ try {
             };
 
             // === NEW UI STATE ===
-            const favorites = ref(JSON.parse(localStorage.getItem('schedule_favorites') || '[]'));
+            const safeParse = (key, fallback) => {
+                try {
+                    const val = localStorage.getItem(key);
+                    return val ? JSON.parse(val) : fallback;
+                } catch (e) {
+                    console.error(`Failed to parse ${key}`, e);
+                    return fallback;
+                }
+            };
+
+            const favorites = ref(safeParse('schedule_favorites', []));
             const viewMode = ref(localStorage.getItem('schedule_viewMode') || 'cards');
             const datePreset = ref('');
             const sidebarOpen = ref(false);

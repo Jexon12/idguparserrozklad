@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-v3';
+const CACHE_NAME = 'schedule-v5';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -32,6 +32,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch — Network-first for everything (ensures latest files are always served)
 self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return;
+    }
+
     event.respondWith(
         fetch(event.request)
             .then(response => {
