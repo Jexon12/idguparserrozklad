@@ -14,7 +14,7 @@ const reportState = Vue.reactive({
     },
     reportChairs: [],
     reportEmployees: [],
-    errorMessage: ''
+    reportError: ''
 });
 
 const reportComputed = {
@@ -100,8 +100,8 @@ const reportMethods = {
                 reportState.reportProgress = { current: s.current || 0, total: s.total || 0, progress: s.progress || '', done: !!s.done, error: s.error || null };
                 if (s.error) {
                     reportState.isDownloadingReport = false;
-                    reportState.errorMessage = s.error;
-                    setTimeout(() => reportState.errorMessage = '', 5000);
+                    reportState.reportError = s.error;
+                    setTimeout(() => reportState.reportError = '', 5000);
                     return;
                 }
                 if (s.done && s.downloadUrl) {
@@ -117,9 +117,9 @@ const reportMethods = {
             };
             poll();
         } catch (e) {
-            reportState.errorMessage = "Помилка: " + e.message;
+            reportState.reportError = "Помилка: " + e.message;
             reportState.isDownloadingReport = false;
-            setTimeout(() => reportState.errorMessage = '', 5000);
+            setTimeout(() => reportState.reportError = '', 5000);
         }
     }
 };

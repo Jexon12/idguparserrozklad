@@ -511,7 +511,6 @@
 
                         <div v-else class="space-y-4">
                             <!-- Faculty Filter (Common) - Hide in Occupancy -->
-                            <!-- Faculty Filter (Common) - Hide in Occupancy -->
                             <div v-if="mode !== 'occupancy'">
                                 <label class="block text-sm font-bold mb-1 dark:text-gray-300">Факультет</label>
                                 <select v-model="selectedFaculty" @change="onFacultyChange"
@@ -719,11 +718,19 @@
                 <div class="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-fit desktop-sidebar">
 
                     <!-- Favorites Quick Access -->
-                    <div v-if="favorites.length > 0" class="mb-4 pb-4 border-b dark:border-gray-700">
+                    <div v-if="favorites.length > 0" class="mb-6 pb-4 border-b dark:border-gray-700">
                         <div class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">⭐
                             Обране</div>
-                        <button class="remove-fav text-red-400 hover:text-red-600"
-                            @click.stop="removeFavorite(fav.id)">✕</button>
+                        <div class="flex flex-wrap gap-2">
+                            <div v-for="fav in favorites" :key="fav.id + fav.type"
+                                class="favorites-chip bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700"
+                                @click="loadFromFavorite(fav)">
+                                <span>{{ fav.type === 'Група' ? '🎓' : '👨‍🏫' }}</span>
+                                <span>{{ fav.name }}</span>
+                                <button class="remove-fav text-red-400 hover:text-red-600"
+                                    @click.stop="removeFavorite(fav.id)">✕</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-6">
                         <button @click="openReportModal"
@@ -1223,7 +1230,7 @@
                         </div>
 
                         <!-- Active Entities List -->
-                        <div v-else class="flex flex-wrap gap-3">
+                        <div v-if="activeEntities.length > 0" class="flex flex-wrap gap-3">
                             <div v-for="(entity, index) in activeEntities" :key="index"
                                 class="flex items-center bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-full shadow-sm">
                                 <span class="font-medium mr-2">{{ entity.name }}</span>
