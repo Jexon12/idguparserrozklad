@@ -12,12 +12,13 @@ const STATIC_ASSETS = [
     '/js/app.js'
 ];
 
-// Install — cache static assets
+// Install — cache static assets, then activate immediately
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(STATIC_ASSETS))
+            .then(() => self.skipWaiting()) // #18: skipWaiting only after assets cached
     );
-    self.skipWaiting();
 });
 
 // Activate — clean old caches
@@ -25,9 +26,8 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then(keys =>
             Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-        )
+        ).then(() => self.clients.claim()) // #23: clients.claim inside waitUntil
     );
-    self.clients.claim();
 });
 
 // Fetch — Network-first for everything (ensures latest files are always served)

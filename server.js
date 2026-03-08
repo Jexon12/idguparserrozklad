@@ -11,7 +11,7 @@ const zlib = require('zlib');
 // Import the Vercel API handler
 const apiHandler = require('./api/index');
 
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT, 10) || 3001;
 
 // MIME types for static files
 const MIME_TYPES = {
@@ -149,7 +149,15 @@ const server = http.createServer(async (req, res) => {
     let filePath = pathname === '/' ? '/index.html' : pathname;
     filePath = path.join(__dirname, filePath);
 
-    const file = getStaticFile(filePath);
+    // #5: Path traversal protection — ensure resolved path is inside project root
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(path.resolve(__dirname))) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+
+    const file = getStaticFile(resolvedPath);
 
     if (!file) {
         res.writeHead(404);

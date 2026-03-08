@@ -23,9 +23,8 @@ window.ScheduleApp = window.ScheduleApp || {};
             url.searchParams.append('aGiveStudyTimes', 'true');
         }
 
-        const callbackName = 'jsonp' + Date.now();
-        url.searchParams.append('callback', callbackName);
-        url.searchParams.append('_', Date.now());
+        // #12: Removed stale JSONP callback param — we use plain fetch, not script injection
+        url.searchParams.append('_', Date.now()); // cache-buster only
 
         // Add remaining params, quoting string values for the API
         for (const [key, value] of Object.entries(params)) {

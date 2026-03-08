@@ -11,7 +11,7 @@ try {
     const { createApp, ref, computed, onMounted, watch, onErrorCaptured } = Vue;
     const SA = window.ScheduleApp;
 
-    createApp({
+    const App = {
         setup() {
             // --- State ---
             const mode = ref('student');
@@ -36,6 +36,16 @@ try {
             const chairs = ref([]);
             const groups = ref([]);
             const employees = ref([]);
+            const lessonTypeFilter = ref(''); // '', 'лекц', 'практ', 'лаб', 'семін', etc.
+            const lessonTypeOptions = [
+                { value: '', label: 'Всі типи' },
+                { value: 'лекц', label: 'Лекції' },
+                { value: 'практ', label: 'Практики' },
+                { value: 'лаб', label: 'Лабораторні' },
+                { value: 'семін', label: 'Семінари' },
+                { value: 'консульт', label: 'Консультації' },
+                { value: 'екзам', label: 'Екзамени' }
+            ];
             const studyTypes = ref([
                 { Key: '10', Value: 'Лекції' },
                 { Key: '11', Value: 'Практичні' },
@@ -255,6 +265,12 @@ try {
                         timeStart: lesson.study_time_begin,
                         timeEnd: lesson.study_time_end,
                     };
+
+                    // Lesson type filter
+                    if (lessonTypeFilter.value) {
+                        const t = (lesson.study_type || '').toLowerCase();
+                        if (!t.includes(lessonTypeFilter.value.toLowerCase())) return;
+                    }
 
                     // Filtering
                     if (selectedDisciplines.value.length > 0) {
@@ -572,7 +588,8 @@ try {
 
             // --- Time Highlighting ---
             const currentTime = ref(new Date());
-            setInterval(() => { currentTime.value = new Date(); }, 60000);
+            // #17: store interval ID so it can be cleaned up on unmount
+            const _clockIntervalId = setInterval(() => { currentTime.value = new Date(); }, 60000);
 
             const isActiveLesson = (dateStr, start, end) => {
                 if (!start || !end) return false;
@@ -765,89 +782,7 @@ try {
             const saveGlobalTimes = () => SA.saveGlobalTimes(adminRefs);
             const getGlobalLink = (lesson, type) => SA.getGlobalLink(lesson, type, adminRefs);
 
-            // Report Methods
-            const openReportModal = () => {
-                showReportModal.value = true;
-                // Pre-fill months
-                const now = new Date();
-                const yyyy = now.getFullYear();
-                const mm = String(now.getMonth() + 1).padStart(2, '0');
-                const currentMonth = `${yyyy}-${mm}`;
 
-                if (!reportForm.value.monthStart) reportForm.value.monthStart = currentMonth;
-                if (!reportForm.value.monthEnd) reportForm.value.monthEnd = currentMonth;
-            };
-
-            const loadReportChairs = async () => {
-                reportForm.value.chair = '';
-                reportForm.value.teacher = '';
-                reportChairs.value = [];
-                if (!reportForm.value.faculty) return;
-
-                console.log("[Report] Loading chairs for faculty:", reportForm.value.faculty);
-                loadingFilters.value = true;
-                const data = await fetchApi('GetEmployeeChairs', { aFacultyID: reportForm.value.faculty.Key });
-                console.log("[Report] Chairs loaded:", data);
-                reportChairs.value = data?.chairs || [];
-                loadingFilters.value = false;
-            };
-
-            const loadReportEmployees = async () => {
-                reportForm.value.teacher = '';
-                reportEmployees.value = [];
-                if (!reportForm.value.chair) return;
-
-                console.log("[Report] Loading employees for chair:", reportForm.value.chair);
-                loadingFilters.value = true;
-                const data = await fetchApi('GetEmployees', {
-                    aFacultyID: reportForm.value.faculty.Key,
-                    aChairID: reportForm.value.chair.Key
-                });
-                console.log("[Report] Employees loaded:", data);
-                reportEmployees.value = Array.isArray(data) ? data : [];
-                loadingFilters.value = false;
-            };
-
-            const downloadReport = async () => {
-                if (!isReportFormValid.value) return;
-                isDownloadingReport.value = true;
-                try {
-                    const params = new URLSearchParams({
-                        faculty: reportForm.value.faculty.Value,
-                        department: reportForm.value.chair.Value,
-                        teacherName: reportForm.value.teacher.Value,
-                        teacherId: reportForm.value.teacher.Key,
-                        monthStart: reportForm.value.monthStart,
-                        monthEnd: reportForm.value.monthEnd
-                    });
-
-                    const response = await fetch(`${SA.API_PROXY}report/download?${params.toString()}`);
-
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || 'Failed to download');
-                    }
-
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    // Filename usually set by Content-Disposition, but fallback here
-                    a.download = `Report_${reportForm.value.teacher.Value}_${reportForm.value.monthStart}_${reportForm.value.monthEnd}.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-
-                    showToast("✅ Звіт успішно завантажено!");
-                    showReportModal.value = false;
-                } catch (e) {
-                    errorMessage.value = "Помилка завантаження звіту: " + e.message;
-                    setTimeout(() => errorMessage.value = '', 5000);
-                } finally {
-                    isDownloadingReport.value = false;
-                }
-            };
 
 
 
@@ -1093,6 +1028,7 @@ try {
                                     type: l.type,
                                     time: slot.time,
                                     percent,
+                                    remainingPercent: Math.min(100, Math.max(0, 100 - percent)),
                                     timeLeft, // mins
                                     timeLeftStr: timeLeft > 60 ? `${Math.floor(timeLeft / 60)}г ${timeLeft % 60}хв` : `${timeLeft} хв`,
                                     totalMins
@@ -1147,10 +1083,18 @@ try {
                 }
             };
 
-            // Start timer
+            // Start timer: every second for smooth progress bar when lesson is active
             if (nextLessonTimer) clearInterval(nextLessonTimer);
-            nextLessonTimer = setInterval(updateTimeBasedInfo, 60000); // Check every minute
-            setTimeout(updateTimeBasedInfo, 1000); // Initial check
+            nextLessonTimer = setInterval(updateTimeBasedInfo, 1000);
+            setTimeout(updateTimeBasedInfo, 300); // Initial check
+
+            // #17: cleanup on unmount to prevent timer leaks during HMR / reinit
+            const { onUnmounted } = Vue;
+            onUnmounted(() => {
+                clearInterval(_clockIntervalId);
+                if (nextLessonTimer) clearInterval(nextLessonTimer);
+                if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            });
 
             // --- Return all template bindings ---
             return {
@@ -1160,6 +1104,7 @@ try {
                 selectedFaculty, selectedEduForm, selectedCourse, selectedGroup,
                 selectedChair, selectedEmployee, selectedDisciplines,
                 studyTypes, selectedStudyType,
+                lessonTypeFilter, lessonTypeOptions,
                 dateStart, dateEnd, activeEntities,
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,
@@ -1195,12 +1140,18 @@ try {
                 // Notifications
                 notificationsEnabled, requestNotificationPermission,
 
-                // Methods
-                openReportModal, loadReportChairs, loadReportEmployees, downloadReport,
-                reportForm, reportChairs, reportEmployees, showReportModal, isReportFormValid, isDownloadingReport
+                // --- Report Module Integration ---
+                ...Vue.toRefs(ReportModule.state),
+                ...ReportModule.methods,
+                isReportFormValid: ReportModule.computed.isReportFormValid
             };
         }
-    }).mount('#app');
+    };
+    const app = createApp(App);
+    if (window.CurrentLessonBannerComponent) {
+        app.component('CurrentLessonBanner', window.CurrentLessonBannerComponent);
+    }
+    app.mount('#app');
 } catch (e) {
     alert("CRITICAL ERROR: " + e.message + "\nCheck console for details.");
     console.error(e);

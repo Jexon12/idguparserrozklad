@@ -10,8 +10,9 @@ window.ScheduleApp = window.ScheduleApp || {};
      * @param {Object} refs - Vue refs { faculties, allItemsCache, isSearching, isCacheLoaded, cacheStatus }
      */
     SA.buildUniversalCache = async (refs) => {
+        // #14: set isSearching FIRST before any async ops to guard against race condition
         if (refs.isSearching.value || refs.isCacheLoaded.value) return;
-        refs.isSearching.value = true;
+        refs.isSearching.value = true;  // guard must be set synchronously here
         refs.allItemsCache.value = [];
         refs.cacheStatus.value = "Індексація груп...";
 

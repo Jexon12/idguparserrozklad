@@ -37,25 +37,8 @@
         <!-- Toast Notification -->
         <div class="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
 
-        <!-- Global Sticky Status Bar -->
-        <div v-if="currentLessonInfo"
-            class="sticky top-0 z-[60] bg-green-600 text-white shadow-md px-4 py-2 flex items-center justify-between animate-slide-down">
-            <div class="flex items-center gap-3 overflow-hidden">
-                <div class="flex flex-col leading-tight min-w-0">
-                    <span class="text-[10px] font-bold opacity-80 uppercase tracking-wider">Зараз іде</span>
-                    <span class="font-bold truncate text-sm">{{ currentLessonInfo.discipline }}</span>
-                    <span class="text-[10px] opacity-90 truncate">{{ currentLessonInfo.type }} · {{
-                        currentLessonInfo.cabinet }}</span>
-                </div>
-            </div>
-            <div class="flex flex-col items-end min-w-[70px] ml-2">
-                <span class="font-bold font-mono text-lg leading-none">{{ currentLessonInfo.timeLeftStr }}</span>
-                <div class="w-full bg-green-800/50 rounded-full h-1 mt-1">
-                    <div class="bg-white h-1 rounded-full transition-all duration-1000"
-                        :style="{ width: currentLessonInfo.percent + '%' }"></div>
-                </div>
-            </div>
-        </div>
+        <!-- Global Sticky Status Bar (Component) -->
+        <current-lesson-banner :current-lesson-info="currentLessonInfo" />
 
         <div class="p-4 md:p-8">
             <!-- Header -->
@@ -400,6 +383,15 @@
                                     class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                             </div>
                         </div>
+
+                        <!-- Progress bar -->
+                        <div v-if="isDownloadingReport && reportProgress" class="space-y-2">
+                            <div class="text-sm font-bold text-green-700 dark:text-green-400">{{ reportProgress.progress }}</div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300"
+                                    :style="{ width: (reportProgress.total ? (reportProgress.current / reportProgress.total * 100) : 0) + '%' }"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-2">
@@ -532,13 +524,22 @@
 
                             <!-- Common Filter: Study Type -->
                             <div v-if="mode !== 'occupancy'">
-                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип заняття</label>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Форма навчання</label>
                                 <select v-model="selectedStudyType"
                                     class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
                                     <option value="">-- Всі типи --</option>
                                     <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value
                                         }}
                                     </option>
+                                </select>
+                            </div>
+
+                            <!-- Filter by Lesson Type (Лекція, Практика, etc.) -->
+                            <div v-if="mode !== 'occupancy' && activeEntities.length > 0">
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип пари</label>
+                                <select v-model="lessonTypeFilter"
+                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                                 </select>
                             </div>
 
@@ -806,12 +807,21 @@
 
                         <!-- Common Filter: Study Type -->
                         <div v-if="mode !== 'occupancy'">
-                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип заняття</label>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Форма навчання</label>
                             <select v-model="selectedStudyType"
                                 class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
                                 <option value="">-- Всі типи --</option>
                                 <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value }}
                                 </option>
+                            </select>
+                        </div>
+
+                        <!-- Filter by Lesson Type -->
+                        <div v-if="mode !== 'occupancy' && activeEntities.length > 0">
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип пари</label>
+                            <select v-model="lessonTypeFilter"
+                                class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                             </select>
                         </div>
 
@@ -1493,6 +1503,7 @@
     </div> <!-- End of #app -->
 
     <script src="js/utils.js"></script>
+    <script src="js/components/current-lesson-banner.js"></script>
     <script src="js/api.js"></script>
     <script src="js/search.js"></script>
     <script src="js/occupancy.js"></script>

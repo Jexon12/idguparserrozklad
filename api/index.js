@@ -4,17 +4,42 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 
 const DB_FILE = path.join(__dirname, '../db.json');
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const _rawAdmin = process.env.ADMIN_PASSWORD || '';
+const ADMIN_PASSWORD = (_rawAdmin && _rawAdmin !== 'admin123' && _rawAdmin.length >= 8)
+    ? _rawAdmin
+    : (process.env.NODE_ENV === 'production' ? null : 'admin123');
 
-// --- In-memory proxy cache ---
+// University ID — single source of truth
+const VUZ_ID = process.env.VUZ_ID || 11927;
+
+// --- Proxy cache: Redis/KV when available, else in-memory ---
 const proxyCache = new Map();
+// --- Report jobs (progress flow) ---
+const reportJobs = new Map();
+const REPORT_JOB_TTL = 10 * 60 * 1000;
 const CACHE_TTL = {
     default: 5 * 60 * 1000,    // 5 minutes for filters, groups, teachers
     schedule: 3 * 60 * 1000    // 3 minutes for schedule data
 };
 const MAX_CACHE_SIZE = 500; // Max entries to prevent memory leak
 
-function getCachedProxy(url) {
+async function getCachedProxy(url) {
+    const db = await getDb();
+    const cacheKey = 'proxy:' + Buffer.from(url).toString('base64url');
+    const ttlMs = url.toLowerCase().includes('getscheduledata') ? CACHE_TTL.schedule : CACHE_TTL.default;
+
+    if (db) {
+        try {
+            let raw;
+            if (db.type === 'kv') raw = await db.client.get(cacheKey);
+            else if (db.type === 'redis') raw = await db.client.get(cacheKey);
+            if (raw != null) {
+                const entry = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (entry && entry.data != null && Date.now() - (entry.timestamp || 0) < ttlMs)
+                    return entry;
+            }
+        } catch (e) { /* fallback to memory */ }
+    }
     const entry = proxyCache.get(url);
     if (!entry) return null;
     if (Date.now() - entry.timestamp > entry.ttl) {
@@ -24,18 +49,23 @@ function getCachedProxy(url) {
     return entry;
 }
 
-function setCachedProxy(url, data, statusCode, isSchedule) {
-    // Evict oldest entries if too many
+async function setCachedProxy(url, data, statusCode, isSchedule) {
+    const entry = { data, statusCode, timestamp: Date.now(), ttl: isSchedule ? CACHE_TTL.schedule : CACHE_TTL.default };
+    const db = await getDb();
+    const cacheKey = 'proxy:' + Buffer.from(url).toString('base64url');
+    const ttlSec = Math.floor(entry.ttl / 1000);
+
+    if (db && ttlSec > 0) {
+        try {
+            if (db.type === 'kv') await db.client.set(cacheKey, entry, { ex: ttlSec });
+            else if (db.type === 'redis') await db.client.set(cacheKey, JSON.stringify(entry), { EX: ttlSec });
+        } catch (e) { /* fallback to memory */ }
+    }
     if (proxyCache.size >= MAX_CACHE_SIZE) {
         const firstKey = proxyCache.keys().next().value;
         proxyCache.delete(firstKey);
     }
-    proxyCache.set(url, {
-        data,
-        statusCode,
-        timestamp: Date.now(),
-        ttl: isSchedule ? CACHE_TTL.schedule : CACHE_TTL.default
-    });
+    proxyCache.set(url, entry);
 }
 
 /** Strip cache-buster params to normalize the cache key */
@@ -71,6 +101,7 @@ const saveLocalDb = (data) => {
 // Global DB Clients (Lazy init) needed for Serverless function cold starts
 let kvClient = null;
 let redisClient = null;
+let redisConnecting = false; // #8 guard against race condition
 
 const getDb = async () => {
     // 1. Vercel KV (@vercel/kv) - HTTP based
@@ -85,7 +116,8 @@ const getDb = async () => {
 
     // 2. Standard Redis (redis package) - TCP based
     if (process.env.REDIS_URL) {
-        if (!redisClient) {
+        if (!redisClient && !redisConnecting) {
+            redisConnecting = true;
             try {
                 const { createClient } = require('redis');
                 redisClient = createClient({ url: process.env.REDIS_URL });
@@ -94,6 +126,8 @@ const getDb = async () => {
             } catch (e) {
                 console.error("Redis init error", e);
                 redisClient = null;
+            } finally {
+                redisConnecting = false;
             }
         }
         if (redisClient && redisClient.isOpen) return { type: 'redis', client: redisClient };
@@ -103,9 +137,21 @@ const getDb = async () => {
 };
 
 module.exports = async (req, res) => {
+    if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
+    }
+
+    // Determine path
+    // Vercel might pass full URL or rewritten path. 
+    // Construct URL object to be safe.
+    const urlObj = new URL(req.url, `http://${req.headers.host}`);
+    const pathname = (urlObj.pathname || '').toLowerCase();
+
     // Helper to allow CORS — restrict for admin mutations
     const origin = req.headers.origin || '';
-    const isAdminPost = req.method === 'POST' && (req.url.includes('/times') || req.url.includes('/links'));
+    // #21: strict pathname match for CORS instead of .includes()
+    const isAdminPost = req.method === 'POST' && (pathname === '/api/times' || pathname === '/api/links');
 
     if (isAdminPost) {
         // For admin endpoints, only allow same-origin or specific origins
@@ -120,22 +166,11 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') {
-        res.status(204).end();
-        return;
-    }
-
-    // Determine path
-    // Vercel might pass full URL or rewritten path. 
-    // Construct URL object to be safe.
-    const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    const pathname = (urlObj.pathname || '').toLowerCase();
-
     console.log(`[Vercel API] Method: ${req.method} Path: ${pathname}`);
 
     // ROUTE: Health Check
     // =========================================================
-    if (pathname.includes('/health')) {
+    if (pathname === '/api/health') {
         res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
         return;
     }
@@ -143,7 +178,7 @@ module.exports = async (req, res) => {
     // =========================================================
     // ROUTE: Global Times (/api/times)
     // =========================================================
-    if (pathname.includes('/times')) {
+    if (pathname === '/api/times') {
         const db = await getDb();
         // Fallback to local file if no cloud DB
         const useLocal = !db;
@@ -166,7 +201,10 @@ module.exports = async (req, res) => {
         }
 
         if (req.method === 'POST') {
-            console.log("API Times POST received");
+            if (!ADMIN_PASSWORD) {
+                res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD (8+ chars, not admin123) in production' });
+                return;
+            }
             let payload;
             try {
                 payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
@@ -186,6 +224,12 @@ module.exports = async (req, res) => {
             if (password !== ADMIN_PASSWORD) {
                 console.log("Wrong password");
                 res.status(403).json({ error: 'Wrong password' });
+                return;
+            }
+
+            // #22: If 'times' is undefined, treat it as a password check only (don't overwrite)
+            if (times === undefined) {
+                res.status(200).json({ success: true, message: 'Password valid' });
                 return;
             }
 
@@ -213,32 +257,36 @@ module.exports = async (req, res) => {
     }
 
     // =========================================================
-    // ROUTE 1: DATABASE (Links)
+    // ROUTE: DATABASE (Links)
     // =========================================================
-    // Check if path contains 'links'. Vercel rewrite might make it /api/links or just /links
-    if (pathname.includes('/links')) {
+    if (pathname === '/api/links') {
 
         try {
             const db = await getDb();
 
             if (req.method === 'GET') {
-                let data = '{}';
+                // #26: Fixed double JSON.parse for KV
+                let dataObj = {};
                 if (db) {
                     if (db.type === 'kv') {
-                        const remote = await db.client.get('links');
-                        if (remote) data = JSON.stringify(remote);
+                        dataObj = await db.client.get('links') || {};
                     } else if (db.type === 'redis') {
                         const remoteStr = await db.client.get('links');
-                        if (remoteStr) data = remoteStr;
+                        if (remoteStr) {
+                            try { dataObj = JSON.parse(remoteStr); } catch (e) { }
+                        }
                     }
                 }
                 // Note: No local file fallback in Vercel environment (read-only FS usually)
-                res.status(200).json(data ? JSON.parse(data) : {});
+                res.status(200).json(dataObj);
                 return;
             }
 
             if (req.method === 'POST') {
-                // Vercel automatically parses JSON body if Content-Type is application/json
+                if (!ADMIN_PASSWORD) {
+                    res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD in production' });
+                    return;
+                }
                 const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
 
                 if (!payload) {
@@ -297,7 +345,7 @@ module.exports = async (req, res) => {
     // =========================================================
     // ROUTE: Search (/api/search?q=...)
     // =========================================================
-    if (pathname.includes('/search') && req.method === 'GET') {
+    if (pathname === '/api/search' && req.method === 'GET') {
         const q = (urlObj.searchParams.get('q') || '').toLowerCase().trim();
         if (!q || q.length < 2) {
             res.status(400).json({ error: 'Query too short (min 2 chars)' });
@@ -341,10 +389,105 @@ module.exports = async (req, res) => {
     }
 
     // =========================================================
+    // ROUTE: Report Start (POST) — two-phase with progress
+    // =========================================================
+    if (pathname === '/api/report/start' && req.method === 'POST') {
+        // #2 fix: declare payload with let
+        let payload;
+        try { payload = (req.body && typeof req.body === 'object') ? req.body : (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : {}); } catch (e) { payload = {}; }
+        const { facultyName = 'Факультет', departmentName = 'Кафедра', teacherName = '', teacherId = '', monthStart = '', monthEnd = '' } = payload;
+        if (!teacherId || !monthStart || !monthEnd) {
+            res.status(400).json({ error: 'Missing teacherId, monthStart or monthEnd' });
+            return;
+        }
+        const jobId = 'r' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        const job = { status: 'running', current: 0, total: 0, progress: '0/0', done: false, error: null, allSemLessons: [], params: { facultyName, departmentName, teacherName, monthStart, monthEnd }, createdAt: Date.now() };
+        reportJobs.set(jobId, job);
+        setTimeout(() => { if (reportJobs.has(jobId)) reportJobs.delete(jobId); }, REPORT_JOB_TTL);
+        res.status(200).json({ jobId });
+        (async () => {
+            const getMonthDate = (str) => { const [y, m] = str.split('-').map(Number); return new Date(y, m - 1, 1); };
+            const formatDate = (d) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+            const startDt = getMonthDate(monthStart);
+            const endDt = getMonthDate(monthEnd);
+            const loopEnd = new Date(endDt.getFullYear(), endDt.getMonth() + 1, 0);
+            const months = [];
+            let cur = new Date(startDt);
+            while (cur <= loopEnd) { months.push({ year: cur.getFullYear(), month: cur.getMonth(), sheetName: cur.toLocaleString('uk-UA', { month: 'long', year: 'numeric' }), apiStart: formatDate(new Date(cur.getFullYear(), cur.getMonth(), 1)), apiEnd: formatDate(new Date(cur.getFullYear(), cur.getMonth() + 1, 0)) }); cur.setMonth(cur.getMonth() + 1); }
+            job.total = months.length;
+            const API_URL = 'http://vnz.osvita.net/WidgetSchedule.asmx/GetScheduleDataEmp';
+            for (let i = 0; i < months.length; i++) {
+                const m = months[i];
+                job.current = i; job.progress = `${i + 1}/${months.length} місяців`;
+                try {
+                    const u = `${API_URL}?aVuzID=${VUZ_ID}&aEmployeeID="${teacherId}"&aStartDate="${m.apiStart}"&aEndDate="${m.apiEnd}"&aStudyTypeID=&aGiveStudyTimes=true`;
+                    const controller = new AbortController();
+                    const tid = setTimeout(() => controller.abort(), 15000);
+                    const apiRes = await fetch(u, { signal: controller.signal });
+                    clearTimeout(tid);
+                    const raw = await apiRes.json();
+                    const lessons = Array.isArray(raw.d) ? raw.d : (Array.isArray(raw) ? raw : []);
+                    lessons.forEach(l => job.allSemLessons.push({ ...l, monthObj: new Date(m.year, m.month, 1) }));
+                } catch (err) { job.error = err.message; job.done = true; return; }
+            }
+            job.status = 'done'; job.done = true; job.progress = `${months.length}/${months.length} місяців`;
+        })();
+        return;
+    }
+
+    // =========================================================
+    // ROUTE: Report Status (GET) — progress polling
+    // =========================================================
+    if (pathname === '/api/report/status' && req.method === 'GET') {
+        const jobId = urlObj.searchParams.get('jobId');
+        if (!jobId) { res.status(400).json({ error: 'Missing jobId' }); return; }
+        const job = reportJobs.get(jobId);
+        if (!job) { res.status(404).json({ error: 'Job not found or expired' }); return; }
+        res.status(200).json({
+            status: job.status,
+            current: job.current,
+            total: job.total,
+            progress: job.progress,
+            done: job.done,
+            error: job.error,
+            downloadUrl: job.done ? `/api/report/download?jobId=${jobId}` : null
+        });
+        return;
+    }
+
+    // =========================================================
     // ROUTE: Excel Report (/api/report/download)
     // =========================================================
-    if (pathname.includes('/report/download') && req.method === 'GET') {
+    if (pathname === '/api/report/download' && req.method === 'GET') {
         try {
+            const jobId = urlObj.searchParams.get('jobId');
+            if (jobId) {
+                const job = reportJobs.get(jobId);
+                if (!job || !job.done) { res.status(404).json({ error: 'Report not ready' }); return; }
+                const { facultyName, departmentName, teacherName, monthStart, monthEnd } = job.params;
+                const workbook = new ExcelJS.Workbook();
+                const monthSheets = {};
+                job.allSemLessons.forEach(l => {
+                    const m = l.monthObj.getMonth();
+                    const y = l.monthObj.getFullYear();
+                    const k = `${y}-${m}`;
+                    if (!monthSheets[k]) monthSheets[k] = { year: y, month: m, lessons: [], sheetName: new Date(y, m, 1).toLocaleString('uk-UA', { month: 'long', year: 'numeric' }) };
+                    monthSheets[k].lessons.push(l);
+                });
+                Object.values(monthSheets).forEach(({ year, month, sheetName, lessons }) => {
+                    const sheet = workbook.addWorksheet(sheetName);
+                    generateMonthSheet(sheet, lessons, { facultyName, departmentName, teacherName, year, month });
+                });
+                const sem1 = job.allSemLessons.filter(l => { const m = l.monthObj.getMonth(); return (m >= 8 && m <= 11) || m === 0; });
+                const sem2 = job.allSemLessons.filter(l => { const m = l.monthObj.getMonth(); return m >= 1 && m <= 6; });
+                if (sem1.length > 0) { const s = workbook.addWorksheet('Зведені дані (1 сем)'); generateSummarySheet(s, sem1, '1 семестр'); }
+                if (sem2.length > 0) { const s = workbook.addWorksheet('Зведені дані (2 сем)'); generateSummarySheet(s, sem2, '2 семестр'); }
+                res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Звіт_${teacherName}_${monthStart}_${monthEnd}.xlsx`)}`);
+                await workbook.xlsx.write(res);
+                reportJobs.delete(jobId);
+                return;
+            }
             const facultyName = urlObj.searchParams.get('faculty') || 'Факультет';
             const departmentName = urlObj.searchParams.get('department') || 'Кафедра';
             const teacherName = urlObj.searchParams.get('teacherName') || '';
@@ -366,19 +509,20 @@ module.exports = async (req, res) => {
                 return new Date(y, m - 1, 1);
             };
 
-            let currentDt = getMonthDate(monthStartStr);
+            const startDt = getMonthDate(monthStartStr);
             const endDt = getMonthDate(monthEndStr);
+            // Ensure we include the full end month
             const loopEnd = new Date(endDt.getFullYear(), endDt.getMonth() + 1, 0);
 
-            const allSemLessons = [];
+            // 1. Prepare Fetch Requests
+            const requests = [];
+            let currentDt = new Date(startDt);
 
-            // Loop through months
             while (currentDt <= loopEnd) {
                 const year = currentDt.getFullYear();
                 const month = currentDt.getMonth(); // 0-11
                 const sheetName = currentDt.toLocaleString('uk-UA', { month: 'long', year: 'numeric' });
 
-                // Fetch Data for this month
                 const startDateObj = new Date(year, month, 1);
                 const endDateObj = new Date(year, month + 1, 0);
 
@@ -392,25 +536,58 @@ module.exports = async (req, res) => {
                 const apiStartDate = formatDate(startDateObj);
                 const apiEndDate = formatDate(endDateObj);
 
-                const API_URL = 'http://vnz.osvita.net/WidgetSchedule.asmx/GetScheduleDataEmp';
-                const param = (val) => `"${val}"`;
-                const apiUrlWithParams = `${API_URL}?aVuzID=${11927}&aEmployeeID=${param(teacherId)}&aStartDate=${param(apiStartDate)}&aEndDate=${param(apiEndDate)}&aStudyTypeID=&aGiveStudyTimes=true`;
+                // Closure to capture current loop variables
+                const fetchMonth = async (mYear, mMonth, mSheetName, mApiStart, mApiEnd) => {
+                    const API_URL = 'http://vnz.osvita.net/WidgetSchedule.asmx/GetScheduleDataEmp';
+                    const param = (val) => `"${val}"`;
+                    const apiUrlWithParams = `${API_URL}?aVuzID=${VUZ_ID}&aEmployeeID=${param(teacherId)}&aStartDate=${param(mApiStart)}&aEndDate=${param(mApiEnd)}&aStudyTypeID=&aGiveStudyTimes=true`;
 
-                console.log(`[Report] Fetching schedule for ${sheetName}: ${apiUrlWithParams}`);
-                const apiRes = await fetch(apiUrlWithParams);
-                if (!apiRes.ok) throw new Error(`Failed to fetch: ${apiRes.status}`);
+                    console.log(`[Report] Fetching ${mSheetName}...`);
+                    try {
+                        // #16: use AbortController instead of unsupported timeout option
+                        const controller = new AbortController();
+                        const tid = setTimeout(() => controller.abort(), 15000);
+                        const apiRes = await fetch(apiUrlWithParams, { signal: controller.signal });
+                        clearTimeout(tid);
+                        if (!apiRes.ok) throw new Error(`Status ${apiRes.status}`);
+                        const rawData = await apiRes.json();
+                        const data = Array.isArray(rawData.d) ? rawData.d : (Array.isArray(rawData) ? rawData : []);
+                        return {
+                            success: true,
+                            year: mYear,
+                            month: mMonth,
+                            sheetName: mSheetName,
+                            lessons: data
+                        };
+                    } catch (err) {
+                        console.error(`[Report] Failed ${mSheetName}:`, err);
+                        return { success: false, sheetName: mSheetName, error: err.message };
+                    }
+                };
 
-                const rawData = await apiRes.json();
-                const lessons = Array.isArray(rawData.d) ? rawData.d : (Array.isArray(rawData) ? rawData : []);
+                requests.push(fetchMonth(year, month, sheetName, apiStartDate, apiEndDate));
 
+                // Increment month
+                currentDt.setMonth(currentDt.getMonth() + 1);
+            }
+
+            // 2. Execute Parallel Fetches
+            console.log(`[Report] Starting ${requests.length} parallel requests...`);
+            const results = await Promise.all(requests);
+
+            // 3. Process Results & Generate Sheets
+            const allSemLessons = [];
+
+            // #3 fix: renamed loop variable to avoid shadowing the outer `res` (HTTP response)
+            for (const monthResult of results) {
+                if (!monthResult.success) continue;
+
+                const { year, month, sheetName, lessons } = monthResult;
+                // Add to global list for summary
                 lessons.forEach(l => allSemLessons.push({ ...l, monthObj: new Date(year, month, 1) }));
 
-                // --- Generate Sheet for Month ---
                 const sheet = workbook.addWorksheet(sheetName);
                 generateMonthSheet(sheet, lessons, { facultyName, departmentName, teacherName, year, month });
-
-                // Next month
-                currentDt.setMonth(currentDt.getMonth() + 1);
             }
 
             // --- Generate Semester Summaries ---
@@ -420,30 +597,40 @@ module.exports = async (req, res) => {
             });
             const sem2Lessons = allSemLessons.filter(l => {
                 const m = l.monthObj.getMonth();
-                return m >= 1 && m <= 6; // Feb(1) - July(6)
+                return (m >= 1 && m <= 6); // Feb(1) - July(6)
             });
 
             if (sem1Lessons.length > 0) {
                 const semSheet = workbook.addWorksheet('Зведені дані (1 сем)');
-                generateSummarySheet(semSheet, sem1Lessons, '1 семестр (Зведені дані)');
+                generateSummarySheet(semSheet, sem1Lessons, '1 семестр');
             }
             if (sem2Lessons.length > 0) {
                 const semSheet = workbook.addWorksheet('Зведені дані (2 сем)');
-                generateSummarySheet(semSheet, sem2Lessons, '2 семестр (Зведені дані)');
+                generateSummarySheet(semSheet, sem2Lessons, '2 семестр');
             }
 
             // --- Send Response ---
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             const safeName = encodeURIComponent(`Звіт_${teacherName}_${monthStartStr}_${monthEndStr}.xlsx`);
             res.setHeader('Content-Disposition', `attachment; filename="Report.xlsx"; filename*=UTF-8''${safeName}`);
+
+            // #11: ExcelJS closes the stream internally — no res.end() needed
             await workbook.xlsx.write(res);
-            res.end();
 
         } catch (e) {
             console.error("Report Generation Error:", e);
             res.status(500).json({ error: e.message });
         }
-        return;
+    }
+
+    // Helper: Determine Row Color based on Study Type
+    function getRowColor(studyType) {
+        const type = (studyType || '').toLowerCase();
+        if (type.includes('лекц')) return 'FFFFE0B2'; // Orange-ish
+        if (type.includes('лаб')) return 'FFC8E6C9';  // Green-ish
+        if (type.includes('практ')) return 'FFBBDEFB'; // Blue-ish
+        if (type.includes('екзам') || type.includes('консульт')) return 'FFF8BBD0'; // Pink-ish
+        return 'FFFFFFFF'; // White
     }
 
     // Helper: Generate Month Sheet (Strict Layout)
@@ -550,6 +737,22 @@ module.exports = async (req, res) => {
                 tCell.font = fontNormal;
                 tCell.alignment = centerStyle;
                 tCell.border = borderStyle;
+
+                // Color Coding
+                const rowColor = getRowColor(l.study_type);
+                if (rowColor !== 'FFFFFFFF') {
+                    const fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: rowColor }
+                    };
+                    // Apply to A-T
+                    for (let c = 1; c <= 20; c++) {
+                        const colLetter = String.fromCharCode(64 + c); // A=1
+                        // Valid for A-T
+                        sheet.getCell(`${colLetter}${r}`).fill = fill;
+                    }
+                }
 
                 currentRow++;
             });
@@ -703,7 +906,7 @@ module.exports = async (req, res) => {
     // =========================================================
     // ROUTE: Occupancy Cache (/api/occupancy)
     // =========================================================
-    if (pathname.includes('/occupancy')) {
+    if (pathname === '/api/occupancy') {
         const db = await getDb();
         const date = urlObj.searchParams.get('date') || '';
 
@@ -779,9 +982,8 @@ module.exports = async (req, res) => {
     const search = urlObj.search;
     const targetUrl = `${API_URL}${action}${search}`;
 
-    // Check proxy cache first (normalize key to ignore cache-buster params)
-    const cacheKey = normalizeProxyCacheKey(targetUrl);
-    const cached = getCachedProxy(cacheKey);
+    const cacheKeyNorm = normalizeProxyCacheKey(targetUrl);
+    const cached = await getCachedProxy(cacheKeyNorm);
     if (cached) {
         console.log(`[Proxy] CACHE HIT: ${action}`);
         res.status(cached.statusCode);
@@ -792,21 +994,24 @@ module.exports = async (req, res) => {
     console.log(`[Proxy] Action: ${action} -> Forwarding to: ${targetUrl}`);
     const isSchedule = action.toLowerCase().startsWith('getscheduledata');
 
+    // #16: node-fetch v2 ignores `timeout` option — use AbortController
     try {
+        const proxyController = new AbortController();
+        const proxyTimeoutId = setTimeout(() => proxyController.abort(), 10000);
         const apiRes = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Referer': 'http://wp-fuaid.zzz.com.ua/',
                 'Content-Type': 'application/json'
             },
-            timeout: 10000
+            signal: proxyController.signal
         });
+        clearTimeout(proxyTimeoutId);
 
         const data = await apiRes.text();
 
-        // Cache successful responses
         if (apiRes.status === 200 && data.length > 0) {
-            setCachedProxy(cacheKey, data, apiRes.status, isSchedule);
+            await setCachedProxy(cacheKeyNorm, data, apiRes.status, isSchedule);
         }
 
         res.status(apiRes.status);

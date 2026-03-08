@@ -143,8 +143,10 @@ window.ScheduleApp = window.ScheduleApp || {};
                 });
 
                 refs.scanProgress.value.current = Math.min(i + CHUNK_SIZE, allGroups.length);
-                refs.occupancyResults.value = Object.values(cabinetMap).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
+                // #15, #27: throttle live updates — update display every 5 chunks (~40 groups) to avoid excessive re-renders (skipping i=0)
+                if ((i > 0 && i % (CHUNK_SIZE * 5) === 0) || i + CHUNK_SIZE >= allGroups.length) {
+                    refs.occupancyResults.value = Object.values(cabinetMap).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+                }
                 await new Promise(r => setTimeout(r, 150));
             }
 

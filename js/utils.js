@@ -6,7 +6,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
     // --- Constants ---
-    const isNode = window.location.port === '3000' || window.location.hostname.includes('vercel.app');
+    const isNode = ['3000', '3001', '5000'].includes(window.location.port || '') || window.location.hostname.includes('vercel.app');
     SA.API_PROXY = isNode ? '/api/' : 'proxy.php?action=';
     SA.VUZ_ID = 11927;
     SA.STORAGE_KEY = 'schedule_app_v1';
@@ -88,11 +88,13 @@ window.ScheduleApp = window.ScheduleApp || {};
                     const dateStr = `${y}${m}${d}`;
                     const uid = `${dateStr}-${startTime}-${lesson.discipline}@schedule`;
 
+                    const escIcal = (s) => (s || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+
                     ical += 'BEGIN:VEVENT\r\n';
                     ical += `DTSTART:${dateStr}T${startTime}00\r\n`;
                     ical += `DTEND:${dateStr}T${endTime}00\r\n`;
-                    ical += `SUMMARY:${lesson.discipline}\r\n`;
-                    ical += `DESCRIPTION:${lesson.type || ''}\\n${lesson.teacher || ''}\r\n`;
+                    ical += `SUMMARY:${escIcal(lesson.discipline)}\r\n`;
+                    ical += `DESCRIPTION:${escIcal(lesson.type + ' ' + lesson.teacher)}\r\n`;
                     ical += `LOCATION:${lesson.cabinet || ''}\r\n`;
                     ical += `UID:${uid}\r\n`;
                     ical += 'END:VEVENT\r\n';
@@ -132,13 +134,7 @@ window.ScheduleApp = window.ScheduleApp || {};
      * Normalize text for occupancy search (Latin↔Cyrillic typo correction).
      */
     SA.normalize = (str) => {
-        const map = {
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'є': 'ye',
-            'ж': 'zh', 'з': 'z', 'и': 'y', 'і': 'i', 'ї': 'yi', 'й': 'y',
-            'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p',
-            'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh',
-            'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ь': '', 'ю': 'yu', 'я': 'ya'
-        };
+        // Typo map: Latin look-alikes → Cyrillic (corrects mixed-keyboard input)
         const typoMap = {
             'a': 'а', 'b': 'б', 'c': 'с', 'e': 'е', 'i': 'і', 'k': 'к',
             'o': 'о', 'p': 'р', 'x': 'х', 'y': 'у', 'h': 'н', 'm': 'м', 't': 'т'

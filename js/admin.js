@@ -5,6 +5,10 @@
 window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
+    // #6: Admin password stored in a module-level closure, NOT in a reactive ref
+    // This keeps it out of Vue DevTools inspection.
+    let _adminPassword = '';
+
     /**
      * Toggle admin login with server-side password validation.
      * @param {Object} refs - { adminMode, adminPassword }
@@ -12,7 +16,8 @@ window.ScheduleApp = window.ScheduleApp || {};
     SA.toggleAdminLogin = async (refs) => {
         if (refs.adminMode.value) {
             refs.adminMode.value = false;
-            refs.adminPassword.value = '';
+            _adminPassword = ''; // clear closure variable on logout
+            refs.adminPassword.value = ''; // keep ref empty
             return;
         }
         const pwd = prompt("Введіть пароль адміністратора:");
@@ -22,11 +27,12 @@ window.ScheduleApp = window.ScheduleApp || {};
             const res = await fetch('/api/times', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: pwd, times: {} })
+                body: JSON.stringify({ password: pwd }) // #22: only send password for validation
             });
             if (res.ok) {
                 refs.adminMode.value = true;
-                refs.adminPassword.value = pwd;
+                _adminPassword = pwd; // store in closure only
+                refs.adminPassword.value = ''; // deliberately keep ref empty
                 alert("Режим адміна активовано! Тепер ви бачите олівці для редагування.");
             } else {
                 alert("Невірний пароль");
@@ -35,6 +41,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             alert("Помилка мережі при перевірці пароля");
         }
     };
+
 
     SA.getGlobalKey = (lesson) => {
         const safe = (s) => (s || '').replace(/[^a-zA-Zа-яА-Я0-9]/g, '');
@@ -77,7 +84,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    password: refs.adminPassword.value,
+                    password: _adminPassword,
                     key: key,
                     value: val
                 })
@@ -123,7 +130,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    password: refs.adminPassword.value,
+                    password: _adminPassword,
                     times: refs.customTimes.value
                 })
             });

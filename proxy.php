@@ -16,21 +16,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 $baseUrl = 'http://vnz.osvita.net/WidgetSchedule.asmx/';
 $targetUrl = '';
 
+// Admin password from env (fallback to admin123 only in dev)
+$ADMIN_PASSWORD = getenv('ADMIN_PASSWORD') ?: (getenv('APP_ENV') === 'production' ? null : 'admin123');
+
 // Determine the target action
-if (isset($_GET['action'])) {
-    $action = $_GET['action'];
-    // basic sanitization to allow only alphanumeric characters
-    if (preg_match('/^[a-zA-Z0-9]+$/', $action)) {
-        $targetUrl = $baseUrl . $action;
-    } else {
-        http_response_code(400);
-        echo json_encode(['error' => 'Invalid action']);
-        exit;
-    }
+if (!isset($_GET['action'])) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing action parameter']);
     exit;
 }
+
+$action = $_GET['action'];
+// Basic sanitization: allow only alphanumeric characters
+if (!preg_match('/^[a-zA-Z0-9]+$/', $action)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid action']);
+    exit;
+}
+
+$targetUrl = $baseUrl . $action;
 
 // --- Local Links Logic (CORS friendly) ---
 if ($action === 'GetLinks') {
@@ -46,7 +50,7 @@ if ($action === 'GetLinks') {
 }
 if ($action === 'SaveLinks' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
-    if (!isset($input['password']) || $input['password'] !== 'admin123') {
+    if (!$ADMIN_PASSWORD || !isset($input['password']) || $input['password'] !== $ADMIN_PASSWORD) {
         http_response_code(403);
         echo json_encode(['error' => 'Wrong password']);
         exit;
@@ -91,6 +95,9 @@ $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $targetUrl);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+// #24: add explicit timeouts to prevent infinite hanging
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 
 // Add headers to mimic a browser to avoid being blocked
 $headers = [
