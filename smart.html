@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Smart Day: наступна пара, рейтинг зручності, теплокарта, what-if симулятор, live board">
+    <title>Smart Day · Розклад</title>
+    <script>
+        window.__loadTailwindFallback = function () {
+            if (window.__tailwindFallbackLoaded) return;
+            window.__tailwindFallbackLoaded = true;
+            var s = document.createElement('script');
+            s.src = 'https://cdn.tailwindcss.com/3.4.1';
+            document.head.appendChild(s);
+        };
+    </script>
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' ||
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/styles.css?v=20260410-1">
+    <style>
+        .heat-cell { min-height: 34px; }
+        .board-card { border-left: 4px solid #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-3 md:p-6 space-y-4" id="smartRoot">
+        <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black text-amber-700 dark:text-amber-300">Smart Day</h1>
+                    <p class="text-xs text-gray-500">Наступна пара · Рейтинг 0–100 · Теплокарта · What-if · Live board</p>
+                </div>
+                <div class="flex gap-2">
+                    <a href="/index.html?desktop=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
+                    <a href="/index2.html?mobile=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Mobile</a>
+                    <a href="/session.html" class="px-3 py-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-xs font-bold text-emerald-700 dark:text-emerald-300">Сесія</a>
+                </div>
+            </div>
+        </header>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                <select id="modeSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="group">Група</option>
+                    <option value="teacher">Викладач</option>
+                </select>
+                <select id="facultySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Факультет...</option>
+                </select>
+                <select id="eduFormSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Форма...</option>
+                </select>
+                <select id="courseSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Курс...</option>
+                </select>
+                <select id="chairSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 hidden">
+                    <option value="">Кафедра...</option>
+                </select>
+                <select id="entitySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2">
+                    <option value="">Оберіть...</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <input id="dateStart" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="dateEnd" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <button id="loadBtn" class="rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold py-2">Завантажити Smart Day</button>
+                <button id="toggleBoardBtn" class="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2">Live board mode</button>
+            </div>
+            <p id="status" class="text-sm text-gray-500">Підготовка...</p>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
+                <div class="text-xs text-gray-500">Зараз</div>
+                <div id="currentLesson" class="font-bold">—</div>
+                <div id="currentMeta" class="text-sm text-gray-500">—</div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div id="currentProgress" class="bg-emerald-600 h-2 rounded-full transition-all" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
+                <div class="text-xs text-gray-500">Наступна пара</div>
+                <div id="nextLesson" class="font-bold">—</div>
+                <div id="nextMeta" class="text-sm text-gray-500">—</div>
+                <div id="nextCountdown" class="text-sm font-bold text-indigo-600 dark:text-indigo-300">—</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
+                <div class="text-xs text-gray-500">Рейтинг зручності</div>
+                <div id="comfortScore" class="text-4xl font-black text-amber-600">0</div>
+                <div id="comfortMeta" class="text-sm text-gray-500">—</div>
+            </div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bold">Теплокарта навантаження (день × пара)</h2>
+                <div class="text-xs text-gray-500">0 = вільно, 1+ = зайнято</div>
+            </div>
+            <div id="heatmap" class="grid grid-cols-8 gap-1 text-xs"></div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <h2 class="font-bold">What-if симулятор</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <select id="simLessonSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Оберіть пару...</option>
+                </select>
+                <select id="simAction" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="shift+1">Зсунути на +1 пару</option>
+                    <option value="shift-1">Зсунути на -1 пару</option>
+                </select>
+                <input id="simRoom" type="text" placeholder="Нова аудиторія (опц.)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <button id="runSimBtn" class="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2">Порахувати</button>
+            </div>
+            <div id="simResult" class="text-sm text-gray-500">Поки без симуляції</div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bold">Live board (зміни за сьогодні)</h2>
+                <div class="text-xs text-gray-500">Оновлення кожні 30 сек</div>
+            </div>
+            <div id="liveBoard" class="space-y-2"></div>
+        </section>
+    </div>
+
+    <script src="js/utils.js?v=20260410-1"></script>
+    <script src="js/api.js?v=20260410-1"></script>
+    <script src="js/smart-day.js?v=20260410-1"></script>
+</body>
+</html>
