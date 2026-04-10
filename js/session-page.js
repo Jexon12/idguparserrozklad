@@ -64,6 +64,19 @@
         return uniqSorted(groups);
     };
 
+    const parseGroupsFromHeading = (heading) => {
+        const raw = clean(heading);
+        if (!raw) return [];
+        const out = [];
+        const regex = /(\d{1,3})\s*([\p{L}])?/gu;
+        let match;
+        while ((match = regex.exec(raw)) !== null) {
+            const group = clean(`${match[1]}${match[2] || ''}`.toLowerCase());
+            if (group && !out.includes(group)) out.push(group);
+        }
+        return out;
+    };
+
     const fillSelect = (selectEl, values, firstLabel, withFirst = true) => {
         selectEl.innerHTML = '';
         if (withFirst) {
@@ -127,11 +140,11 @@
             const tr = document.createElement('tr');
             tr.className = 'border-b border-gray-100 dark:border-gray-700';
             tr.innerHTML = `
-                <td class="px-3 py-2 align-top text-xs font-semibold">${(item.groups || []).join(', ') || item.groupHeading || '—'}</td>
+                <td class="px-3 py-2 align-top text-xs">${teacherCell}</td>
                 <td class="px-3 py-2 align-top text-sm">${item.discipline || '—'}</td>
                 <td class="px-3 py-2 align-top text-xs">${item.controlType || '—'}</td>
                 <td class="px-3 py-2 align-top text-xs">${item.examForm || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs">${teacherCell}</td>
+                <td class="px-3 py-2 align-top text-xs font-semibold">${(item.groups || []).join(', ') || item.groupHeading || '—'}</td>
                 <td class="px-3 py-2 align-top text-xs">${item.date || '—'}</td>
                 <td class="px-3 py-2 align-top text-xs">${item.time || '—'}</td>
                 <td class="px-3 py-2 align-top text-xs">${item.room || '—'}</td>
@@ -277,10 +290,15 @@
 
         state.items = (Array.isArray(data.items) ? data.items : []).map((item) => {
             const teacherNames = extractTeacherNames(item.teacher);
+            const parsedGroups = Array.isArray(item.groups) ? item.groups : [];
+            const needsGroupRecovery = !parsedGroups.length || parsedGroups.every((g) => /^\d{1,3}$/.test(clean(g)));
+            const recoveredGroups = needsGroupRecovery ? parseGroupsFromHeading(item.groupHeading) : [];
+            const finalGroups = uniqSorted((needsGroupRecovery ? recoveredGroups : parsedGroups).map((g) => clean(g).toLowerCase()));
             return {
                 ...item,
                 term: item.term || data.term || '',
                 studyForm: item.studyForm || data.studyForm || '',
+                groups: finalGroups,
                 teacherNames,
                 teacher: teacherNames.join('; ') || clean(item.teacher)
             };
@@ -304,3 +322,4 @@
 
     start();
 })();
+

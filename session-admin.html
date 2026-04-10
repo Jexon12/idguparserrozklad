@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Адмін-панель завантаження файлів сесії">
+    <meta name="description" content="Адмін-панель завантаження та керування сесіями">
     <title>Session Admin</title>
     <script>
         window.__loadTailwindFallback = function () {
@@ -25,12 +25,12 @@
     <link rel="stylesheet" href="css/styles.css?v=20260410-1">
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
-    <div class="max-w-5xl mx-auto p-3 md:p-6 space-y-4">
+    <div class="max-w-6xl mx-auto p-3 md:p-6 space-y-4">
         <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                     <h1 class="text-2xl md:text-3xl font-black text-emerald-700 dark:text-emerald-300">🛠 Session Admin</h1>
-                    <p class="text-xs text-gray-500 mt-1">Завантажуйте Word (.docx), парсинг іде автоматично в браузері</p>
+                    <p class="text-xs text-gray-500 mt-1">Завантаження DOCX, керування сесіями, корзиною та історією дій</p>
                 </div>
                 <div class="flex gap-2">
                     <a href="/session.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">До таблиці сесії</a>
@@ -40,8 +40,10 @@
         </header>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <h2 class="font-bold">Завантаження файлів</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="adminActor" type="text" placeholder="Ваше ім'я (для логу)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <input id="sessionTerm" type="text" placeholder="Назва сесії (напр. Зимова 2025-26)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2">
             </div>
             <select id="studyForm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
@@ -49,9 +51,15 @@
                 <option value="заочна форма навчання">Заочна форма навчання</option>
             </select>
             <input id="docxFiles" type="file" accept=".docx" multiple class="block w-full text-sm">
+            <div class="text-xs text-gray-500" id="fileHint">Ліміт: до 25 файлів або до 15 MB сумарно за раз</div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                <div id="parseProgressBar" class="h-full bg-amber-500 transition-all duration-200" style="width:0%"></div>
+            </div>
+            <div id="parseProgressText" class="text-xs text-gray-500">Очікування файлів...</div>
             <div class="flex gap-2 flex-wrap">
                 <button id="parseFiles" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">1) Розпарсити файли</button>
                 <button id="uploadData" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">2) Завантажити в API</button>
+                <button id="exportBackup" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">Експорт JSON (backup)</button>
             </div>
             <p id="adminStatus" class="text-sm text-gray-600 dark:text-gray-300"></p>
         </section>
@@ -62,8 +70,40 @@
             <div class="text-xs text-gray-500 dark:text-gray-400">Групи:</div>
             <div id="groupPreview" class="flex flex-wrap gap-2"></div>
         </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <h2 class="font-bold">Активні сесії</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <select id="existingTerms" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2"></select>
+                <input id="renameTermInput" type="text" placeholder="Нова назва сесії" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <button id="refreshTerms" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Оновити список</button>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button id="renameTerm" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm">Перейменувати</button>
+                <button id="deleteTerm" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm">У корзину</button>
+                <button id="exportSelectedTerm" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm">Експорт вибраної сесії</button>
+            </div>
+            <div id="termSummary" class="text-xs text-gray-500 dark:text-gray-400"></div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <h2 class="font-bold">Корзина сесій</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <select id="trashTerms" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <div class="flex gap-2">
+                    <button id="restoreTerm" class="flex-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">Відновити</button>
+                    <button id="purgeTerm" class="flex-1 px-3 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-sm">Видалити назавжди</button>
+                </div>
+            </div>
+            <div id="trashSummary" class="text-xs text-gray-500 dark:text-gray-400"></div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
+            <h2 class="font-bold">Історія дій</h2>
+            <ul id="historyList" class="space-y-1 text-xs text-gray-600 dark:text-gray-300 max-h-60 overflow-auto"></ul>
+        </section>
     </div>
 
-    <script src="js/session-admin.js?v=20260410-5"></script>
+    <script src="js/session-admin.js?v=20260410-8"></script>
 </body>
 </html>
