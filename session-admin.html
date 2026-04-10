@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Адмін-панель завантаження та керування сесіями">
+    <meta name="description" content="РђРґРјС–РЅ-РїР°РЅРµР»СЊ Р·Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ С‚Р° РєРµСЂСѓРІР°РЅРЅСЏ СЃРµСЃС–СЏРјРё">
     <title>Session Admin</title>
     <script>
         window.__loadTailwindFallback = function () {
@@ -29,81 +29,82 @@
         <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-black text-emerald-700 dark:text-emerald-300">🛠 Session Admin</h1>
-                    <p class="text-xs text-gray-500 mt-1">Завантаження DOCX, керування сесіями, корзиною та історією дій</p>
+                    <h1 class="text-2xl md:text-3xl font-black text-emerald-700 dark:text-emerald-300">рџ›  Session Admin</h1>
+                    <p class="text-xs text-gray-500 mt-1">Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ DOCX, РєРµСЂСѓРІР°РЅРЅСЏ СЃРµСЃС–СЏРјРё, РєРѕСЂР·РёРЅРѕСЋ С‚Р° С–СЃС‚РѕСЂС–С”СЋ РґС–Р№</p>
                 </div>
                 <div class="flex gap-2">
-                    <a href="/session.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">До таблиці сесії</a>
+                    <a href="/session.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Р”Рѕ С‚Р°Р±Р»РёС†С– СЃРµСЃС–С—</a>
                     <a href="/index.html?desktop=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
                 </div>
             </div>
         </header>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
-            <h2 class="font-bold">Завантаження файлів</h2>
+            <h2 class="font-bold">Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ С„Р°Р№Р»С–РІ</h2>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                <input id="adminActor" type="text" placeholder="Ваше ім'я (для логу)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                <input id="sessionTerm" type="text" placeholder="Назва сесії (напр. Зимова 2025-26)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2">
+                <input id="adminActor" type="text" placeholder="Р’Р°С€Рµ С–Рј'СЏ (РґР»СЏ Р»РѕРіСѓ)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="sessionTerm" type="text" placeholder="РќР°Р·РІР° СЃРµСЃС–С— (РЅР°РїСЂ. Р—РёРјРѕРІР° 2025-26)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2">
             </div>
             <select id="studyForm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                <option value="денна форма навчання">Денна форма навчання</option>
-                <option value="заочна форма навчання">Заочна форма навчання</option>
+                <option value="РґРµРЅРЅР° С„РѕСЂРјР° РЅР°РІС‡Р°РЅРЅСЏ">Р”РµРЅРЅР° С„РѕСЂРјР° РЅР°РІС‡Р°РЅРЅСЏ</option>
+                <option value="Р·Р°РѕС‡РЅР° С„РѕСЂРјР° РЅР°РІС‡Р°РЅРЅСЏ">Р—Р°РѕС‡РЅР° С„РѕСЂРјР° РЅР°РІС‡Р°РЅРЅСЏ</option>
             </select>
             <input id="docxFiles" type="file" accept=".docx" multiple class="block w-full text-sm">
-            <div class="text-xs text-gray-500" id="fileHint">Ліміт: до 25 файлів або до 15 MB сумарно за раз</div>
+            <div class="text-xs text-gray-500" id="fileHint">Р›С–РјС–С‚: РґРѕ 25 С„Р°Р№Р»С–РІ Р°Р±Рѕ РґРѕ 15 MB СЃСѓРјР°СЂРЅРѕ Р·Р° СЂР°Р·</div>
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                 <div id="parseProgressBar" class="h-full bg-amber-500 transition-all duration-200" style="width:0%"></div>
             </div>
-            <div id="parseProgressText" class="text-xs text-gray-500">Очікування файлів...</div>
+            <div id="parseProgressText" class="text-xs text-gray-500">РћС‡С–РєСѓРІР°РЅРЅСЏ С„Р°Р№Р»С–РІ...</div>
             <div class="flex gap-2 flex-wrap">
-                <button id="parseFiles" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">1) Розпарсити файли</button>
-                <button id="uploadData" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">2) Завантажити в API</button>
-                <button id="exportBackup" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">Експорт JSON (backup)</button>
+                <button id="parseFiles" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">1) Р РѕР·РїР°СЂСЃРёС‚Рё С„Р°Р№Р»Рё</button>
+                <button id="uploadData" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">2) Р—Р°РІР°РЅС‚Р°Р¶РёС‚Рё РІ API</button>
+                <button id="exportBackup" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">Р•РєСЃРїРѕСЂС‚ JSON (backup)</button>
             </div>
             <p id="adminStatus" class="text-sm text-gray-600 dark:text-gray-300"></p>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
-            <h2 class="font-bold">Підсумок парсингу</h2>
-            <div class="text-sm text-gray-600 dark:text-gray-300">Файлів: <span id="fileCount" class="font-bold">0</span> · Записів: <span id="itemCount" class="font-bold">0</span></div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Групи:</div>
+            <h2 class="font-bold">РџС–РґСЃСѓРјРѕРє РїР°СЂСЃРёРЅРіСѓ</h2>
+            <div class="text-sm text-gray-600 dark:text-gray-300">Р¤Р°Р№Р»С–РІ: <span id="fileCount" class="font-bold">0</span> В· Р—Р°РїРёСЃС–РІ: <span id="itemCount" class="font-bold">0</span></div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Р“СЂСѓРїРё:</div>
             <div id="groupPreview" class="flex flex-wrap gap-2"></div>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
-            <h2 class="font-bold">Активні сесії</h2>
+            <h2 class="font-bold">РђРєС‚РёРІРЅС– СЃРµСЃС–С—</h2>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <select id="existingTerms" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2"></select>
-                <input id="renameTermInput" type="text" placeholder="Нова назва сесії" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                <button id="refreshTerms" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Оновити список</button>
+                <input id="renameTermInput" type="text" placeholder="РќРѕРІР° РЅР°Р·РІР° СЃРµСЃС–С—" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <button id="refreshTerms" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">РћРЅРѕРІРёС‚Рё СЃРїРёСЃРѕРє</button>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <button id="renameTerm" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm">Перейменувати</button>
-                <button id="deleteTerm" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm">У корзину</button>
-                <button id="exportSelectedTerm" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm">Експорт вибраної сесії</button>
+                <button id="renameTerm" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm">РџРµСЂРµР№РјРµРЅСѓРІР°С‚Рё</button>
+                <button id="deleteTerm" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm">РЈ РєРѕСЂР·РёРЅСѓ</button>
+                <button id="exportSelectedTerm" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm">Р•РєСЃРїРѕСЂС‚ РІРёР±СЂР°РЅРѕС— СЃРµСЃС–С—</button>
             </div>
             <div id="termSummary" class="text-xs text-gray-500 dark:text-gray-400"></div>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
-            <h2 class="font-bold">Корзина сесій</h2>
+            <h2 class="font-bold">РљРѕСЂР·РёРЅР° СЃРµСЃС–Р№</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <select id="trashTerms" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
                 <div class="flex gap-2">
-                    <button id="restoreTerm" class="flex-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">Відновити</button>
-                    <button id="purgeTerm" class="flex-1 px-3 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-sm">Видалити назавжди</button>
+                    <button id="restoreTerm" class="flex-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">Р’С–РґРЅРѕРІРёС‚Рё</button>
+                    <button id="purgeTerm" class="flex-1 px-3 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-sm">Р’РёРґР°Р»РёС‚Рё РЅР°Р·Р°РІР¶РґРё</button>
                 </div>
             </div>
             <div id="trashSummary" class="text-xs text-gray-500 dark:text-gray-400"></div>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
-            <h2 class="font-bold">Історія дій</h2>
+            <h2 class="font-bold">Р†СЃС‚РѕСЂС–СЏ РґС–Р№</h2>
             <ul id="historyList" class="space-y-1 text-xs text-gray-600 dark:text-gray-300 max-h-60 overflow-auto"></ul>
         </section>
     </div>
 
-    <script src="js/session-admin.js?v=20260410-8"></script>
+    <script src="js/session-admin.js?v=20260410-9"></script>
 </body>
 </html>
+

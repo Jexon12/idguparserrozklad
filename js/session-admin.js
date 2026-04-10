@@ -61,11 +61,11 @@
     };
 
     const validateFiles = (files) => {
-        if (!files.length) return 'Оберіть хоча б один .docx файл';
-        if (files.length > MAX_FILES) return `Забагато файлів: максимум ${MAX_FILES} за раз`;
+        if (!files.length) return 'Р В РЎвЂєР В Р’В±Р В Р’ВµР РЋР вЂљР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋРІР‚В¦Р В РЎвЂўР РЋРІР‚РЋР В Р’В° Р В Р’В± Р В РЎвЂўР В РўвЂР В РЎвЂР В Р вЂ¦ .docx Р РЋРІР‚С›Р В Р’В°Р В РІвЂћвЂ“Р В Р’В»';
+        if (files.length > MAX_FILES) return `Р В РІР‚вЂќР В Р’В°Р В Р’В±Р В Р’В°Р В РЎвЂ“Р В Р’В°Р РЋРІР‚С™Р В РЎвЂў Р РЋРІР‚С›Р В Р’В°Р В РІвЂћвЂ“Р В Р’В»Р РЋРІР‚вЂњР В Р вЂ : Р В РЎВР В Р’В°Р В РЎвЂќР РЋР С“Р В РЎвЂР В РЎВР РЋРЎвЂњР В РЎВ ${MAX_FILES} Р В Р’В·Р В Р’В° Р РЋР вЂљР В Р’В°Р В Р’В·`;
         const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
         if (totalBytes > MAX_TOTAL_BYTES) {
-            return `Занадто великий пакет: максимум ${(MAX_TOTAL_BYTES / (1024 * 1024)).toFixed(0)} MB за раз`;
+            return `Р В РІР‚вЂќР В Р’В°Р В Р вЂ¦Р В Р’В°Р В РўвЂР РЋРІР‚С™Р В РЎвЂў Р В Р вЂ Р В Р’ВµР В Р’В»Р В РЎвЂР В РЎвЂќР В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂ”Р В Р’В°Р В РЎвЂќР В Р’ВµР РЋРІР‚С™: Р В РЎВР В Р’В°Р В РЎвЂќР РЋР С“Р В РЎвЂР В РЎВР РЋРЎвЂњР В РЎВ ${(MAX_TOTAL_BYTES / (1024 * 1024)).toFixed(0)} MB Р В Р’В·Р В Р’В° Р РЋР вЂљР В Р’В°Р В Р’В·`;
         }
         return '';
     };
@@ -74,21 +74,28 @@
         const raw = clean(value).replace(/[\u200e\u200f]/g, '');
         if (!raw) return [];
 
-        const regex = /([А-ЯІЇЄҐ][а-яіїєґ'’\-]+)\s*([А-ЯІЇЄҐ])\.\s*([А-ЯІЇЄҐ])\.?/g;
+        const prepared = raw
+            .replace(
+                /([\p{Lu}])\.\s*([\p{Lu}])\.\s*(?=[\p{Lu}][\p{Ll}'вЂ™\-]{2,})/gu,
+                '$1.$2.; '
+            )
+            .replace(/\s*(,|\/|\|)\s*/g, '; ')
+            .replace(/\s+\u0442\u0430\s+/giu, '; ')
+            .replace(/;\s*;\s*/g, '; ');
+
+        const regex = /([\p{Lu}][\p{Ll}'вЂ™\-]+)\s*([\p{Lu}])\.\s*([\p{Lu}])\.?/gu;
         const names = [];
-        let m;
-        while ((m = regex.exec(raw)) !== null) {
-            const name = `${m[1]} ${m[2]}.${m[3]}.`;
-            if (!names.includes(name)) names.push(name);
+        let match;
+        while ((match = regex.exec(prepared)) !== null) {
+            const full = `${match[1]} ${match[2]}.${match[3]}.`;
+            if (!names.includes(full)) names.push(full);
         }
 
         if (names.length) return names;
 
-        return raw
-            .replace(/\s*(,|\/|;)\s*/g, '; ')
-            .replace(/\s+та\s+/gi, '; ')
+        return prepared
             .split(';')
-            .map((p) => clean(p))
+            .map((part) => clean(part).replace(/([\p{Lu}])\s*\.\s*([\p{Lu}])\.?/gu, '$1.$2.'))
             .filter(Boolean);
     };
 
@@ -146,10 +153,10 @@
 
             const groups = parseGroups(heading);
             const speciality = metaLines
-                .filter((line) => line.includes(':') && !line.toLowerCase().includes('освіт'))
+                .filter((line) => line.includes(':') && !line.toLowerCase().includes('Р В РЎвЂўР РЋР С“Р В Р вЂ Р РЋРІР‚вЂњР РЋРІР‚С™'))
                 .join('; ');
             const program = metaLines
-                .filter((line) => line.toLowerCase().includes('освіт'))
+                .filter((line) => line.toLowerCase().includes('Р В РЎвЂўР РЋР С“Р В Р вЂ Р РЋРІР‚вЂњР РЋРІР‚С™'))
                 .join('; ');
 
             const rows = child.getElementsByTagNameNS(WORD_NS, 'tr');
@@ -224,9 +231,9 @@
 
     const makeTermOptionText = (session, inTrash) => {
         const count = Array.isArray(session.items) ? session.items.length : 0;
-        if (!inTrash) return `${session.term || 'Session'} (${count} записів)`;
-        const deletedAt = session.deletedAt ? new Date(session.deletedAt).toLocaleString('uk-UA') : '—';
-        return `${session.term || 'Session'} (${count}) · видалено: ${deletedAt}`;
+        if (!inTrash) return `${session.term || 'Session'} (${count} Р В Р’В·Р В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ )`;
+        const deletedAt = session.deletedAt ? new Date(session.deletedAt).toLocaleString('uk-UA') : 'Р Р†Р вЂљРІР‚Сњ';
+        return `${session.term || 'Session'} (${count}) Р вЂ™Р’В· Р В Р вЂ Р В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў: ${deletedAt}`;
     };
 
     const renderTerms = () => {
@@ -239,7 +246,7 @@
         if (!sessions.length) {
             const opt = document.createElement('option');
             opt.value = '';
-            opt.textContent = 'Немає активних сесій';
+            opt.textContent = 'Р В РЎСљР В Р’ВµР В РЎВР В Р’В°Р РЋРІР‚Сњ Р В Р’В°Р В РЎвЂќР РЋРІР‚С™Р В РЎвЂР В Р вЂ Р В Р вЂ¦Р В РЎвЂР РЋРІР‚В¦ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР В РІвЂћвЂ“';
             els.existingTerms.appendChild(opt);
         } else {
             sessions
@@ -256,7 +263,7 @@
         if (!trash.length) {
             const opt = document.createElement('option');
             opt.value = '';
-            opt.textContent = 'Корзина порожня';
+            opt.textContent = 'Р В РЎв„ўР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р В Р’В° Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР В РЎвЂўР В Р’В¶Р В Р вЂ¦Р РЋР РЏ';
             els.trashTerms.appendChild(opt);
         } else {
             trash
@@ -273,8 +280,8 @@
         const totalActiveItems = sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
         const totalTrashItems = trash.reduce((sum, s) => sum + ((s.items || []).length), 0);
 
-        els.termSummary.textContent = `Активних сесій: ${sessions.length} · Записів: ${totalActiveItems} · storage: ${state.storage}`;
-        els.trashSummary.textContent = `У корзині: ${trash.length} сесій · ${totalTrashItems} записів`;
+        els.termSummary.textContent = `Р В РЎвЂ™Р В РЎвЂќР РЋРІР‚С™Р В РЎвЂР В Р вЂ Р В Р вЂ¦Р В РЎвЂР РЋРІР‚В¦ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР В РІвЂћвЂ“: ${sessions.length} Р вЂ™Р’В· Р В РІР‚вЂќР В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ : ${totalActiveItems} Р вЂ™Р’В· storage: ${state.storage}`;
+        els.trashSummary.textContent = `Р В Р в‚¬ Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р РЋРІР‚вЂњ: ${trash.length} Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР В РІвЂћвЂ“ Р вЂ™Р’В· ${totalTrashItems} Р В Р’В·Р В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ `;
     };
 
     const renderHistory = () => {
@@ -282,18 +289,18 @@
         const list = Array.isArray(state.history) ? state.history.slice().reverse().slice(0, 80) : [];
         if (!list.length) {
             const li = document.createElement('li');
-            li.textContent = 'Історія поки порожня';
+            li.textContent = 'Р В РІР‚В Р РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР РЋРІР‚вЂњР РЋР РЏ Р В РЎвЂ”Р В РЎвЂўР В РЎвЂќР В РЎвЂ Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР В РЎвЂўР В Р’В¶Р В Р вЂ¦Р РЋР РЏ';
             els.historyList.appendChild(li);
             return;
         }
 
         list.forEach((entry) => {
             const li = document.createElement('li');
-            const at = entry.at ? new Date(entry.at).toLocaleString('uk-UA') : '—';
+            const at = entry.at ? new Date(entry.at).toLocaleString('uk-UA') : 'Р Р†Р вЂљРІР‚Сњ';
             const action = clean(entry.action || 'action');
             const term = clean(entry.term || '');
             const by = clean(entry.by || 'unknown');
-            li.textContent = `${at} · ${action}${term ? ` · ${term}` : ''} · ${by}`;
+            li.textContent = `${at} Р вЂ™Р’В· ${action}${term ? ` Р вЂ™Р’В· ${term}` : ''} Р вЂ™Р’В· ${by}`;
             els.historyList.appendChild(li);
         });
     };
@@ -325,7 +332,7 @@
     const ensureAdminContext = () => {
         const password = clean(els.password.value);
         if (!password) {
-            setStatus('Введіть ADMIN_PASSWORD', true);
+            setStatus('Р В РІР‚в„ўР В Р вЂ Р В Р’ВµР В РўвЂР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ ADMIN_PASSWORD', true);
             return null;
         }
         const actor = clean(els.actor.value) || 'admin-ui';
@@ -340,35 +347,35 @@
             return;
         }
         if (!window.JSZip) {
-            setStatus('JSZip не завантажений', true);
+            setStatus('JSZip Р В Р вЂ¦Р В Р’Вµ Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В°Р В Р вЂ¦Р РЋРІР‚С™Р В Р’В°Р В Р’В¶Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“', true);
             return;
         }
 
-        setStatus('Парсинг файлів...');
+        setStatus('Р В РЎСџР В Р’В°Р РЋР вЂљР РЋР С“Р В РЎвЂР В Р вЂ¦Р В РЎвЂ“ Р РЋРІР‚С›Р В Р’В°Р В РІвЂћвЂ“Р В Р’В»Р РЋРІР‚вЂњР В Р вЂ ...');
         state.filesParsed = files.map((f) => f.name);
         state.items = [];
         setParseProgress(0, files.length, `0/${files.length}`);
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            setParseProgress(i, files.length, `Обробка: ${file.name}`);
+            setParseProgress(i, files.length, `Р В РЎвЂєР В Р’В±Р РЋР вЂљР В РЎвЂўР В Р’В±Р В РЎвЂќР В Р’В°: ${file.name}`);
             try {
                 const rows = await parseDocxFile(file);
                 state.items.push(...rows);
-                setParseProgress(i + 1, files.length, `Готово: ${i + 1}/${files.length}`);
+                setParseProgress(i + 1, files.length, `Р В РІР‚СљР В РЎвЂўР РЋРІР‚С™Р В РЎвЂўР В Р вЂ Р В РЎвЂў: ${i + 1}/${files.length}`);
             } catch (e) {
-                setStatus(`Помилка парсингу ${file.name}: ${e.message}`, true);
+                setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР РЋР С“Р В РЎвЂР В Р вЂ¦Р В РЎвЂ“Р РЋРЎвЂњ ${file.name}: ${e.message}`, true);
                 return;
             }
         }
 
         renderSummary();
-        setStatus(`Парсинг завершено: ${state.items.length} записів`);
+        setStatus(`Р В РЎСџР В Р’В°Р РЋР вЂљР РЋР С“Р В РЎвЂР В Р вЂ¦Р В РЎвЂ“ Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋРІвЂљВ¬Р В Р’ВµР В Р вЂ¦Р В РЎвЂў: ${state.items.length} Р В Р’В·Р В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ `);
     };
 
     const uploadData = async () => {
         if (!state.items.length) {
-            setStatus('Спочатку розпарсіть файли', true);
+            setStatus('Р В Р Р‹Р В РЎвЂ”Р В РЎвЂўР РЋРІР‚РЋР В Р’В°Р РЋРІР‚С™Р В РЎвЂќР РЋРЎвЂњ Р РЋР вЂљР В РЎвЂўР В Р’В·Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР РЋР С“Р РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋРІР‚С›Р В Р’В°Р В РІвЂћвЂ“Р В Р’В»Р В РЎвЂ', true);
             return;
         }
 
@@ -390,17 +397,17 @@
             }
         };
 
-        setStatus('Завантажую дані в API...');
+        setStatus('Р В РІР‚вЂќР В Р’В°Р В Р вЂ Р В Р’В°Р В Р вЂ¦Р РЋРІР‚С™Р В Р’В°Р В Р’В¶Р РЋРЎвЂњР РЋР вЂ№ Р В РўвЂР В Р’В°Р В Р вЂ¦Р РЋРІР‚вЂњ Р В Р вЂ  API...');
         try {
             const safe = await apiJson('/api/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            setStatus(`Успішно: додано ${safe.added || 0}, всього ${safe.count || 0} (сесія: ${safe.term || ''}, storage: ${safe.storage || 'n/a'})`);
+            setStatus(`Р В Р в‚¬Р РЋР С“Р В РЎвЂ”Р РЋРІР‚вЂњР РЋРІвЂљВ¬Р В Р вЂ¦Р В РЎвЂў: Р В РўвЂР В РЎвЂўР В РўвЂР В Р’В°Р В Р вЂ¦Р В РЎвЂў ${safe.added || 0}, Р В Р вЂ Р РЋР С“Р РЋР Р‰Р В РЎвЂўР В РЎвЂ“Р В РЎвЂў ${safe.count || 0} (Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР РЏ: ${safe.term || ''}, storage: ${safe.storage || 'n/a'})`);
             await loadStore();
         } catch (e) {
-            setStatus(`Помилка завантаження: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В°Р В Р вЂ¦Р РЋРІР‚С™Р В Р’В°Р В Р’В¶Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ: ${e.message}`, true);
         }
     };
 
@@ -408,16 +415,16 @@
         try {
             const data = await loadStore();
             exportJsonToFile(data, 'session_backup_all');
-            setStatus('JSON backup успішно експортовано');
+            setStatus('JSON backup Р РЋРЎвЂњР РЋР С“Р В РЎвЂ”Р РЋРІР‚вЂњР РЋРІвЂљВ¬Р В Р вЂ¦Р В РЎвЂў Р В Р’ВµР В РЎвЂќР РЋР С“Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋРІР‚С™Р В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В РЎвЂў');
         } catch (e) {
-            setStatus(`Помилка backup: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° backup: ${e.message}`, true);
         }
     };
 
     const exportSelectedTerm = async () => {
         const term = clean(els.existingTerms.value || els.term.value);
         if (!term) {
-            setStatus('Оберіть сесію для експорту', true);
+            setStatus('Р В РЎвЂєР В Р’В±Р В Р’ВµР РЋР вЂљР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В РўвЂР В Р’В»Р РЋР РЏ Р В Р’ВµР В РЎвЂќР РЋР С“Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋРІР‚С™Р РЋРЎвЂњ', true);
             return;
         }
         try {
@@ -425,13 +432,13 @@
             const normalized = normalizeTerm(term);
             const sessions = (data.sessions || []).filter((s) => normalizeTerm(s.term) === normalized);
             if (!sessions.length) {
-                setStatus('Сесію для експорту не знайдено', true);
+                setStatus('Р В Р Р‹Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В РўвЂР В Р’В»Р РЋР РЏ Р В Р’ВµР В РЎвЂќР РЋР С“Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋРІР‚С™Р РЋРЎвЂњ Р В Р вЂ¦Р В Р’Вµ Р В Р’В·Р В Р вЂ¦Р В Р’В°Р В РІвЂћвЂ“Р В РўвЂР В Р’ВµР В Р вЂ¦Р В РЎвЂў', true);
                 return;
             }
             exportJsonToFile({ sessions, exportedAt: new Date().toISOString(), term }, 'session_backup_term');
-            setStatus(`Експортовано сесію: ${term}`);
+            setStatus(`Р В РІР‚СћР В РЎвЂќР РЋР С“Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋРІР‚С™Р В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В РЎвЂў Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№: ${term}`);
         } catch (e) {
-            setStatus(`Помилка експорту: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В Р’ВµР В РЎвЂќР РЋР С“Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋРІР‚С™Р РЋРЎвЂњ: ${e.message}`, true);
         }
     };
 
@@ -441,18 +448,18 @@
 
         const term = clean(els.existingTerms.value || els.term.value);
         if (!term) {
-            setStatus('Оберіть сесію для видалення', true);
+            setStatus('Р В РЎвЂєР В Р’В±Р В Р’ВµР РЋР вЂљР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В РўвЂР В Р’В»Р РЋР РЏ Р В Р вЂ Р В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ', true);
             return;
         }
 
-        if (!window.confirm(`Перемістити сесію "${term}" у корзину?`)) return;
+        if (!window.confirm(`Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР РЋРІР‚вЂњР РЋР С“Р РЋРІР‚С™Р В РЎвЂР РЋРІР‚С™Р В РЎвЂ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ "${term}" Р РЋРЎвЂњ Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р РЋРЎвЂњ?`)) return;
 
         try {
             // Auto-backup before destructive action
             const snapshot = await loadStore();
             exportJsonToFile(snapshot, `session_backup_before_delete_${term.replace(/\s+/g, '_')}`);
 
-            setStatus(`Переміщую сесію "${term}" у корзину...`);
+            setStatus(`Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР РЋРІР‚вЂњР РЋРІР‚В°Р РЋРЎвЂњР РЋР вЂ№ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ "${term}" Р РЋРЎвЂњ Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р РЋРЎвЂњ...`);
             const result = await apiJson('/api/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -463,10 +470,10 @@
                     term
                 })
             });
-            setStatus(`Сесію переміщено в корзину: ${result.term || term}. Видалено записів: ${result.deletedItems || 0}`);
+            setStatus(`Р В Р Р‹Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР РЋРІР‚вЂњР РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂў Р В Р вЂ  Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р РЋРЎвЂњ: ${result.term || term}. Р В РІР‚в„ўР В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў Р В Р’В·Р В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ : ${result.deletedItems || 0}`);
             await loadStore();
         } catch (e) {
-            setStatus(`Помилка видалення: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В Р вЂ Р В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ: ${e.message}`, true);
         }
     };
 
@@ -476,12 +483,12 @@
 
         const term = clean(els.trashTerms.value);
         if (!term) {
-            setStatus('Оберіть сесію в корзині для відновлення', true);
+            setStatus('Р В РЎвЂєР В Р’В±Р В Р’ВµР РЋР вЂљР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В Р вЂ  Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р РЋРІР‚вЂњ Р В РўвЂР В Р’В»Р РЋР РЏ Р В Р вЂ Р РЋРІР‚вЂњР В РўвЂР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ', true);
             return;
         }
 
         try {
-            setStatus(`Відновлюю сесію "${term}"...`);
+            setStatus(`Р В РІР‚в„ўР РЋРІР‚вЂњР В РўвЂР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р РЋР вЂ№Р РЋР вЂ№ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ "${term}"...`);
             const result = await apiJson('/api/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -492,10 +499,10 @@
                     term
                 })
             });
-            setStatus(`Сесію відновлено: ${result.term || term}. Відновлено записів: ${result.restoredItems || 0}`);
+            setStatus(`Р В Р Р‹Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В Р вЂ Р РЋРІР‚вЂњР В РўвЂР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў: ${result.term || term}. Р В РІР‚в„ўР РЋРІР‚вЂњР В РўвЂР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў Р В Р’В·Р В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ : ${result.restoredItems || 0}`);
             await loadStore();
         } catch (e) {
-            setStatus(`Помилка відновлення: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В Р вЂ Р РЋРІР‚вЂњР В РўвЂР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ: ${e.message}`, true);
         }
     };
 
@@ -505,14 +512,14 @@
 
         const term = clean(els.trashTerms.value);
         if (!term) {
-            setStatus('Оберіть сесію в корзині', true);
+            setStatus('Р В РЎвЂєР В Р’В±Р В Р’ВµР РЋР вЂљР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р В Р вЂ  Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р РЋРІР‚вЂњ', true);
             return;
         }
 
-        if (!window.confirm(`Видалити назавжди "${term}" з корзини?`)) return;
+        if (!window.confirm(`Р В РІР‚в„ўР В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚С™Р В РЎвЂ Р В Р вЂ¦Р В Р’В°Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В¶Р В РўвЂР В РЎвЂ "${term}" Р В Р’В· Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р В РЎвЂ?`)) return;
 
         try {
-            setStatus(`Видаляю назавжди "${term}"...`);
+            setStatus(`Р В РІР‚в„ўР В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р РЋР РЏР РЋР вЂ№ Р В Р вЂ¦Р В Р’В°Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В¶Р В РўвЂР В РЎвЂ "${term}"...`);
             const result = await apiJson('/api/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -523,10 +530,10 @@
                     term
                 })
             });
-            setStatus(`Видалено назавжди: ${result.term || term}. Записів: ${result.purgedItems || 0}`);
+            setStatus(`Р В РІР‚в„ўР В РЎвЂР В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў Р В Р вЂ¦Р В Р’В°Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В¶Р В РўвЂР В РЎвЂ: ${result.term || term}. Р В РІР‚вЂќР В Р’В°Р В РЎвЂ”Р В РЎвЂР РЋР С“Р РЋРІР‚вЂњР В Р вЂ : ${result.purgedItems || 0}`);
             await loadStore();
         } catch (e) {
-            setStatus(`Помилка очищення корзини: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В РЎвЂўР РЋРІР‚РЋР В РЎвЂР РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ Р В РЎвЂќР В РЎвЂўР РЋР вЂљР В Р’В·Р В РЎвЂР В Р вЂ¦Р В РЎвЂ: ${e.message}`, true);
         }
     };
 
@@ -538,14 +545,14 @@
         const toTerm = clean(els.renameTermInput.value);
 
         if (!fromTerm || !toTerm) {
-            setStatus('Оберіть сесію і введіть нову назву', true);
+            setStatus('Р В РЎвЂєР В Р’В±Р В Р’ВµР РЋР вЂљР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№ Р РЋРІР‚вЂњ Р В Р вЂ Р В Р вЂ Р В Р’ВµР В РўвЂР РЋРІР‚вЂњР РЋРІР‚С™Р РЋР Р‰ Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р РЋРЎвЂњ Р В Р вЂ¦Р В Р’В°Р В Р’В·Р В Р вЂ Р РЋРЎвЂњ', true);
             return;
         }
 
-        if (!window.confirm(`Перейменувати "${fromTerm}" на "${toTerm}"?`)) return;
+        if (!window.confirm(`Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР В РІвЂћвЂ“Р В РЎВР В Р’ВµР В Р вЂ¦Р РЋРЎвЂњР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р В РЎвЂ "${fromTerm}" Р В Р вЂ¦Р В Р’В° "${toTerm}"?`)) return;
 
         try {
-            setStatus('Перейменовую сесію...');
+            setStatus('Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР В РІвЂћвЂ“Р В РЎВР В Р’ВµР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р РЋРЎвЂњР РЋР вЂ№ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР вЂ№...');
             const result = await apiJson('/api/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -557,11 +564,11 @@
                     toTerm
                 })
             });
-            setStatus(`Перейменовано: ${result.fromTerm || fromTerm} → ${result.toTerm || toTerm}`);
+            setStatus(`Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР В РІвЂћвЂ“Р В РЎВР В Р’ВµР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В РЎвЂў: ${result.fromTerm || fromTerm} Р Р†РІР‚В РІР‚в„ў ${result.toTerm || toTerm}`);
             els.renameTermInput.value = '';
             await loadStore();
         } catch (e) {
-            setStatus(`Помилка перейменування: ${e.message}`, true);
+            setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РІвЂћвЂ“Р В РЎВР В Р’ВµР В Р вЂ¦Р РЋРЎвЂњР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ: ${e.message}`, true);
         }
     };
 
@@ -575,6 +582,7 @@
     els.purgeTerm.addEventListener('click', purgeSelectedTerm);
     els.renameTerm.addEventListener('click', renameSelectedTerm);
 
-    setParseProgress(0, 1, 'Очікування файлів...');
-    loadStore().catch((e) => setStatus(`Помилка ініціалізації: ${e.message}`, true));
+    setParseProgress(0, 1, 'Р В РЎвЂєР РЋРІР‚РЋР РЋРІР‚вЂњР В РЎвЂќР РЋРЎвЂњР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ Р РЋРІР‚С›Р В Р’В°Р В РІвЂћвЂ“Р В Р’В»Р РЋРІР‚вЂњР В Р вЂ ...');
+    loadStore().catch((e) => setStatus(`Р В РЎСџР В РЎвЂўР В РЎВР В РЎвЂР В Р’В»Р В РЎвЂќР В Р’В° Р РЋРІР‚вЂњР В Р вЂ¦Р РЋРІР‚вЂњР РЋРІР‚В Р РЋРІР‚вЂњР В Р’В°Р В Р’В»Р РЋРІР‚вЂњР В Р’В·Р В Р’В°Р РЋРІР‚В Р РЋРІР‚вЂњР РЋРІР‚вЂќ: ${e.message}`, true));
 })();
+

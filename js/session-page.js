@@ -28,21 +28,28 @@
         const raw = clean(value).replace(/[\u200e\u200f]/g, '');
         if (!raw) return [];
 
-        const regex = /([А-ЯІЇЄҐ][а-яіїєґ'’\-]+)\s*([А-ЯІЇЄҐ])\.\s*([А-ЯІЇЄҐ])\.?/g;
+        const prepared = raw
+            .replace(
+                /([\p{Lu}])\.\s*([\p{Lu}])\.\s*(?=[\p{Lu}][\p{Ll}'вЂ™\-]{2,})/gu,
+                '$1.$2.; '
+            )
+            .replace(/\s*(,|\/|\|)\s*/g, '; ')
+            .replace(/\s+\u0442\u0430\s+/giu, '; ')
+            .replace(/;\s*;\s*/g, '; ');
+
+        const regex = /([\p{Lu}][\p{Ll}'вЂ™\-]+)\s*([\p{Lu}])\.\s*([\p{Lu}])\.?/gu;
         const names = [];
         let match;
-        while ((match = regex.exec(raw)) !== null) {
+        while ((match = regex.exec(prepared)) !== null) {
             const full = `${match[1]} ${match[2]}.${match[3]}.`;
             if (!names.includes(full)) names.push(full);
         }
 
         if (names.length) return names;
 
-        return raw
-            .replace(/\s*(,|\/|;)\s*/g, '; ')
-            .replace(/\s+та\s+/gi, '; ')
+        return prepared
             .split(';')
-            .map((part) => clean(part))
+            .map((part) => clean(part).replace(/([\p{Lu}])\s*\.\s*([\p{Lu}])\.?/gu, '$1.$2.'))
             .filter(Boolean);
     };
 
@@ -122,7 +129,7 @@
         els.tbody.innerHTML = '';
         if (!state.filtered.length) {
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="9" class="px-3 py-5 text-center text-sm text-gray-500">Нічого не знайдено за поточними фільтрами</td>';
+            tr.innerHTML = '<td colspan="9" class="px-3 py-5 text-center text-sm text-gray-500">Р В РЎСљР РЋРІР‚вЂњР РЋРІР‚РЋР В РЎвЂўР В РЎвЂ“Р В РЎвЂў Р В Р вЂ¦Р В Р’Вµ Р В Р’В·Р В Р вЂ¦Р В Р’В°Р В РІвЂћвЂ“Р В РўвЂР В Р’ВµР В Р вЂ¦Р В РЎвЂў Р В Р’В·Р В Р’В° Р В РЎвЂ”Р В РЎвЂўР РЋРІР‚С™Р В РЎвЂўР РЋРІР‚РЋР В Р вЂ¦Р В РЎвЂР В РЎВР В РЎвЂ Р РЋРІР‚С›Р РЋРІР‚вЂњР В Р’В»Р РЋР Р‰Р РЋРІР‚С™Р РЋР вЂљР В Р’В°Р В РЎВР В РЎвЂ</td>';
             els.tbody.appendChild(tr);
             els.count.textContent = '0';
             return;
@@ -135,20 +142,20 @@
                 : extractTeacherNames(item.teacher);
             const teacherCell = teacherNames.length
                 ? `<div class="flex flex-wrap gap-1">${teacherNames.map((n) => `<span class="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-semibold">${n}</span>`).join('')}</div>`
-                : '—';
+                : 'Р Р†Р вЂљРІР‚Сњ';
 
             const tr = document.createElement('tr');
             tr.className = 'border-b border-gray-100 dark:border-gray-700';
             tr.innerHTML = `
                 <td class="px-3 py-2 align-top text-xs">${teacherCell}</td>
-                <td class="px-3 py-2 align-top text-sm">${item.discipline || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs">${item.controlType || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs">${item.examForm || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs font-semibold">${(item.groups || []).join(', ') || item.groupHeading || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs">${item.date || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs">${item.time || '—'}</td>
-                <td class="px-3 py-2 align-top text-xs">${item.room || '—'}</td>
-                <td class="px-3 py-2 align-top text-[11px] text-gray-500 dark:text-gray-400">${item.speciality || '—'}</td>
+                <td class="px-3 py-2 align-top text-sm">${item.discipline || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-xs">${item.controlType || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-xs">${item.examForm || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-xs font-semibold">${(item.groups || []).join(', ') || item.groupHeading || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-xs">${item.date || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-xs">${item.time || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-xs">${item.room || 'Р Р†Р вЂљРІР‚Сњ'}</td>
+                <td class="px-3 py-2 align-top text-[11px] text-gray-500 dark:text-gray-400">${item.speciality || 'Р Р†Р вЂљРІР‚Сњ'}</td>
             `;
             fragment.appendChild(tr);
         });
@@ -194,22 +201,22 @@
 
     const exportFiltered = () => {
         if (!window.XLSX) {
-            alert('XLSX бібліотека не завантажена');
+            alert('XLSX Р В Р’В±Р РЋРІР‚вЂњР В Р’В±Р В Р’В»Р РЋРІР‚вЂњР В РЎвЂўР РЋРІР‚С™Р В Р’ВµР В РЎвЂќР В Р’В° Р В Р вЂ¦Р В Р’Вµ Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В°Р В Р вЂ¦Р РЋРІР‚С™Р В Р’В°Р В Р’В¶Р В Р’ВµР В Р вЂ¦Р В Р’В°');
             return;
         }
 
         const rows = [[
-            'Сесія',
-            'Форма навчання',
-            'Група',
-            'Дисципліна',
-            'Тип',
-            'Форма',
-            'Викладач',
-            'Дата',
-            'Час',
-            'Аудиторія',
-            'Спеціальність'
+            'Р В Р Р‹Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋР РЏ',
+            'Р В Р’В¤Р В РЎвЂўР РЋР вЂљР В РЎВР В Р’В° Р В Р вЂ¦Р В Р’В°Р В Р вЂ Р РЋРІР‚РЋР В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р РЋР РЏ',
+            'Р В РІР‚СљР РЋР вЂљР РЋРЎвЂњР В РЎвЂ”Р В Р’В°',
+            'Р В РІР‚СњР В РЎвЂР РЋР С“Р РЋРІР‚В Р В РЎвЂР В РЎвЂ”Р В Р’В»Р РЋРІР‚вЂњР В Р вЂ¦Р В Р’В°',
+            'Р В РЎС›Р В РЎвЂР В РЎвЂ”',
+            'Р В Р’В¤Р В РЎвЂўР РЋР вЂљР В РЎВР В Р’В°',
+            'Р В РІР‚в„ўР В РЎвЂР В РЎвЂќР В Р’В»Р В Р’В°Р В РўвЂР В Р’В°Р РЋРІР‚РЋ',
+            'Р В РІР‚СњР В Р’В°Р РЋРІР‚С™Р В Р’В°',
+            'Р В Р’В§Р В Р’В°Р РЋР С“',
+            'Р В РЎвЂ™Р РЋРЎвЂњР В РўвЂР В РЎвЂР РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР РЋРІР‚вЂњР РЋР РЏ',
+            'Р В Р Р‹Р В РЎвЂ”Р В Р’ВµР РЋРІР‚В Р РЋРІР‚вЂњР В Р’В°Р В Р’В»Р РЋР Р‰Р В Р вЂ¦Р РЋРІР‚вЂњР РЋР С“Р РЋРІР‚С™Р РЋР Р‰'
         ]];
 
         state.filtered.forEach((item) => {
@@ -235,11 +242,11 @@
     };
 
     const initFilters = () => {
-        fillSelect(els.term, uniqSorted(state.items.map((i) => i.term)), 'Усі сесії');
-        fillSelect(els.studyForm, uniqSorted(state.items.map((i) => i.studyForm)), 'Усі форми');
-        fillSelect(els.group, collectGroups(state.items), 'Усі групи');
-        fillSelect(els.teacher, uniqSorted(state.items.flatMap((i) => i.teacherNames || [])), 'Усі викладачі', false);
-        fillSelect(els.controlType, uniqSorted(state.items.map((i) => i.controlType)), 'Усі типи');
+        fillSelect(els.term, uniqSorted(state.items.map((i) => i.term)), 'Р В Р в‚¬Р РЋР С“Р РЋРІР‚вЂњ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋРІР‚вЂќ');
+        fillSelect(els.studyForm, uniqSorted(state.items.map((i) => i.studyForm)), 'Р В Р в‚¬Р РЋР С“Р РЋРІР‚вЂњ Р РЋРІР‚С›Р В РЎвЂўР РЋР вЂљР В РЎВР В РЎвЂ');
+        fillSelect(els.group, collectGroups(state.items), 'Р В Р в‚¬Р РЋР С“Р РЋРІР‚вЂњ Р В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В РЎвЂ”Р В РЎвЂ');
+        fillSelect(els.teacher, uniqSorted(state.items.flatMap((i) => i.teacherNames || [])), 'Р В Р в‚¬Р РЋР С“Р РЋРІР‚вЂњ Р В Р вЂ Р В РЎвЂР В РЎвЂќР В Р’В»Р В Р’В°Р В РўвЂР В Р’В°Р РЋРІР‚РЋР РЋРІР‚вЂњ', false);
+        fillSelect(els.controlType, uniqSorted(state.items.map((i) => i.controlType)), 'Р В Р в‚¬Р РЋР С“Р РЋРІР‚вЂњ Р РЋРІР‚С™Р В РЎвЂР В РЎвЂ”Р В РЎвЂ');
         buildChips(collectGroups(state.items));
         applyGroupFromUrl();
     };
@@ -283,7 +290,7 @@
 
         if (!data || !Array.isArray(data.items)) {
             const fallbackRes = await fetch('/data/session-2025-26.json?v=20260410-3');
-            if (!fallbackRes.ok) throw new Error('Не вдалося завантажити дані сесії');
+            if (!fallbackRes.ok) throw new Error('Р В РЎСљР В Р’Вµ Р В Р вЂ Р В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂўР РЋР С“Р РЋР РЏ Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’В°Р В Р вЂ¦Р РЋРІР‚С™Р В Р’В°Р В Р’В¶Р В РЎвЂР РЋРІР‚С™Р В РЎвЂ Р В РўвЂР В Р’В°Р В Р вЂ¦Р РЋРІР‚вЂњ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋРІР‚вЂњР РЋРІР‚вЂќ');
             data = await fallbackRes.json();
             storageLabel = 'file-fallback';
         }
@@ -304,9 +311,9 @@
             };
         });
 
-        const generated = data.generatedAt ? new Date(data.generatedAt).toLocaleString('uk-UA') : '—';
+        const generated = data.generatedAt ? new Date(data.generatedAt).toLocaleString('uk-UA') : 'Р Р†Р вЂљРІР‚Сњ';
         const source = data.sourceFile || 'session';
-        els.source.textContent = `Джерело: ${source} · оновлено: ${generated} · storage: ${storageLabel}`;
+        els.source.textContent = `Р В РІР‚СњР В Р’В¶Р В Р’ВµР РЋР вЂљР В Р’ВµР В Р’В»Р В РЎвЂў: ${source} Р вЂ™Р’В· Р В РЎвЂўР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў: ${generated} Р вЂ™Р’В· storage: ${storageLabel}`;
     };
 
     const start = async () => {
@@ -322,4 +329,5 @@
 
     start();
 })();
+
 
