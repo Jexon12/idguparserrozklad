@@ -88,7 +88,7 @@
                     </div>
                     <div class="flex gap-2">
                         <a href="/index.html?desktop=1" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
-                        <button @click="toggleDarkMode" onclick="window.__mobileToggleTheme(); return false;" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">{{ isDark ? '☀️' : '🌙' }}</button>
+                        <button @click="toggleDarkMode" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">{{ isDark ? '☀️' : '🌙' }}</button>
                         <button @click="showSettingsModal = true" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">⚙️</button>
                     </div>
                 </div>
@@ -104,6 +104,58 @@
                     </div>
                 </div>
             </header>
+
+            <section v-if="currentLessonInfo" class="sticky top-2 z-30 bg-emerald-50/95 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl shadow p-3">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Зараз триває</div>
+                        <div class="font-bold text-sm">{{ currentLessonInfo.discipline }}</div>
+                        <div class="text-xs text-gray-600 dark:text-gray-300">{{ currentLessonInfo.teacher }} · {{ currentLessonInfo.cabinet || '—' }}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-emerald-700 dark:text-emerald-300">{{ currentLessonInfo.time }}</div>
+                        <div class="text-xs font-bold">{{ currentLessonInfo.timeLeftStr }}</div>
+                    </div>
+                </div>
+                <div class="mt-2 w-full bg-emerald-200/70 dark:bg-emerald-800 rounded-full h-2">
+                    <div class="bg-emerald-600 h-2 rounded-full transition-all duration-300" :style="{ width: `${currentLessonInfo.percent || 0}%` }"></div>
+                </div>
+            </section>
+
+            <section v-if="nextLessonInfo" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-xs text-indigo-600 dark:text-indigo-300 font-semibold">Наступна пара через {{ nextLessonInfo.timeLeft }}</div>
+                        <div class="font-bold text-sm mt-0.5">{{ nextLessonInfo.discipline }}</div>
+                        <div class="text-xs text-gray-500 mt-1">{{ nextLessonInfo.teacher || '—' }} · {{ nextLessonInfo.cabinet || '—' }}</div>
+                    </div>
+                    <div class="text-right text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                        <div>{{ nextLessonInfo.time }}</div>
+                        <div>{{ nextLessonInfo.date }}</div>
+                    </div>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                    <button @click="openNextLessonInGoogleCalendar" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 Calendar</button>
+                    <a v-if="getGlobalLink(nextLessonInfo, 'onlineUrl')" :href="getGlobalLink(nextLessonInfo, 'onlineUrl')" target="_blank" class="rounded-xl bg-purple-100 text-purple-700 py-2 text-xs font-bold text-center">📹 Онлайн</a>
+                    <button v-else @click="showToast('Для пари не задано online-посилання')" class="rounded-xl bg-purple-100 text-purple-700 py-2 text-xs font-bold">📹 Онлайн</button>
+                </div>
+            </section>
+
+            <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3 space-y-2">
+                <div class="grid grid-cols-3 gap-2">
+                    <button @click="openReportModal" class="rounded-xl bg-green-100 text-green-700 py-2 text-xs font-bold">📊 Звіт</button>
+                    <button @click="setTomorrowRange" class="rounded-xl bg-indigo-100 text-indigo-700 py-2 text-xs font-bold">🗓 Завтра</button>
+                    <button @click="openFreeRoomsNow" class="rounded-xl bg-emerald-100 text-emerald-700 py-2 text-xs font-bold">🏫 Вільні</button>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <button @click="loadAllFavorites" class="rounded-xl bg-yellow-100 text-yellow-700 py-2 text-xs font-bold">⭐ Лише обране</button>
+                    <button @click="saveOfflineSnapshot" class="rounded-xl bg-slate-100 text-slate-700 py-2 text-xs font-bold">💾 Snapshot</button>
+                    <button @click="restoreOfflineSnapshot()" class="rounded-xl bg-slate-100 text-slate-700 py-2 text-xs font-bold">📦 Restore</button>
+                </div>
+                <div class="text-[11px] text-gray-500 dark:text-gray-400" v-if="offlineSnapshotAt">
+                    Останній офлайн-знімок: {{ new Date(offlineSnapshotAt).toLocaleString('uk-UA') }}
+                </div>
+            </section>
 
             <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3 space-y-3">
                 <div class="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
@@ -189,7 +241,7 @@
                 <div class="grid grid-cols-3 gap-2">
                     <button @click="shareSchedule" class="rounded-xl bg-gray-100 dark:bg-gray-700 py-2 text-xs font-bold">🔗 Share</button>
                     <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 Calendar</button>
-                    <button @click="clearLocalData && clearLocalData()" onclick="window.__mobileClearData(); return false;" class="rounded-xl bg-red-100 text-red-700 py-2 text-xs font-bold">🗑 Очистити</button>
+                    <button @click="clearLocalData && clearLocalData()" class="rounded-xl bg-red-100 text-red-700 py-2 text-xs font-bold">🗑 Очистити</button>
                 </div>
             </section>
 
@@ -360,10 +412,44 @@
 
                     <div class="rounded-xl bg-red-50 dark:bg-red-900/20 p-3">
                         <div class="font-bold mb-2 text-red-700 dark:text-red-300">Скидання локальних даних</div>
-                        <button @click="clearLocalData && clearLocalData()" onclick="window.__mobileClearData(); return false;" class="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-bold">
+                        <button @click="clearLocalData && clearLocalData()" class="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-bold">
                             Очистити дані
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showReportModal" class="fixed inset-0 bg-black/50 z-[90] p-3 flex items-end" @click.self="showReportModal = false">
+            <div class="w-full max-h-[88vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-t-3xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-bold text-lg">📊 Звіт викладача</h3>
+                    <button @click="showReportModal = false" class="text-2xl">×</button>
+                </div>
+                <div class="space-y-3">
+                    <select v-model="reportForm.faculty" @change="loadReportChairs" class="w-full rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <option value="">-- Факультет --</option>
+                        <option v-for="f in faculties" :key="f.Key" :value="f">{{ f.Value }}</option>
+                    </select>
+                    <select v-model="reportForm.chair" @change="loadReportEmployees" :disabled="!reportForm.faculty" class="w-full rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <option value="">-- Кафедра --</option>
+                        <option v-for="c in reportChairs" :key="c.Key" :value="c">{{ c.Value }}</option>
+                    </select>
+                    <select v-model="reportForm.teacher" :disabled="!reportForm.chair" class="w-full rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <option value="">-- Викладач --</option>
+                        <option v-for="e in reportEmployees" :key="e.Key" :value="e">{{ e.Value }}</option>
+                    </select>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="month" v-model="reportForm.monthStart" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <input type="month" v-model="reportForm.monthEnd" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    </div>
+                    <p v-if="reportError" class="text-sm text-red-600">{{ reportError }}</p>
+                    <div v-if="isDownloadingReport" class="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 text-sm">
+                        {{ reportProgress.progress || 'Підготовка...' }}
+                    </div>
+                    <button @click="downloadReport" :disabled="!isReportFormValid || isDownloadingReport" class="w-full rounded-xl bg-green-600 hover:bg-green-700 text-white py-2 font-bold disabled:bg-gray-400">
+                        {{ isDownloadingReport ? 'Формую...' : 'Завантажити XLSX' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -387,13 +473,13 @@
         </div>
     </div>
 
-    <script src="js/utils.js?v=20260408-15"></script>
-    <script src="js/components/current-lesson-banner.js?v=20260408-15"></script>
-    <script src="js/api.js?v=20260408-15"></script>
-    <script src="js/search.js?v=20260408-15"></script>
-    <script src="js/notes.js?v=20260408-15"></script>
-    <script src="js/admin.js?v=20260408-15"></script>
-    <script src="js/occupancy.js?v=20260408-15"></script>
+    <script src="js/utils.js?v=20260410-1"></script>
+    <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
+    <script src="js/api.js?v=20260410-1"></script>
+    <script src="js/search.js?v=20260410-1"></script>
+    <script src="js/notes.js?v=20260410-1"></script>
+    <script src="js/admin.js?v=20260410-1"></script>
+    <script src="js/occupancy.js?v=20260410-1"></script>
 
     <script>
         (function () {
@@ -420,11 +506,11 @@
         })();
     </script>
 
-    <script src="js/app.js?v=20260408-15"></script>
+    <script src="js/app.js?v=20260410-1"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js?v=20260408-15')
+                navigator.serviceWorker.register('/sw.js?v=20260410-1')
                     .then(() => console.log('SW registered'))
                     .catch((err) => console.log('SW registration failed:', err));
             });

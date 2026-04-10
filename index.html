@@ -50,7 +50,7 @@
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260408-15">
+    <link rel="stylesheet" href="css/styles.css?v=20260410-1">
     <script>
         // Auto-detect dark mode
         if (localStorage.getItem('darkMode') === 'true' ||
@@ -1749,13 +1749,13 @@
 
     </div> <!-- End of #app -->
 
-    <script src="js/utils.js?v=20260408-15"></script>
-    <script src="js/components/current-lesson-banner.js?v=20260408-15"></script>
-    <script src="js/api.js?v=20260408-15"></script>
-    <script src="js/search.js?v=20260408-15"></script>
-    <script src="js/notes.js?v=20260408-15"></script>
-    <script src="js/admin.js?v=20260408-15"></script>
-    <script src="js/occupancy.js?v=20260408-15"></script>
+    <script src="js/utils.js?v=20260410-1"></script>
+    <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
+    <script src="js/api.js?v=20260410-1"></script>
+    <script src="js/search.js?v=20260410-1"></script>
+    <script src="js/notes.js?v=20260410-1"></script>
+    <script src="js/admin.js?v=20260410-1"></script>
+    <script src="js/occupancy.js?v=20260410-1"></script>
     <script>
         // Compatibility fallback for stale cached app.js versions expecting global ReportModule.
         (function () {
@@ -1783,13 +1783,13 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260408-15"></script>
+    <script src="js/app.js?v=20260410-1"></script>
 
     <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js?v=20260408-15')
+                navigator.serviceWorker.register('/sw.js?v=20260410-1')
                     .then(registration => console.log('SW registered'))
                     .catch(registrationError => console.log('SW registration failed: ', registrationError));
             });
@@ -1798,6 +1798,7 @@
 </body>
 
 </html>
+
 
 
 

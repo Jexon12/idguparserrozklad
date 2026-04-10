@@ -1051,6 +1051,12 @@ try {
                 updateUrlState();
             }, { deep: true });
 
+            watch(activeEntities, () => {
+                if ((activeEntities.value || []).length > 0) {
+                    persistOfflineSnapshot();
+                }
+            }, { deep: true });
+
             const resetCustomTimes = () => {
                 customTimes.value = JSON.parse(JSON.stringify(SA.defaultTimes));
                 saveState();
@@ -1192,6 +1198,10 @@ try {
                     loadingSchedule.value = false;
                 }
 
+                if (!navigator.onLine && activeEntities.value.length === 0) {
+                    restoreOfflineSnapshot(true);
+                }
+
                 SA.loadGlobalLinks(adminRefs);
                 SA.loadGlobalTimes(adminRefs);
 
@@ -1217,6 +1227,72 @@ try {
                 toastMessage.value = msg;
                 toastVisible.value = true;
                 setTimeout(() => { toastVisible.value = false; }, 3000);
+            };
+
+            const OFFLINE_SNAPSHOT_KEY = 'schedule_offline_snapshot_v1';
+            const OFFLINE_SNAPSHOT_META_KEY = 'schedule_offline_snapshot_meta_v1';
+            const offlineSnapshotAt = ref(localStorage.getItem(OFFLINE_SNAPSHOT_META_KEY) || '');
+
+            const persistOfflineSnapshot = () => {
+                try {
+                    const snapshot = {
+                        at: new Date().toISOString(),
+                        mode: mode.value,
+                        dateStart: dateStart.value,
+                        dateEnd: dateEnd.value,
+                        selectedDisciplines: selectedDisciplines.value,
+                        entities: (activeEntities.value || []).slice(0, 12)
+                    };
+                    localStorage.setItem(OFFLINE_SNAPSHOT_KEY, JSON.stringify(snapshot));
+                    localStorage.setItem(OFFLINE_SNAPSHOT_META_KEY, snapshot.at);
+                    offlineSnapshotAt.value = snapshot.at;
+                    return true;
+                } catch (e) {
+                    console.error('Offline snapshot save failed', e);
+                    return false;
+                }
+            };
+
+            const saveOfflineSnapshot = () => {
+                const ok = persistOfflineSnapshot();
+                if (ok) showToast('💾 Офлайн-знімок розкладу збережено');
+            };
+
+            const restoreOfflineSnapshot = (silent = false) => {
+                try {
+                    const raw = localStorage.getItem(OFFLINE_SNAPSHOT_KEY);
+                    if (!raw) {
+                        if (!silent) showToast('Офлайн-знімок ще не створено');
+                        return false;
+                    }
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || !Array.isArray(parsed.entities) || parsed.entities.length === 0) {
+                        if (!silent) showToast('Офлайн-знімок порожній');
+                        return false;
+                    }
+                    mode.value = parsed.mode || mode.value;
+                    dateStart.value = parsed.dateStart || dateStart.value;
+                    dateEnd.value = parsed.dateEnd || dateEnd.value;
+                    selectedDisciplines.value = Array.isArray(parsed.selectedDisciplines) ? parsed.selectedDisciplines : [];
+                    activeEntities.value = parsed.entities;
+                    datePreset.value = '';
+                    if (!silent) showToast(`📦 Відновлено офлайн-знімок (${parsed.entities.length})`);
+                    return true;
+                } catch (e) {
+                    console.error('Offline snapshot restore failed', e);
+                    if (!silent) showToast('Не вдалося відновити офлайн-знімок');
+                    return false;
+                }
+            };
+
+            const setTomorrowRange = () => {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const iso = tomorrow.toISOString().split('T')[0];
+                dateStart.value = iso;
+                dateEnd.value = iso;
+                datePreset.value = 'tomorrow';
+                if (activeEntities.value.length > 0) refreshAllSchedules();
             };
 
             // Quick date range presets
@@ -1314,6 +1390,28 @@ try {
                 await loadFromFavorite(favorites.value[nextIndex]);
             };
 
+            const loadAllFavorites = async () => {
+                if (!favorites.value.length) {
+                    showToast('Додайте обране для швидкого режиму');
+                    return;
+                }
+                loadingSchedule.value = true;
+                const entities = [];
+                for (const fav of favorites.value) {
+                    const entity = { id: fav.id, name: fav.name, type: fav.type };
+                    const { action, payload } = SA.buildSchedulePayload(entity, scheduleRefs);
+                    const data = await fetchApi(action, payload, { silent: true });
+                    if (data) entities.push({ ...entity, scheduleData: data });
+                }
+                loadingSchedule.value = false;
+                if (!entities.length) {
+                    showToast('Не вдалося завантажити обране');
+                    return;
+                }
+                activeEntities.value = entities;
+                showToast(`⭐ Завантажено обране: ${entities.length}`);
+            };
+
             const clearChangeHistory = () => {
                 scheduleChangeLog.value = [];
                 saveChangeLog();
@@ -1353,7 +1451,9 @@ try {
                     'schedule_aliases_v1',
                     'schedule_autoRefresh',
                     'schedule_autoRefreshInterval',
-                    'schedule_notifications'
+                    'schedule_notifications',
+                    OFFLINE_SNAPSHOT_KEY,
+                    OFFLINE_SNAPSHOT_META_KEY
                 ];
                 keys.forEach((k) => localStorage.removeItem(k));
                 // Reset runtime state without page reload.
@@ -1424,6 +1524,7 @@ try {
                 }
                 notificationsEnabled.value = false;
                 notifiedLessons.value = new Set();
+                offlineSnapshotAt.value = '';
 
                 // Keep current theme visually stable and in sync.
                 if (isDark.value) {
@@ -1741,8 +1842,8 @@ try {
                 favorites, activeFavoriteKey, viewMode, datePreset, sidebarOpen,
                 deliveryModeFilter, setDeliveryMode,
                 toastMessage, toastVisible, nextLessonInfo,
-                setDateRange, shiftWeek,
-                addToFavorites, removeFavorite, loadFromFavorite, quickSwitchFavorite,
+                setDateRange, setTomorrowRange, shiftWeek,
+                addToFavorites, removeFavorite, loadFromFavorite, quickSwitchFavorite, loadAllFavorites,
                 scheduleChangeLog, showChangeHistoryModal, clearChangeHistory,
                 exportICal, shareSchedule, showToast,
                 shareFavoritesSet, openNextLessonInGoogleCalendar,
@@ -1751,7 +1852,7 @@ try {
                 getDisplayDiscipline, getDisplayTeacher,
                 showFreeNowOnly, openFreeRoomsNow, currentPairNow, freeRoomsNow,
                 mobileWidgetData,
-                clearLocalData,
+                clearLocalData, saveOfflineSnapshot, restoreOfflineSnapshot, offlineSnapshotAt,
                 // Auto-Refresh
                 autoRefreshEnabled, autoRefreshInterval, lastRefreshTime,
                 toggleAutoRefresh, setAutoRefreshInterval,
