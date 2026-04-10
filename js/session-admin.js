@@ -228,9 +228,15 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Upload failed');
-            setStatus(`Успішно: додано ${json.added || 0}, всього ${json.count || 0} (сесія: ${json.term || ''}, storage: ${json.storage || 'n/a'})`);
+            const raw = await res.text();
+            let json = null;
+            try { json = raw ? JSON.parse(raw) : null; } catch (e) { }
+            if (!res.ok) {
+                const serverMsg = (json && (json.error || json.message)) ? (json.error || json.message) : (raw || 'Upload failed');
+                throw new Error(`HTTP ${res.status}: ${serverMsg}`);
+            }
+            const safe = json || {};
+            setStatus(`Успішно: додано ${safe.added || 0}, всього ${safe.count || 0} (сесія: ${safe.term || ''}, storage: ${safe.storage || 'n/a'})`);
         } catch (e) {
             setStatus(`Помилка завантаження: ${e.message}`, true);
         }
