@@ -32,15 +32,20 @@
         </header>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                <select id="filterTerm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <select id="filterStudyForm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
                 <select id="filterGroup" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
-                <select id="filterTeacher" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <select id="filterTeacher" multiple size="5" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
                 <select id="filterControlType" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
                 <input id="filterDiscipline" type="text" placeholder="Фільтр за дисципліною..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                <div class="flex gap-2">
+                <div class="flex gap-2 md:col-span-2">
                     <input id="filterDate" type="text" placeholder="Дата (напр. 14.01)" class="flex-1 rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                     <button id="resetFilters" class="px-3 rounded-xl bg-red-100 text-red-700 font-bold text-sm">Скинути</button>
                 </div>
+            </div>
+            <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                Мультивибір викладачів: утримуйте <b>Ctrl</b> (Windows) або <b>Cmd</b> (Mac).
             </div>
 
             <div id="quickGroupChips" class="flex flex-wrap gap-2"></div>
@@ -72,6 +77,6 @@
         </section>
     </div>
 
-    <script src="js/session-page.js?v=20260410-1"></script>
+    <script src="js/session-page.js?v=20260410-6"></script>
 </body>
 </html>

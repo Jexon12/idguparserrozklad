@@ -440,6 +440,13 @@ const apiHandler = async (req, res) => {
                     res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD in production' });
                     return;
                 }
+                const dbForSession = await getDb();
+                if (!dbForSession && process.env.NODE_ENV === 'production') {
+                    res.status(503).json({
+                        error: 'Session storage requires REDIS_URL or Vercel KV in production'
+                    });
+                    return;
+                }
 
                 const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
                 if (!payload) {
@@ -457,15 +464,66 @@ const apiHandler = async (req, res) => {
                     return;
                 }
 
-                const normalized = {
-                    sourceFile: data.sourceFile || '',
-                    generatedAt: data.generatedAt || new Date().toISOString(),
-                    term: data.term || 'Session',
-                    items: data.items
+                const loaded = await loadSessionData();
+                const store = ensureSessionStore(loaded.data);
+                const term = data.term || 'Session';
+                const studyForm = data.studyForm || '';
+                const incomingItems = (data.items || []).map((item) => ({
+                    ...item,
+                    term: item.term || term,
+                    studyForm: item.studyForm || studyForm
+                }));
+
+                const normalizedTerm = normalizeSessionTerm(term);
+                let session = store.sessions.find((s) => normalizeSessionTerm(s.term) === normalizedTerm);
+                if (!session) {
+                    session = {
+                        term,
+                        generatedAt: data.generatedAt || new Date().toISOString(),
+                        sourceFile: data.sourceFile || '',
+                        items: []
+                    };
+                    store.sessions.push(session);
+                }
+
+                const makeKey = (item) => [
+                    item.term || '',
+                    item.studyForm || '',
+                    item.groupHeading || '',
+                    JSON.stringify(item.groups || []),
+                    item.controlType || '',
+                    item.discipline || '',
+                    item.examForm || '',
+                    item.teacher || '',
+                    item.date || '',
+                    item.time || '',
+                    item.room || ''
+                ].join('||');
+
+                const existingKeys = new Set((session.items || []).map(makeKey));
+                let added = 0;
+                incomingItems.forEach((item) => {
+                    const key = makeKey(item);
+                    if (existingKeys.has(key)) return;
+                    existingKeys.add(key);
+                    session.items.push(item);
+                    added += 1;
+                });
+
+                const sourceSet = new Set(String(session.sourceFile || '').split(',').map((s) => s.trim()).filter(Boolean));
+                String(data.sourceFile || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((s) => sourceSet.add(s));
+                session.sourceFile = Array.from(sourceSet).join(', ');
+                session.generatedAt = new Date().toISOString();
+
+                const storedPayload = {
+                    updatedAt: new Date().toISOString(),
+                    sourceFile: session.sourceFile,
+                    sessions: store.sessions
                 };
 
-                const storage = await saveSessionData(normalized);
-                res.status(200).json({ success: true, storage, count: normalized.items.length });
+                const storage = await saveSessionData(storedPayload);
+                const total = store.sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
+                res.status(200).json({ success: true, storage, added, count: total, term });
                 return;
             }
         } catch (e) {
@@ -1194,18 +1252,67 @@ const readFallbackSessionFile = () => {
     }
 };
 
+const ensureSessionStore = (input) => {
+    if (input && Array.isArray(input.sessions)) {
+        const sessions = input.sessions.map((s) => ({
+            term: s.term || 'Session',
+            generatedAt: s.generatedAt || '',
+            sourceFile: s.sourceFile || '',
+            items: Array.isArray(s.items) ? s.items : []
+        }));
+        const flat = sessions.flatMap((s) => s.items.map((it) => ({
+            ...it,
+            term: it.term || s.term || 'Session',
+            studyForm: it.studyForm || ''
+        })));
+        return {
+            updatedAt: input.updatedAt || '',
+            sourceFile: input.sourceFile || '',
+            sessions,
+            items: flat
+        };
+    }
+
+    if (input && Array.isArray(input.items)) {
+        const term = input.term || 'Session';
+        const mappedItems = input.items.map((it) => ({
+            ...it,
+            term: it.term || term,
+            studyForm: it.studyForm || input.studyForm || ''
+        }));
+        return {
+            updatedAt: input.generatedAt || '',
+            sourceFile: input.sourceFile || '',
+            sessions: [{
+                term,
+                generatedAt: input.generatedAt || '',
+                sourceFile: input.sourceFile || '',
+                items: mappedItems
+            }],
+            items: mappedItems
+        };
+    }
+
+    return {
+        updatedAt: '',
+        sourceFile: '',
+        sessions: [],
+        items: []
+    };
+};
+
 const loadSessionData = async () => {
     const db = await getDb();
     if (db) {
         try {
             if (db.type === 'kv') {
                 const data = await db.client.get('session_data');
-                if (data && Array.isArray(data.items)) return { data, storage: 'kv' };
+                if (data) return { data: ensureSessionStore(data), storage: 'kv' };
             } else if (db.type === 'redis') {
                 const raw = await db.client.get('session_data');
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    if (parsed && Array.isArray(parsed.items)) return { data: parsed, storage: 'redis' };
+                    if (parsed) return { data: ensureSessionStore(parsed), storage: 'redis' };
                 }
             }
         } catch (e) {
@@ -1214,20 +1321,15 @@ const loadSessionData = async () => {
     }
 
     const local = getLocalDb();
-    if (local.session_data && Array.isArray(local.session_data.items)) {
-        return { data: local.session_data, storage: 'local-db' };
+    if (local.session_data) {
+        return { data: ensureSessionStore(local.session_data), storage: 'local-db' };
     }
 
     const fallback = readFallbackSessionFile();
-    if (fallback) return { data: fallback, storage: 'file-fallback' };
+    if (fallback) return { data: ensureSessionStore(fallback), storage: 'file-fallback' };
 
     return {
-        data: {
-            sourceFile: '',
-            generatedAt: '',
-            term: 'Session',
-            items: []
-        },
+        data: ensureSessionStore(null),
         storage: 'empty'
     };
 };
@@ -1252,6 +1354,11 @@ const saveSessionData = async (payload) => {
     }
     return 'local-db';
 };
+
+const normalizeSessionTerm = (value) => String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 module.exports = apiHandler;
 

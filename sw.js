@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'schedule-v24';
+﻿const CACHE_NAME = 'schedule-v29';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -58,6 +58,11 @@ self.addEventListener('fetch', (event) => {
             .catch(() => caches.match(event.request))
     );
 });
+
+
+
+
+
 
 
 

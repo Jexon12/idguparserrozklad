@@ -4,6 +4,7 @@
     const els = {
         password: document.getElementById('adminPassword'),
         term: document.getElementById('sessionTerm'),
+        studyForm: document.getElementById('studyForm'),
         files: document.getElementById('docxFiles'),
         parseBtn: document.getElementById('parseFiles'),
         uploadBtn: document.getElementById('uploadData'),
@@ -27,6 +28,30 @@
         .replace(/[\u200e\u200f]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+
+    const extractTeacherNames = (value) => {
+        const raw = clean(value).replace(/[\u200e\u200f]/g, '');
+        if (!raw) return [];
+
+        const regex = /([А-ЯІЇЄҐ][а-яіїєґ'’\-]+)\s*([А-ЯІЇЄҐ])\.\s*([А-ЯІЇЄҐ])\.?/g;
+        const names = [];
+        let m;
+        while ((m = regex.exec(raw)) !== null) {
+            const name = `${m[1]} ${m[2]}.${m[3]}.`;
+            if (!names.includes(name)) names.push(name);
+        }
+
+        if (names.length) return names;
+
+        return raw
+            .replace(/\s*(,|\/|;)\s*/g, '; ')
+            .replace(/\s+та\s+/gi, '; ')
+            .split(';')
+            .map((p) => clean(p))
+            .filter(Boolean);
+    };
+
+    const normalizeTeacher = (value) => extractTeacherNames(value).join('; ');
 
     const parseGroups = (heading) => {
         const raw = String(heading || '');
@@ -113,7 +138,7 @@
                     controlType,
                     discipline: vals[1],
                     examForm: vals[2],
-                    teacher: vals[3],
+                    teacher: normalizeTeacher(vals[3]),
                     date: vals[4],
                     time: vals[5],
                     room: vals[6],
@@ -188,7 +213,11 @@
                 sourceFile: state.filesParsed.join(', '),
                 generatedAt: new Date().toISOString(),
                 term: clean(els.term.value) || 'Session',
-                items: state.items
+                studyForm: clean(els.studyForm.value) || '',
+                items: state.items.map((item) => ({
+                    ...item,
+                    studyForm: clean(els.studyForm.value) || item.studyForm || ''
+                }))
             }
         };
 
@@ -201,7 +230,7 @@
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Upload failed');
-            setStatus(`Успішно збережено (${json.count} записів, storage: ${json.storage})`);
+            setStatus(`Успішно: додано ${json.added || 0}, всього ${json.count || 0} (сесія: ${json.term || ''}, storage: ${json.storage || 'n/a'})`);
         } catch (e) {
             setStatus(`Помилка завантаження: ${e.message}`, true);
         }

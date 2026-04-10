@@ -35,6 +35,10 @@
                 <input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <input id="sessionTerm" type="text" placeholder="Назва сесії (напр. Зимова 2025-26)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2">
             </div>
+            <select id="studyForm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <option value="денна форма навчання">Денна форма навчання</option>
+                <option value="заочна форма навчання">Заочна форма навчання</option>
+            </select>
             <input id="docxFiles" type="file" accept=".docx" multiple class="block w-full text-sm">
             <div class="flex gap-2 flex-wrap">
                 <button id="parseFiles" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">1) Розпарсити файли</button>
@@ -51,6 +55,6 @@
         </section>
     </div>
 
-    <script src="js/session-admin.js?v=20260410-1"></script>
+    <script src="js/session-admin.js?v=20260410-4"></script>
 </body>
 </html>
