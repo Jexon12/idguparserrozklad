@@ -1,9 +1,10 @@
-﻿const CACHE_NAME = 'schedule-v23';
+﻿const CACHE_NAME = 'schedule-v24';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/index2.html',
     '/session.html',
+    '/session-admin.html',
     '/css/tailwind.generated.css',
     '/css/styles.css',
     '/js/utils.js',
@@ -15,6 +16,7 @@ const STATIC_ASSETS = [
     '/js/admin.js',
     '/js/app.js',
     '/js/session-page.js',
+    '/js/session-admin.js',
     '/data/session-2025-26.json'
 ];
 
@@ -56,6 +58,7 @@ self.addEventListener('fetch', (event) => {
             .catch(() => caches.match(event.request))
     );
 });
+
 
 
 

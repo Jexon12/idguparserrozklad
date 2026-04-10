@@ -4,6 +4,7 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 
 const DB_FILE = path.join(__dirname, '../db.json');
+const SESSION_FALLBACK_FILE = path.join(__dirname, '../data/session-2025-26.json');
 const _rawAdmin = process.env.ADMIN_PASSWORD || '';
 const ADMIN_PASSWORD = (_rawAdmin && _rawAdmin !== 'admin123' && _rawAdmin.length >= 8)
     ? _rawAdmin
@@ -216,7 +217,11 @@ const apiHandler = async (req, res) => {
     // Helper to allow CORS вЂ” restrict for admin mutations
     const origin = req.headers.origin || '';
     // #21: strict pathname match for CORS instead of .includes()
-    const isAdminPost = req.method === 'POST' && (pathname === '/api/times' || pathname === '/api/links');
+    const isAdminPost = req.method === 'POST' && (
+        pathname === '/api/times' ||
+        pathname === '/api/links' ||
+        pathname === '/api/session'
+    );
 
     if (isAdminPost) {
         // For admin endpoints, only allow same-origin or specific origins
@@ -408,6 +413,63 @@ const apiHandler = async (req, res) => {
 
         } catch (e) {
             console.error("Vercel API DB Error:", e);
+            res.status(500).json({ error: e.message });
+            return;
+        }
+    }
+
+    // =========================================================
+    // ROUTE: Session Data (/api/session)
+    // =========================================================
+    if (pathname === '/api/session') {
+        try {
+            if (req.method === 'GET') {
+                const loaded = await loadSessionData();
+                res.status(200).json({
+                    ...loaded.data,
+                    storage: loaded.storage
+                });
+                return;
+            }
+
+            if (req.method === 'POST') {
+                if (!enforceRateLimit(req, res, 'admin-post-session', RATE_LIMITS.adminPost)) {
+                    return;
+                }
+                if (!ADMIN_PASSWORD) {
+                    res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD in production' });
+                    return;
+                }
+
+                const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+                if (!payload) {
+                    res.status(400).json({ error: 'Missing body' });
+                    return;
+                }
+
+                const { password, data } = payload;
+                if (password !== ADMIN_PASSWORD) {
+                    res.status(403).json({ error: 'Wrong password' });
+                    return;
+                }
+                if (!data || !Array.isArray(data.items)) {
+                    res.status(400).json({ error: 'Invalid session payload (items[])' });
+                    return;
+                }
+
+                const normalized = {
+                    sourceFile: data.sourceFile || '',
+                    generatedAt: data.generatedAt || new Date().toISOString(),
+                    term: data.term || 'Session',
+                    items: data.items
+                };
+
+                const storage = await saveSessionData(normalized);
+                res.status(200).json({ success: true, storage, count: normalized.items.length });
+                return;
+            }
+        } catch (e) {
+            console.error('Session API error', e);
             res.status(500).json({ error: e.message });
             return;
         }
@@ -1117,6 +1179,78 @@ apiHandler.__resetInternalsForTests = () => {
     reportJobs.clear();
     proxyCache.clear();
     inFlightProxyRequests.clear();
+};
+
+const readFallbackSessionFile = () => {
+    try {
+        if (!fs.existsSync(SESSION_FALLBACK_FILE)) return null;
+        const raw = fs.readFileSync(SESSION_FALLBACK_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.items)) return null;
+        return parsed;
+    } catch (e) {
+        console.error('Fallback session file read error', e);
+        return null;
+    }
+};
+
+const loadSessionData = async () => {
+    const db = await getDb();
+    if (db) {
+        try {
+            if (db.type === 'kv') {
+                const data = await db.client.get('session_data');
+                if (data && Array.isArray(data.items)) return { data, storage: 'kv' };
+            } else if (db.type === 'redis') {
+                const raw = await db.client.get('session_data');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && Array.isArray(parsed.items)) return { data: parsed, storage: 'redis' };
+                }
+            }
+        } catch (e) {
+            console.error('Session DB read error', e);
+        }
+    }
+
+    const local = getLocalDb();
+    if (local.session_data && Array.isArray(local.session_data.items)) {
+        return { data: local.session_data, storage: 'local-db' };
+    }
+
+    const fallback = readFallbackSessionFile();
+    if (fallback) return { data: fallback, storage: 'file-fallback' };
+
+    return {
+        data: {
+            sourceFile: '',
+            generatedAt: '',
+            term: 'Session',
+            items: []
+        },
+        storage: 'empty'
+    };
+};
+
+const saveSessionData = async (payload) => {
+    const db = await getDb();
+    if (db) {
+        if (db.type === 'kv') {
+            await db.client.set('session_data', payload);
+            return 'kv';
+        }
+        if (db.type === 'redis') {
+            await db.client.set('session_data', JSON.stringify(payload));
+            return 'redis';
+        }
+    }
+
+    const local = getLocalDb();
+    local.session_data = payload;
+    if (!saveLocalDb(local)) {
+        throw new Error('Failed to write local session data');
+    }
+    return 'local-db';
 };
 
 module.exports = apiHandler;

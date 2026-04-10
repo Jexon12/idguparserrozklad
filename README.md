@@ -71,6 +71,7 @@
 - Фільтри: `група`, `викладач`, `тип контролю`, `дисципліна`, `дата`.
 - Дані зберігаються у `data/session-2025-26.json`.
 - Є скрипт конвертації Word у JSON: `scripts/extract_session_docx.py`.
+- `session-admin.html` дозволяє завантажувати декілька `.docx`, автоматично парсити їх у браузері та зберігати у `/api/session` (потрібен `ADMIN_PASSWORD`).
 
 ## Продуктивність
 
@@ -108,6 +109,8 @@
 - `GET /api/links` — отримати глобальні посилання.
 - `POST /api/links` — зберегти посилання (admin).
 - `GET /api/search?q=...` — серверний пошук (кешований).
+- `GET /api/session` — отримати актуальні дані сесії.
+- `POST /api/session` — зберегти нові дані сесії (admin).
 - `POST /api/report/start` — старт генерації Excel-звіту.
 - `GET /api/report/status?jobId=...` — статус генерації.
 - `GET /api/report/download?jobId=...` — завантажити файл звіту.
