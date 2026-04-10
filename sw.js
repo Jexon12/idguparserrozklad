@@ -1,8 +1,9 @@
-﻿const CACHE_NAME = 'schedule-v22';
+﻿const CACHE_NAME = 'schedule-v23';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/index2.html',
+    '/session.html',
     '/css/tailwind.generated.css',
     '/css/styles.css',
     '/js/utils.js',
@@ -12,7 +13,9 @@ const STATIC_ASSETS = [
     '/js/workers/occupancy-worker.js',
     '/js/notes.js',
     '/js/admin.js',
-    '/js/app.js'
+    '/js/app.js',
+    '/js/session-page.js',
+    '/data/session-2025-26.json'
 ];
 
 // Install - cache static assets, then activate immediately
@@ -53,6 +56,7 @@ self.addEventListener('fetch', (event) => {
             .catch(() => caches.match(event.request))
     );
 });
+
 
 
 

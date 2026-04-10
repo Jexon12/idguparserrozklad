@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Розклад сесії 2025-26 з фільтрами за групами, викладачами, дисциплінами">
+    <title>Розклад Сесії</title>
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' ||
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2">
+    <link rel="stylesheet" href="css/styles.css?v=20260410-1">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-3 md:p-6 space-y-4">
+        <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black text-amber-700 dark:text-amber-300">📚 Розклад Сесії 2025-26</h1>
+                    <p id="sourceInfo" class="text-xs text-gray-500 mt-1">Завантаження...</p>
+                </div>
+                <div class="flex gap-2">
+                    <a href="/index.html?desktop=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
+                    <a href="/index2.html?mobile=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Mobile</a>
+                </div>
+            </div>
+        </header>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                <select id="filterGroup" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <select id="filterTeacher" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <select id="filterControlType" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <input id="filterDiscipline" type="text" placeholder="Фільтр за дисципліною..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <div class="flex gap-2">
+                    <input id="filterDate" type="text" placeholder="Дата (напр. 14.01)" class="flex-1 rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <button id="resetFilters" class="px-3 rounded-xl bg-red-100 text-red-700 font-bold text-sm">Скинути</button>
+                </div>
+            </div>
+
+            <div id="quickGroupChips" class="flex flex-wrap gap-2"></div>
+            <div class="text-sm text-gray-600 dark:text-gray-300">Знайдено записів: <span id="resultCount" class="font-bold">0</span></div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200 text-xs uppercase">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Група</th>
+                            <th class="px-3 py-2 text-left">Дисципліна</th>
+                            <th class="px-3 py-2 text-left">Тип</th>
+                            <th class="px-3 py-2 text-left">Форма</th>
+                            <th class="px-3 py-2 text-left">Викладач</th>
+                            <th class="px-3 py-2 text-left">Дата</th>
+                            <th class="px-3 py-2 text-left">Час</th>
+                            <th class="px-3 py-2 text-left">Ауд.</th>
+                            <th class="px-3 py-2 text-left">Спеціальність</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessionTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="js/session-page.js?v=20260410-1"></script>
+</body>
+</html>
