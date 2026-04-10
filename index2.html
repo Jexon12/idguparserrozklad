@@ -1,0 +1,446 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Гнучкий розклад - мобільна версія інтерфейсу">
+    <meta name="theme-color" content="#1d4ed8">
+    <script>
+        window.__mobileToggleTheme = function () {
+            try {
+                if (window.ScheduleAppUI && typeof window.ScheduleAppUI.toggleTheme === 'function') {
+                    window.ScheduleAppUI.toggleTheme();
+                    return;
+                }
+                var dark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('darkMode', dark ? 'true' : 'false');
+            } catch (e) {}
+        };
+        window.__mobileClearData = function () {
+            try {
+                if (window.ScheduleAppUI && typeof window.ScheduleAppUI.clearLocalData === 'function') {
+                    window.ScheduleAppUI.clearLocalData();
+                    return;
+                }
+                [
+                    'schedule_app_v1',
+                    'schedule_favorites',
+                    'schedule_activeFavoriteKey',
+                    'schedule_viewMode',
+                    'schedule_delivery_mode',
+                    'schedule_change_log_v1',
+                    'schedule_aliases_v1',
+                    'schedule_autoRefresh',
+                    'schedule_autoRefreshInterval',
+                    'schedule_notifications'
+                ].forEach(function (k) { localStorage.removeItem(k); });
+                history.replaceState(null, '', window.location.pathname);
+                location.reload();
+            } catch (e) {}
+        };
+        window.__loadTailwindFallback = function () {
+            if (window.__tailwindFallbackLoaded) return;
+            window.__tailwindFallbackLoaded = true;
+            var s = document.createElement('script');
+            s.src = 'https://cdn.tailwindcss.com/3.4.1';
+            document.head.appendChild(s);
+        };
+    </script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
+    <title>Гнучкий Розклад · Mobile</title>
+
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' ||
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+
+    <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/styles.css?v=20260408-15">
+    <style>
+        .safe-bottom { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+        .glass { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        .bottom-nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 70;
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors">
+    <div id="app" class="safe-bottom">
+        <div class="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
+        <current-lesson-banner :current-lesson-info="currentLessonInfo"></current-lesson-banner>
+
+        <div class="px-3 pt-4 pb-4 space-y-4">
+            <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <h1 class="text-xl font-black text-amber-700 dark:text-amber-300">📅 Гнучкий Розклад</h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Mobile UI · швидкий доступ</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="/index.html?desktop=1" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
+                        <button @click="toggleDarkMode" onclick="window.__mobileToggleTheme(); return false;" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">{{ isDark ? '☀️' : '🌙' }}</button>
+                        <button @click="showSettingsModal = true" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">⚙️</button>
+                    </div>
+                </div>
+
+                <div class="mt-3 grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-amber-50 dark:bg-amber-900/20 rounded-lg py-2">
+                        <div class="text-xs text-gray-500 dark:text-gray-400">Сьогодні</div>
+                        <div class="font-bold text-amber-700 dark:text-amber-300">{{ (mobileWidgetData && mobileWidgetData.todayCount) || 0 }} пар</div>
+                    </div>
+                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg py-2">
+                        <div class="text-xs text-gray-500 dark:text-gray-400">Завтра</div>
+                        <div class="font-bold text-indigo-700 dark:text-indigo-300">{{ (mobileWidgetData && mobileWidgetData.tomorrowCount) || 0 }} пар</div>
+                    </div>
+                </div>
+            </header>
+
+            <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3 space-y-3">
+                <div class="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
+                    <button @click="mode = 'student'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'student' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">🎓 Група</button>
+                    <button @click="mode = 'teacher'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'teacher' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">👨‍🏫 Викладач</button>
+                    <button @click="mode = 'occupancy'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'occupancy' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">🏫 Ауд.</button>
+                </div>
+
+                <div v-if="mode !== 'occupancy'" class="relative">
+                    <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
+                        placeholder="Пошук групи/викладача..."
+                        class="w-full rounded-xl border dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700">
+                    <div v-if="searchResults.length > 0" class="absolute z-20 mt-1 w-full rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 shadow max-h-64 overflow-y-auto">
+                        <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)"
+                            class="px-3 py-2 border-b dark:border-gray-700 last:border-b-0 hover:bg-amber-50 dark:hover:bg-gray-700 cursor-pointer">
+                            <div class="font-semibold text-sm">{{ res.label }}</div>
+                            <div class="text-xs text-gray-500">{{ res.type }} · {{ res.facultyName }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2" v-if="mode !== 'occupancy'">
+                    <select v-model="selectedFaculty" @change="onFacultyChange" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <option value="">-- Факультет --</option>
+                        <option v-for="f in faculties" :key="f.Key" :value="f.Key">{{ f.Value }}</option>
+                    </select>
+
+                    <template v-if="mode === 'student'">
+                        <div class="grid grid-cols-2 gap-2">
+                            <select v-model="selectedEduForm" @change="loadGroups" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                                <option value="">Форма</option>
+                                <option v-for="ef in eduForms" :key="ef.Key" :value="ef.Key">{{ ef.Value }}</option>
+                            </select>
+                            <select v-model="selectedCourse" @change="loadGroups" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                                <option value="">Курс</option>
+                                <option v-for="c in courses" :key="c.Key" :value="c.Key">{{ c.Value }}</option>
+                            </select>
+                        </div>
+                        <select v-model="selectedGroup" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                            <option value="">-- Група --</option>
+                            <option v-for="g in groups" :key="g.Key" :value="g">{{ g.Value }}</option>
+                        </select>
+                    </template>
+
+                    <template v-else-if="mode === 'teacher'">
+                        <select v-model="selectedChair" @change="loadEmployees" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                            <option value="">-- Кафедра --</option>
+                            <option v-for="c in chairs" :key="c.Key" :value="c.Key">{{ c.Value }}</option>
+                        </select>
+                        <select v-model="selectedEmployee" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                            <option value="">-- Викладач --</option>
+                            <option v-for="e in employees" :key="e.Key" :value="e">{{ e.Value }}</option>
+                        </select>
+                    </template>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="date" v-model="dateStart" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <input type="date" v-model="dateEnd" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button @click="addEntity" :disabled="!canAdd" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl py-2 font-bold disabled:bg-gray-400">+ Додати</button>
+                        <button @click="addToFavorites" :disabled="!canAdd" class="px-3 rounded-xl bg-yellow-100 dark:bg-yellow-900/30">⭐</button>
+                    </div>
+                </div>
+
+                <div v-if="mode === 'occupancy'" class="space-y-2">
+                    <div class="flex gap-2">
+                        <input type="date" v-model="occupancyDate" class="flex-1 rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <button @click="startOccupancyScan" :disabled="isScanning" class="rounded-xl px-3 bg-amber-600 text-white font-bold disabled:bg-gray-400">{{ isScanning ? 'Скан...' : 'Скан' }}</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="showFreeNowOnly = !showFreeNowOnly" class="flex-1 rounded-xl px-3 py-2 text-sm font-bold"
+                            :class="showFreeNowOnly ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-700'">
+                            {{ showFreeNowOnly ? 'Усі ауд.' : 'Вільні зараз' }}
+                        </button>
+                        <button @click="exportOccupancy" class="rounded-xl px-3 py-2 bg-green-600 text-white text-sm font-bold">📥</button>
+                    </div>
+                </div>
+
+                <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <button @click="shareSchedule" class="rounded-xl bg-gray-100 dark:bg-gray-700 py-2 text-xs font-bold">🔗 Share</button>
+                    <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 Calendar</button>
+                    <button @click="clearLocalData && clearLocalData()" onclick="window.__mobileClearData(); return false;" class="rounded-xl bg-red-100 text-red-700 py-2 text-xs font-bold">🗑 Очистити</button>
+                </div>
+            </section>
+
+            <section v-if="(favorites || []).length > 0" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-bold text-sm">⭐ Обране</h3>
+                    <div class="flex gap-2">
+                        <button v-if="(favorites || []).length > 1" @click="quickSwitchFavorite(-1)" class="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">←</button>
+                        <button v-if="(favorites || []).length > 1" @click="quickSwitchFavorite(1)" class="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">→</button>
+                        <button @click="shareFavoritesSet && shareFavoritesSet()" class="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700">🔗</button>
+                    </div>
+                </div>
+                <div class="flex gap-2 overflow-x-auto pb-1">
+                    <button v-for="fav in (favorites || [])" :key="fav.id + fav.type" @click="loadFromFavorite(fav)"
+                        class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                        :class="activeFavoriteKey === `${fav.type}:${fav.id}` ? 'bg-amber-200 text-amber-900 border-amber-300' : 'bg-yellow-50 text-yellow-800 border-yellow-200'">
+                        {{ fav.name }}
+                    </button>
+                </div>
+            </section>
+
+            <section v-if="activeEntities.length > 0 && mode !== 'occupancy'" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3 space-y-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button @click="setDeliveryMode && setDeliveryMode('')" :class="['px-2 py-1 rounded text-xs font-bold', deliveryModeFilter === '' ? 'bg-gray-800 text-white' : 'bg-gray-100 dark:bg-gray-700']">Усі</button>
+                    <button @click="setDeliveryMode && setDeliveryMode('offline')" :class="['px-2 py-1 rounded text-xs font-bold', deliveryModeFilter === 'offline' ? 'bg-gray-800 text-white' : 'bg-gray-100 dark:bg-gray-700']">Офлайн</button>
+                    <button @click="setDeliveryMode && setDeliveryMode('online')" :class="['px-2 py-1 rounded text-xs font-bold', deliveryModeFilter === 'online' ? 'bg-gray-800 text-white' : 'bg-gray-100 dark:bg-gray-700']">Онлайн</button>
+                    <button @click="findCommonFreeSlots" v-if="activeEntities.length > 1" class="ml-auto px-2 py-1 rounded text-xs font-bold bg-indigo-100 text-indigo-700">Вікна</button>
+                </div>
+
+                <div class="flex gap-2 overflow-x-auto pb-1">
+                    <button @click="selectedDisciplines = []" class="shrink-0 px-3 py-1 rounded-full text-xs border" :class="selectedDisciplines.length === 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-gray-100 border-gray-200'">Всі</button>
+                    <button v-for="disc in availableDisciplines" :key="disc" @click="toggleDiscipline(disc)" class="shrink-0 px-3 py-1 rounded-full text-xs border"
+                        :class="selectedDisciplines.includes(disc) ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'">
+                        {{ disc }}
+                    </button>
+                </div>
+            </section>
+
+            <section v-if="mode !== 'occupancy' && activeEntities.length > 0" class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <button @click="shiftWeek(-1)" class="px-3 py-2 rounded-xl bg-white dark:bg-gray-800 shadow text-sm">← Тиждень</button>
+                    <button @click="shiftWeek(1)" class="px-3 py-2 rounded-xl bg-white dark:bg-gray-800 shadow text-sm">Тиждень →</button>
+                </div>
+
+                <div v-if="(groupedSchedule || []).length === 0 && !loadingSchedule" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center text-gray-500">
+                    На вибраний період розкладу немає.
+                </div>
+
+                <div v-for="dayData in (groupedSchedule || [])" :key="dayData.date" class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
+                    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
+                        <div class="font-bold">{{ dayData.dayName }}, {{ dayData.date }}</div>
+                        <div class="text-xs text-gray-500">{{ dayData.slots.length }} пар</div>
+                    </div>
+
+                    <div class="divide-y divide-gray-100 dark:divide-gray-700">
+                        <div v-for="timeSlot in dayData.slots" :key="timeSlot.time" class="p-3">
+                            <div class="inline-block text-xs font-bold px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 mb-2">
+                                {{ timeSlot.time }}
+                            </div>
+
+                            <div class="space-y-2">
+                                <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
+                                    class="rounded-xl border dark:border-gray-600 p-3 border-l-4"
+                                    :class="getColorClass(lesson.entityId)">
+                                    <div class="font-bold text-sm">
+                                        {{ lesson.discipline }}
+                                        <span v-if="lesson.group" class="text-amber-600 font-normal">({{ lesson.group }})</span>
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1">{{ lesson.teacher }} · {{ lesson.cabinet || '—' }}</div>
+                                    <div class="mt-1 flex gap-2 text-xs">
+                                        <span class="px-2 py-0.5 rounded-full" :class="['lesson-type-badge', getLessonTypeClass(lesson.type)]">{{ lesson.type || '—' }}</span>
+                                        <span class="text-gray-400">{{ lesson.entityName }}</span>
+                                    </div>
+                                    <div class="mt-2 flex items-center gap-2 justify-end">
+                                        <a v-if="getGlobalLink(lesson, 'onlineUrl')" :href="getGlobalLink(lesson, 'onlineUrl')" target="_blank" class="text-xs px-2 py-1 rounded bg-purple-50 text-purple-700">📹 Онлайн</a>
+                                        <a v-if="getGlobalLink(lesson, 'courseUrl')" :href="getGlobalLink(lesson, 'courseUrl')" target="_blank" class="text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">📘 Курс</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section v-if="mode === 'occupancy'">
+                <div v-if="(occupancyResults || []).length === 0 && !isScanning" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center text-gray-500">
+                    Запустіть сканування, щоб побачити зайнятість аудиторій.
+                </div>
+
+                <div v-if="isScanning" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+                    <div class="text-sm font-bold mb-1">{{ scanProgress.text || 'Сканування...' }}</div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-amber-600 h-2 rounded-full" :style="{ width: (scanProgress.total ? (scanProgress.current / scanProgress.total * 100) : 0) + '%' }"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2" v-if="(occupancyResults || []).length > 0">
+                    <div v-for="cab in (showFreeNowOnly ? freeRoomsNow : filteredOccupancyResults)" :key="cab.name" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3">
+                        <div class="font-bold mb-2">{{ cab.name }}</div>
+                        <div class="grid grid-cols-7 gap-1 text-[10px]">
+                            <div v-for="slot in [1,2,3,4,5,6,7]" :key="slot" class="rounded p-1 text-center"
+                                :class="cab.slots[slot] ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
+                                <div class="font-bold">{{ slot }}</div>
+                                <div>{{ cab.slots[slot] ? 'Зайнято' : 'Вільно' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="glass bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow border border-gray-200 dark:border-gray-700 grid grid-cols-5 gap-1 p-1">
+                <button @click="mode = 'student'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'student' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">🎓</button>
+                <button @click="mode = 'teacher'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'teacher' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">👨‍🏫</button>
+                <button @click="mode = 'occupancy'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'occupancy' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">🏫</button>
+                <button @click="shareSchedule" class="py-2 rounded-xl text-xs font-bold text-gray-500">🔗</button>
+                <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())" class="py-2 rounded-xl text-xs font-bold text-gray-500">📆</button>
+            </div>
+        </div>
+
+        <div v-if="showSettingsModal" class="fixed inset-0 bg-black/50 z-[90] p-3 flex items-end">
+            <div class="w-full max-h-[86vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-t-3xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-bold text-lg">Налаштування</h3>
+                    <button @click="showSettingsModal = false" class="text-2xl">×</button>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3">
+                        <div class="font-bold mb-2">Сповіщення (15/5 хв)</div>
+                        <button @click="requestNotificationPermission" class="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold">
+                            {{ notificationsEnabled ? 'Вимкнути' : 'Увімкнути' }}
+                        </button>
+                    </div>
+
+                    <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3">
+                        <div class="font-bold mb-2">Автооновлення</div>
+                        <div class="flex items-center gap-2">
+                            <button @click="toggleAutoRefresh" class="px-3 py-2 rounded-lg text-sm font-bold"
+                                :class="autoRefreshEnabled ? 'bg-amber-600 text-white' : 'bg-gray-200 dark:bg-gray-600'">
+                                {{ autoRefreshEnabled ? 'Увімкнено' : 'Вимкнено' }}
+                            </button>
+                            <input type="number" min="1" max="60" :value="autoRefreshInterval" @input="setAutoRefreshInterval($event.target.value)"
+                                class="w-20 rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-800">
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3">
+                        <div class="font-bold mb-2">Аліаси назв</div>
+                        <div class="grid grid-cols-1 gap-2">
+                            <select v-model="aliasType" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-800">
+                                <option value="all">Усі</option>
+                                <option value="discipline">Дисципліна</option>
+                                <option value="teacher">Викладач</option>
+                            </select>
+                            <input v-model="aliasSource" placeholder="З" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-800">
+                            <input v-model="aliasTarget" placeholder="На" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-800">
+                            <button @click="addAlias" class="rounded-lg bg-amber-600 text-white py-2 font-bold">Додати</button>
+                        </div>
+                        <div class="mt-2 space-y-1 max-h-36 overflow-y-auto">
+                            <div v-for="item in aliasesList" :key="item.key" class="flex justify-between items-center text-xs bg-white dark:bg-gray-800 rounded p-2">
+                                <span class="truncate pr-2">{{ item.source }} → {{ item.value }}</span>
+                                <button @click="removeAlias(item.key)" class="text-red-500">✕</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-red-50 dark:bg-red-900/20 p-3">
+                        <div class="font-bold mb-2 text-red-700 dark:text-red-300">Скидання локальних даних</div>
+                        <button @click="clearLocalData && clearLocalData()" onclick="window.__mobileClearData(); return false;" class="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-bold">
+                            Очистити дані
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showFreeTimeModal" class="fixed inset-0 bg-black/50 z-[90] p-3 flex items-end" @click.self="showFreeTimeModal = false">
+            <div class="w-full max-h-[80vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-t-3xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-bold">Спільні вільні слоти</h3>
+                    <button @click="showFreeTimeModal = false" class="text-2xl">×</button>
+                </div>
+                <div v-if="commonFreeSlots.length === 0" class="text-sm text-gray-500">Вікна не знайдено</div>
+                <div v-else class="space-y-3">
+                    <div v-for="day in commonFreeSlots" :key="day.date" class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3">
+                        <div class="font-bold text-sm mb-1">{{ day.date }}</div>
+                        <div class="flex flex-wrap gap-1">
+                            <span v-for="slot in day.slots" :key="slot.pair" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">{{ slot.pair }} пара</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/utils.js?v=20260408-15"></script>
+    <script src="js/components/current-lesson-banner.js?v=20260408-15"></script>
+    <script src="js/api.js?v=20260408-15"></script>
+    <script src="js/search.js?v=20260408-15"></script>
+    <script src="js/notes.js?v=20260408-15"></script>
+    <script src="js/admin.js?v=20260408-15"></script>
+    <script src="js/occupancy.js?v=20260408-15"></script>
+
+    <script>
+        (function () {
+            if (window.ReportModule) return;
+            const state = {
+                showReportModal: false,
+                isDownloadingReport: false,
+                reportProgress: { current: 0, total: 0, progress: '', done: false, error: null },
+                reportForm: { faculty: '', chair: '', teacher: '', monthStart: '', monthEnd: '' },
+                reportChairs: [],
+                reportEmployees: [],
+                reportError: ''
+            };
+            window.ReportModule = {
+                state,
+                methods: {
+                    openReportModal() { state.showReportModal = true; },
+                    loadReportChairs() {},
+                    loadReportEmployees() {},
+                    downloadReport() {}
+                },
+                computed: { isReportFormValid: { value: false } }
+            };
+        })();
+    </script>
+
+    <script src="js/app.js?v=20260408-15"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js?v=20260408-15')
+                    .then(() => console.log('SW registered'))
+                    .catch((err) => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
