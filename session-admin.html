@@ -6,13 +6,22 @@
     <meta name="description" content="Адмін-панель завантаження файлів сесії">
     <title>Session Admin</title>
     <script>
+        window.__loadTailwindFallback = function () {
+            if (window.__tailwindFallbackLoaded) return;
+            window.__tailwindFallbackLoaded = true;
+            var s = document.createElement('script');
+            s.src = 'https://cdn.tailwindcss.com/3.4.1';
+            document.head.appendChild(s);
+        };
+    </script>
+    <script>
         if (localStorage.getItem('darkMode') === 'true' ||
             (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
         }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2">
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="css/styles.css?v=20260410-1">
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
