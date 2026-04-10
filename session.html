@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Р РѕР·РєР»Р°Рґ СЃРµСЃС–С— 2025-26 Р· С„С–Р»СЊС‚СЂР°РјРё Р·Р° РіСЂСѓРїР°РјРё, РІРёРєР»Р°РґР°С‡Р°РјРё, РґРёСЃС†РёРїР»С–РЅР°РјРё">
-    <title>Р РѕР·РєР»Р°Рґ РЎРµСЃС–С—</title>
+    <meta name="description" content="Розклад сесії 2025-26 з фільтрами за групами, викладачами, дисциплінами">
+    <title>Розклад Сесії</title>
     <script>
         window.__loadTailwindFallback = function () {
             if (window.__tailwindFallbackLoaded) return;
@@ -29,8 +29,8 @@
         <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-black text-amber-700 dark:text-amber-300">рџ“љ Р РѕР·РєР»Р°Рґ РЎРµСЃС–С— 2025-26</h1>
-                    <p id="sourceInfo" class="text-xs text-gray-500 mt-1">Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ...</p>
+                    <h1 class="text-2xl md:text-3xl font-black text-amber-700 dark:text-amber-300">📚 Розклад Сесії 2025-26</h1>
+                    <p id="sourceInfo" class="text-xs text-gray-500 mt-1">Завантаження...</p>
                 </div>
                 <div class="flex gap-2">
                     <a href="/index.html?desktop=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
@@ -47,20 +47,20 @@
                 <select id="filterTeacher" multiple size="5" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
                 <select id="filterGroup" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
                 <select id="filterControlType" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
-                <input id="filterDiscipline" type="text" placeholder="Р¤С–Р»СЊС‚СЂ Р·Р° РґРёСЃС†РёРїР»С–РЅРѕСЋ..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="filterDiscipline" type="text" placeholder="Фільтр за дисципліною..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <div class="flex gap-2 md:col-span-2">
-                    <input id="filterDate" type="text" placeholder="Р”Р°С‚Р° (РЅР°РїСЂ. 14.01)" class="flex-1 rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                    <button id="resetFilters" class="px-3 rounded-xl bg-red-100 text-red-700 font-bold text-sm">РЎРєРёРЅСѓС‚Рё</button>
+                    <input id="filterDate" type="text" placeholder="Дата (напр. 14.01)" class="flex-1 rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <button id="resetFilters" class="px-3 rounded-xl bg-red-100 text-red-700 font-bold text-sm">Скинути</button>
                 </div>
             </div>
             <div class="text-[11px] text-gray-500 dark:text-gray-400">
-                РњСѓР»СЊС‚РёРІРёР±С–СЂ РІРёРєР»Р°РґР°С‡С–РІ: СѓС‚СЂРёРјСѓР№С‚Рµ <b>Ctrl</b> (Windows) Р°Р±Рѕ <b>Cmd</b> (Mac).
+                Мультивибір викладачів: утримуйте <b>Ctrl</b> (Windows) або <b>Cmd</b> (Mac).
             </div>
 
             <div id="quickGroupChips" class="flex flex-wrap gap-2"></div>
             <div class="flex items-center justify-between gap-2 flex-wrap">
-                <div class="text-sm text-gray-600 dark:text-gray-300">Р—РЅР°Р№РґРµРЅРѕ Р·Р°РїРёСЃС–РІ: <span id="resultCount" class="font-bold">0</span></div>
-                <button id="exportFiltered" class="px-3 py-2 rounded-xl bg-green-100 text-green-700 font-bold text-sm">Р•РєСЃРїРѕСЂС‚ XLSX</button>
+                <div class="text-sm text-gray-600 dark:text-gray-300">Знайдено записів: <span id="resultCount" class="font-bold">0</span></div>
+                <button id="exportFiltered" class="px-3 py-2 rounded-xl bg-green-100 text-green-700 font-bold text-sm">Експорт XLSX</button>
             </div>
         </section>
 
@@ -69,15 +69,15 @@
                 <table class="min-w-full">
                     <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200 text-xs uppercase">
                         <tr>
-                            <th class="px-3 py-2 text-left">Р’РёРєР»Р°РґР°С‡</th>
-                            <th class="px-3 py-2 text-left">Р”РёСЃС†РёРїР»С–РЅР°</th>
-                            <th class="px-3 py-2 text-left">РўРёРї</th>
-                            <th class="px-3 py-2 text-left">Р¤РѕСЂРјР°</th>
-                            <th class="px-3 py-2 text-left">Р“СЂСѓРїР°</th>
-                            <th class="px-3 py-2 text-left">Р”Р°С‚Р°</th>
-                            <th class="px-3 py-2 text-left">Р§Р°СЃ</th>
-                            <th class="px-3 py-2 text-left">РђСѓРґ.</th>
-                            <th class="px-3 py-2 text-left">РЎРїРµС†С–Р°Р»СЊРЅС–СЃС‚СЊ</th>
+                            <th class="px-3 py-2 text-left">Викладач</th>
+                            <th class="px-3 py-2 text-left">Дисципліна</th>
+                            <th class="px-3 py-2 text-left">Тип</th>
+                            <th class="px-3 py-2 text-left">Форма</th>
+                            <th class="px-3 py-2 text-left">Група</th>
+                            <th class="px-3 py-2 text-left">Дата</th>
+                            <th class="px-3 py-2 text-left">Час</th>
+                            <th class="px-3 py-2 text-left">Ауд.</th>
+                            <th class="px-3 py-2 text-left">Спеціальність</th>
                         </tr>
                     </thead>
                     <tbody id="sessionTableBody"></tbody>
@@ -86,7 +86,7 @@
         </section>
     </div>
 
-    <script src="js/session-page.js?v=20260410-8"></script>
+    <script src="js/session-page.js?v=20260410-9"></script>
 </body>
 </html>
 
