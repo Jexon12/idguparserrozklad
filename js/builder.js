@@ -14,7 +14,11 @@ window.ScheduleApp = window.ScheduleApp || {};
         entities: [],
         weekDays: [],
         normalized: [],
-        lastSourceCount: 0
+        lastSourceCount: 0,
+        baselineNormalized: [],
+        optimizedNormalized: [],
+        loadedFacultyKey: '',
+        parseCounter: 0
     };
 
     const els = {
@@ -52,7 +56,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         optNoFirstPairGroups: document.getElementById('optNoFirstPairGroups'),
         optMaxWindowsGroup: document.getElementById('optMaxWindowsGroup'),
         optTableHead: document.getElementById('optTableHead'),
-        optTableBody: document.getElementById('optTableBody')
+        optTableBody: document.getElementById('optTableBody'),
+        optMoves: document.getElementById('optMoves')
     };
 
     function setStatus(msg, isError) {
@@ -134,6 +139,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         const groupName = String(raw.contingent || raw.study_group || raw.groupName || sourceName || '').trim();
 
         return {
+            id: `L${++state.parseCounter}`,
             date: raw.full_date || '',
             dow,
             pair: parsePair(raw),
@@ -407,14 +413,9 @@ window.ScheduleApp = window.ScheduleApp || {};
         return { windows, firstPair: pairs[0] };
     }
 
-    function renderOptimizationReport() {
-        if (!els.optimizationSection) return;
-        const isFaculty = state.mode === 'faculty';
-        els.optimizationSection.classList.toggle('hidden', !isFaculty);
-        if (!isFaculty) return;
-
+    function getWindowsSummary(lessons) {
         const byGroup = new Map();
-        state.normalized.forEach((l) => {
+        lessons.forEach((l) => {
             const g = String(l.group || l.sourceName || '').trim();
             if (!g) return;
             if (!byGroup.has(g)) byGroup.set(g, []);
@@ -431,29 +432,39 @@ window.ScheduleApp = window.ScheduleApp || {};
 
             let windowsWeek = 0;
             let noFirstPairDays = 0;
-            let activeDays = 0;
-
             byDay.forEach((dayRows) => {
                 const info = computeGroupWindows(dayRows);
                 windowsWeek += info.windows;
                 if (info.firstPair > 1) noFirstPairDays += 1;
-                if (info.firstPair > 0) activeDays += 1;
             });
 
+            stats.push({ group, windowsWeek, noFirstPairDays, rows, byDay });
+        });
+
+        return stats;
+    }
+
+    function renderOptimizationReport(baseLessons, optimizedLessons) {
+        if (!els.optimizationSection) return;
+        const isFaculty = state.mode === 'faculty';
+        els.optimizationSection.classList.toggle('hidden', !isFaculty);
+        if (!isFaculty) return;
+        const current = Array.isArray(baseLessons) ? baseLessons : state.baselineNormalized;
+        const optimized = Array.isArray(optimizedLessons) ? optimizedLessons : null;
+        const stats = getWindowsSummary(current).map((x) => {
+            const byDay = x.byDay;
             const avgStart = byDay.size
                 ? (Array.from(byDay.values()).reduce((s, dayRows) => s + (computeGroupWindows(dayRows).firstPair || 0), 0) / byDay.size)
                 : 0;
-
-            stats.push({
-                group,
-                windowsWeek,
-                noFirstPairDays,
-                activeDays,
+            return {
+                group: x.group,
+                windowsWeek: x.windowsWeek,
+                noFirstPairDays: x.noFirstPairDays,
                 avgStart: avgStart ? avgStart.toFixed(2) : '0.00',
-                suggestion: windowsWeek >= 3
+                suggestion: x.windowsWeek >= 3
                     ? 'Ущільнити пари в межах дня (зменшити вікна)'
-                    : (noFirstPairDays >= 3 ? 'Перевірити можливість старту з 1-2 пари' : 'Розклад близький до оптимального')
-            });
+                    : (x.noFirstPairDays >= 3 ? 'Перевірити можливість старту з 1-2 пари' : 'Розклад близький до оптимального')
+            };
         });
 
         stats.sort((a, b) => b.windowsWeek - a.windowsWeek || b.noFirstPairDays - a.noFirstPairDays || a.group.localeCompare(b.group, 'uk'));
@@ -487,6 +498,36 @@ window.ScheduleApp = window.ScheduleApp || {};
                 `<td class="p-2 border dark:border-gray-700 text-xs">${x.suggestion}</td>`;
             els.optTableBody.appendChild(tr);
         });
+
+        if (!els.optMoves) return;
+        els.optMoves.innerHTML = '';
+        if (!optimized || !optimized.length) {
+            els.optMoves.textContent = 'Натисніть "Новий оптимізований розклад", щоб побачити конкретні переноси.';
+            return;
+        }
+
+        const baseById = new Map(current.map((x) => [x.id, x]));
+        const moves = [];
+        optimized.forEach((x) => {
+            const b = baseById.get(x.id);
+            if (!b) return;
+            if (b.pair !== x.pair) {
+                moves.push({ group: x.group, date: x.date, discipline: x.discipline, from: b.pair, to: x.pair });
+            }
+        });
+        if (!moves.length) {
+            els.optMoves.textContent = 'Явних переносів не потрібно — поточний варіант уже близький до оптимального.';
+            return;
+        }
+
+        moves
+            .sort((a, b) => (a.group.localeCompare(b.group, 'uk') || a.date.localeCompare(b.date, 'uk')))
+            .slice(0, 80)
+            .forEach((m) => {
+                const div = document.createElement('div');
+                div.textContent = `${m.group} · ${m.date}: "${m.discipline}" ${m.from}→${m.to} пара`;
+                els.optMoves.appendChild(div);
+            });
     }
 
     function fillGroupsDaySelect() {
@@ -564,7 +605,129 @@ window.ScheduleApp = window.ScheduleApp || {};
         return allRows.filter(Boolean);
     }
 
+    function optimizeFacultySchedule(lessons) {
+        const byGroupDay = new Map();
+        lessons.forEach((l) => {
+            const key = `${l.group}||${l.date}`;
+            if (!byGroupDay.has(key)) byGroupDay.set(key, []);
+            byGroupDay.get(key).push(l);
+        });
+
+        const tasks = Array.from(byGroupDay.entries()).map(([key, arr]) => ({
+            key,
+            lessons: arr.slice().sort((a, b) => (a.pair - b.pair) || a.discipline.localeCompare(b.discipline, 'uk'))
+        }));
+        tasks.sort((a, b) => b.lessons.length - a.lessons.length);
+
+        const occupancy = {};
+        for (let d = 1; d <= 5; d++) {
+            occupancy[d] = {};
+            for (let p = 1; p <= 7; p++) occupancy[d][p] = 0;
+        }
+
+        const optimized = [];
+        tasks.forEach((task) => {
+            const dayDow = task.lessons[0].dow;
+            const n = task.lessons.length;
+            const maxStart = Math.max(1, 8 - n);
+            let bestStart = 1;
+            let bestCost = Infinity;
+            for (let start = 1; start <= maxStart; start++) {
+                let load = 0;
+                for (let i = 0; i < n; i++) load += occupancy[dayDow][start + i] || 0;
+                const earlyPenalty = (start - 1) * 2.5;
+                const cost = load * 1.3 + earlyPenalty;
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    bestStart = start;
+                }
+            }
+
+            task.lessons.forEach((l, idx) => {
+                const np = bestStart + idx;
+                const t = PAIR_TIMES[np] || {};
+                const nl = { ...l, pair: np, start: t.start || l.start, end: t.end || l.end };
+                optimized.push(nl);
+                occupancy[dayDow][np] = (occupancy[dayDow][np] || 0) + 1;
+            });
+        });
+
+        return optimized;
+    }
+
+    async function ensureFacultyLoaded() {
+        const facultyId = els.facultySelect.value;
+        const startDmy = toDmyIso(els.weekStart.value);
+        const endDmy = toDmyIso(els.weekEnd.value);
+        const key = `${facultyId}||${startDmy}||${endDmy}`;
+        if (state.loadedFacultyKey === key && state.baselineNormalized.length) return;
+
+        buildWeekDays();
+        const weekDmySet = new Set(state.weekDays.map((d) => d.dmy));
+        setStatus('Збір всіх груп факультету...');
+        const groups = await fetchAllFacultyGroups(facultyId);
+        state.lastSourceCount = groups.length;
+        if (!groups.length) {
+            state.baselineNormalized = [];
+            state.optimizedNormalized = [];
+            state.normalized = [];
+            state.loadedFacultyKey = key;
+            return;
+        }
+        const rows = await fetchFacultySchedule(groups, startDmy, endDmy);
+        state.baselineNormalized = rows.filter((l) => l && weekDmySet.has(l.date));
+        state.optimizedNormalized = [];
+        state.loadedFacultyKey = key;
+    }
+
+    async function runAuxiliaryAnalysis() {
+        if (!els.facultySelect.value) {
+            setStatus('Оберіть факультет', true);
+            return;
+        }
+        state.mode = 'faculty';
+        if (els.modeSelect) els.modeSelect.value = 'faculty';
+        setModeUI();
+        await ensureFacultyLoaded();
+        state.normalized = state.baselineNormalized.slice();
+        renderTable(state.normalized);
+        fillGroupsDaySelect();
+        renderGroupsTable();
+        renderOptimizationReport(state.baselineNormalized, null);
+        setStatus(`Допоміжний аналіз готовий: ${state.normalized.length} занять`);
+    }
+
+    async function buildOptimizedFacultySchedule() {
+        if (!els.facultySelect.value) {
+            setStatus('Оберіть факультет', true);
+            return;
+        }
+        state.mode = 'faculty';
+        if (els.modeSelect) els.modeSelect.value = 'faculty';
+        setModeUI();
+        await ensureFacultyLoaded();
+        if (!state.baselineNormalized.length) {
+            setStatus('Для цього факультету не знайдено даних', true);
+            return;
+        }
+        setStatus('Будую новий оптимізований розклад...');
+        state.optimizedNormalized = optimizeFacultySchedule(state.baselineNormalized);
+        state.normalized = state.optimizedNormalized.slice();
+        renderTable(state.normalized);
+        fillGroupsDaySelect();
+        renderGroupsTable();
+        renderOptimizationReport(state.baselineNormalized, state.optimizedNormalized);
+
+        const before = getWindowsSummary(state.baselineNormalized).reduce((s, x) => s + x.windowsWeek, 0);
+        const after = getWindowsSummary(state.optimizedNormalized).reduce((s, x) => s + x.windowsWeek, 0);
+        setStatus(`Оптимізований розклад готовий: вікна ${before} → ${after}`);
+    }
+
     async function buildWeekSchedule() {
+        if (state.mode === 'faculty') {
+            await runAuxiliaryAnalysis();
+            return;
+        }
         if (!els.facultySelect.value) {
             setStatus('Оберіть факультет', true);
             return;
@@ -586,23 +749,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         const weekDmySet = new Set(state.weekDays.map((d) => d.dmy));
 
         if (state.mode === 'faculty') {
-            setStatus('Збір всіх груп факультету...');
-            const groups = await fetchAllFacultyGroups(els.facultySelect.value);
-            state.lastSourceCount = groups.length;
-            if (!groups.length) {
-                state.normalized = [];
-                renderTable(state.normalized);
-                setStatus('Для цього факультету не знайдено груп', true);
-                return;
-            }
-
-            const rows = await fetchFacultySchedule(groups, startDmy, endDmy);
-            state.normalized = rows.filter((l) => l && weekDmySet.has(l.date));
-            renderTable(state.normalized);
-            fillGroupsDaySelect();
-            renderGroupsTable();
-            renderOptimizationReport();
-            setStatus(`Готово: факультет, груп ${groups.length}, занять ${state.normalized.length}`);
+            await runAuxiliaryAnalysis();
             return;
         }
 
@@ -656,7 +803,11 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (els.buildBtnPrimary) els.buildBtnPrimary.addEventListener('click', buildWeekSchedule);
         if (els.groupsApplyBtn) els.groupsApplyBtn.addEventListener('click', renderGroupsTable);
         if (els.groupsDaySelect) els.groupsDaySelect.addEventListener('change', renderGroupsTable);
-        if (els.runOptimizationBtn) els.runOptimizationBtn.addEventListener('click', renderOptimizationReport);
+        if (els.runOptimizationBtn) els.runOptimizationBtn.addEventListener('click', runAuxiliaryAnalysis);
+        if (els.buildBtnPrimary) {
+            els.buildBtnPrimary.removeEventListener('click', buildWeekSchedule);
+            els.buildBtnPrimary.addEventListener('click', buildOptimizedFacultySchedule);
+        }
     }
 
     async function init() {
