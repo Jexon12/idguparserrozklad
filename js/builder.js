@@ -376,8 +376,10 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
         if (state.mode !== 'faculty' && !els.entitySelect.value) {
-            setStatus('Оберіть групу або викладача', true);
-            return;
+            state.mode = 'faculty';
+            if (els.modeSelect) els.modeSelect.value = 'faculty';
+            setModeUI();
+            setStatus('Автоматично увімкнено режим факультету. Запускаю збір...');
         }
         if (!els.weekStart.value || !els.weekEnd.value) {
             setStatus('Оберіть коректний діапазон дат', true);
