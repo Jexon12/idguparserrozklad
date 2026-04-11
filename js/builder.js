@@ -38,7 +38,14 @@ window.ScheduleApp = window.ScheduleApp || {};
         sumDays: document.getElementById('sumDays'),
         sumConflicts: document.getElementById('sumConflicts'),
         sumDuplicates: document.getElementById('sumDuplicates'),
-        sumSources: document.getElementById('sumSources')
+        sumSources: document.getElementById('sumSources'),
+        groupsTableSection: document.getElementById('groupsTableSection'),
+        groupsDaySelect: document.getElementById('groupsDaySelect'),
+        groupsFilterInput: document.getElementById('groupsFilterInput'),
+        groupsApplyBtn: document.getElementById('groupsApplyBtn'),
+        groupsTableMeta: document.getElementById('groupsTableMeta'),
+        groupsTableHead: document.getElementById('groupsTableHead'),
+        groupsTableBody: document.getElementById('groupsTableBody')
     };
 
     function setStatus(msg, isError) {
@@ -261,6 +268,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.tableHead.appendChild(trHead);
 
         let conflictSlots = 0;
+        const trueConflictKeys = new Set();
         PAIRS.forEach((pair) => {
             const tr = document.createElement('tr');
             let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} пара</td>`;
@@ -268,7 +276,20 @@ window.ScheduleApp = window.ScheduleApp || {};
             state.weekDays.forEach((day) => {
                 const cellKey = `${day.dow}-${pair}`;
                 const items = map.get(cellKey) || [];
-                if (items.length > 1) conflictSlots += 1;
+                if (state.mode === 'faculty') {
+                    const byGroup = new Map();
+                    items.forEach((it) => {
+                        const g = String(it.group || it.sourceName || '').trim();
+                        if (!g) return;
+                        if (!byGroup.has(g)) byGroup.set(g, 0);
+                        byGroup.set(g, byGroup.get(g) + 1);
+                    });
+                    byGroup.forEach((count, g) => {
+                        if (count > 1) trueConflictKeys.add(`${day.dow}-${pair}-${g}`);
+                    });
+                } else if (items.length > 1) {
+                    conflictSlots += 1;
+                }
 
                 const chipHtml = items.map((it) => {
                     let subtitle = '';
@@ -298,12 +319,85 @@ window.ScheduleApp = window.ScheduleApp || {};
         });
 
         const activeDays = state.weekDays.filter((day) => PAIRS.some((pair) => (map.get(`${day.dow}-${pair}`) || []).length > 0)).length;
+        if (state.mode === 'faculty') conflictSlots = trueConflictKeys.size;
 
         els.sumLessons.textContent = String(lessons.length);
         els.sumDays.textContent = String(activeDays);
         els.sumConflicts.textContent = String(conflictSlots);
         els.sumDuplicates.textContent = String(duplicates);
         els.sumSources.textContent = String(state.lastSourceCount || 0);
+    }
+
+    function getWeekDayByDow(dow) {
+        return (state.weekDays || []).find((d) => d.dow === dow) || null;
+    }
+
+    function parseGroupsFilter(raw) {
+        const s = String(raw || '').trim();
+        if (!s) return [];
+        return s
+            .split(',')
+            .map((x) => x.trim().toLowerCase())
+            .filter(Boolean);
+    }
+
+    function renderGroupsTable() {
+        if (!els.groupsTableSection) return;
+        const isFaculty = state.mode === 'faculty';
+        els.groupsTableSection.classList.toggle('hidden', !isFaculty);
+        if (!isFaculty) return;
+
+        const dayDow = parseInt(els.groupsDaySelect.value || '1', 10);
+        const rowsForDay = state.normalized.filter((l) => l && l.dow === dayDow);
+        const allGroups = Array.from(new Set(rowsForDay.map((l) => String(l.group || l.sourceName || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
+        const filterParts = parseGroupsFilter(els.groupsFilterInput.value);
+        let groups = allGroups;
+        if (filterParts.length) {
+            groups = allGroups.filter((g) => filterParts.some((f) => g.toLowerCase().includes(f)));
+        }
+        const MAX_GROUPS = 24;
+        const trimmed = groups.slice(0, MAX_GROUPS);
+
+        const matrix = new Map();
+        rowsForDay.forEach((l) => {
+            const g = String(l.group || l.sourceName || '').trim();
+            if (!trimmed.includes(g)) return;
+            const key = `${l.pair}||${g}`;
+            if (!matrix.has(key)) matrix.set(key, []);
+            matrix.get(key).push(l);
+        });
+
+        els.groupsTableHead.innerHTML = '';
+        els.groupsTableBody.innerHTML = '';
+        const th = document.createElement('tr');
+        th.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${trimmed.map((g) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${g}</th>`).join('')}`;
+        els.groupsTableHead.appendChild(th);
+
+        PAIRS.forEach((pair) => {
+            const tr = document.createElement('tr');
+            let row = `<td class="p-2 border dark:border-gray-700 font-bold">${pair} пара</td>`;
+            trimmed.forEach((g) => {
+                const cell = matrix.get(`${pair}||${g}`) || [];
+                const text = cell.map((x) => `${x.discipline || '—'}${x.room ? ` (${x.room})` : ''}`).join(' / ');
+                row += `<td class="p-2 border dark:border-gray-700 text-xs">${text || '—'}</td>`;
+            });
+            tr.innerHTML = row;
+            els.groupsTableBody.appendChild(tr);
+        });
+
+        const dayObj = getWeekDayByDow(dayDow);
+        els.groupsTableMeta.textContent = `День: ${dayObj ? dayObj.label : dayDow}. Груп у таблиці: ${trimmed.length}${groups.length > MAX_GROUPS ? ` (показано перші ${MAX_GROUPS})` : ''}.`;
+    }
+
+    function fillGroupsDaySelect() {
+        if (!els.groupsDaySelect) return;
+        els.groupsDaySelect.innerHTML = '';
+        state.weekDays.forEach((d) => {
+            const o = document.createElement('option');
+            o.value = String(d.dow);
+            o.textContent = d.label;
+            els.groupsDaySelect.appendChild(o);
+        });
     }
 
     function chunk(items, size) {
@@ -405,6 +499,8 @@ window.ScheduleApp = window.ScheduleApp || {};
             const rows = await fetchFacultySchedule(groups, startDmy, endDmy);
             state.normalized = rows.filter((l) => l && weekDmySet.has(l.date));
             renderTable(state.normalized);
+            fillGroupsDaySelect();
+            renderGroupsTable();
             setStatus(`Готово: факультет, груп ${groups.length}, занять ${state.normalized.length}`);
             return;
         }
@@ -425,6 +521,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         state.lastSourceCount = 1;
         state.normalized = data.map((x) => normalizeLesson(x, '')).filter((l) => l && weekDmySet.has(l.date));
         renderTable(state.normalized);
+        if (els.groupsTableSection) els.groupsTableSection.classList.add('hidden');
         setStatus(`Готово: зібрано ${state.normalized.length} занять за тиждень`);
     }
 
@@ -455,6 +552,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.nextWeekBtn.addEventListener('click', () => shiftWeek(1));
         els.buildBtn.addEventListener('click', buildWeekSchedule);
         if (els.buildBtnPrimary) els.buildBtnPrimary.addEventListener('click', buildWeekSchedule);
+        if (els.groupsApplyBtn) els.groupsApplyBtn.addEventListener('click', renderGroupsTable);
+        if (els.groupsDaySelect) els.groupsDaySelect.addEventListener('change', renderGroupsTable);
     }
 
     async function init() {

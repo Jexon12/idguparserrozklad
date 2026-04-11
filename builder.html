@@ -118,6 +118,22 @@
                 </table>
             </div>
         </section>
+
+        <section id="groupsTableSection" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 hidden">
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <h2 class="font-bold">Таблиця по групах</h2>
+                <select id="groupsDaySelect" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <input id="groupsFilterInput" type="text" placeholder="Фільтр груп: 10у,11у..." class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm min-w-[220px]">
+                <button id="groupsApplyBtn" class="rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-3 py-2 text-sm font-bold">Застосувати</button>
+            </div>
+            <p id="groupsTableMeta" class="text-xs text-gray-500 mb-2"></p>
+            <div class="overflow-auto">
+                <table class="w-full text-sm border-collapse">
+                    <thead id="groupsTableHead"></thead>
+                    <tbody id="groupsTableBody"></tbody>
+                </table>
+            </div>
+        </section>
     </div>
 
     <script src="js/utils.js?v=20260410-1"></script>
