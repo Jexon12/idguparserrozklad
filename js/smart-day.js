@@ -12,12 +12,12 @@ window.ScheduleApp = window.ScheduleApp || {};
     };
 
     const state = {
+        mode: 'group',
         faculties: [],
         eduForms: [],
         courses: [],
         chairs: [],
         entities: [],
-        mode: 'group',
         selectedEntity: null,
         lessons: [],
         normalized: [],
@@ -83,8 +83,8 @@ window.ScheduleApp = window.ScheduleApp || {};
     }
 
     function parsePair(lesson) {
-        const m = String(lesson.study_time || '').match(/(\d+)/);
-        if (m) return parseInt(m[1], 10);
+        const fromStudyTime = String(lesson.study_time || '').match(/(\d+)/);
+        if (fromStudyTime) return parseInt(fromStudyTime[1], 10);
         for (let i = 1; i <= 7; i++) {
             const t = PAIR_TIMES[i];
             if (t && t.start === lesson.study_time_begin) return i;
@@ -96,8 +96,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         const pair = parsePair(raw);
         const fallback = PAIR_TIMES[pair] || { start: raw.study_time_begin || '', end: raw.study_time_end || '' };
         return {
-            raw: raw,
-            pair: pair,
+            raw,
+            pair,
             date: String(raw.full_date || ''),
             discipline: String(raw.discipline || ''),
             type: String(raw.study_type || ''),
@@ -122,8 +122,8 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     function buildingKey(room) {
         const text = String(room || '').toLowerCase();
-        const corps = text.match(/к\d+|корпус\s*\d+/i);
-        if (corps) return corps[0];
+        const corp = text.match(/к\d+|корпус\s*\d+/i);
+        if (corp) return corp[0];
         const slash = text.split('/');
         if (slash.length > 1 && slash[1]) return slash[1].trim();
         const num = text.match(/\d{2,4}/);
@@ -165,10 +165,17 @@ window.ScheduleApp = window.ScheduleApp || {};
         const penalty = windows * 8 + latePairs * 5 + moves * 3 + overloadPenalty * 2;
         return {
             score: clamp(100 - penalty, 0, 100),
-            windows: windows,
-            latePairs: latePairs,
-            moves: moves
+            windows,
+            latePairs,
+            moves
         };
+    }
+
+    function createCell(text, cls) {
+        const div = document.createElement('div');
+        div.className = cls || '';
+        div.textContent = text;
+        return div;
     }
 
     function renderHeatmap(lessons) {
@@ -187,27 +194,20 @@ window.ScheduleApp = window.ScheduleApp || {};
             grid[dow][l.pair] += 1;
         });
 
-        els.heatmap.appendChild(cell(''));
-        for (let p = 1; p <= 7; p++) els.heatmap.appendChild(cell(`${p} пара`, 'font-semibold'));
+        els.heatmap.appendChild(createCell(''));
+        for (let p = 1; p <= 7; p++) els.heatmap.appendChild(createCell(`${p} пара`, 'font-semibold'));
 
         for (let d = 1; d <= 7; d++) {
-            els.heatmap.appendChild(cell(dayNames[d - 1], 'font-semibold'));
+            els.heatmap.appendChild(createCell(dayNames[d - 1], 'font-semibold'));
             for (let p = 1; p <= 7; p++) {
                 const v = grid[d][p];
                 let cls = 'bg-gray-100 dark:bg-gray-700';
                 if (v >= 3) cls = 'bg-red-200 dark:bg-red-900/40';
                 else if (v === 2) cls = 'bg-amber-200 dark:bg-amber-900/40';
                 else if (v === 1) cls = 'bg-emerald-200 dark:bg-emerald-900/40';
-                els.heatmap.appendChild(cell(String(v), `heat-cell rounded text-center py-2 ${cls}`));
+                els.heatmap.appendChild(createCell(String(v), `heat-cell rounded text-center py-2 ${cls}`));
             }
         }
-    }
-
-    function cell(text, cls) {
-        const div = document.createElement('div');
-        div.className = cls || '';
-        div.textContent = text;
-        return div;
     }
 
     function renderSimLessonOptions(lessons) {
@@ -231,14 +231,14 @@ window.ScheduleApp = window.ScheduleApp || {};
             const end = lessonDateTime(l.date, l.end);
             if (!start || !end) return;
 
-            if (now >= start && now < end) {
-                if (!current) current = { l: l, start: start, end: end };
+            if (now >= start && now < end && !current) {
+                current = { l, start, end };
             }
 
             const diff = start - now;
             if (diff > 0 && diff < nextDiff) {
                 nextDiff = diff;
-                next = { l: l, start: start };
+                next = { l, start };
             }
         });
 
@@ -260,15 +260,16 @@ window.ScheduleApp = window.ScheduleApp || {};
             els.nextLesson.textContent = 'Наступної пари не знайдено';
             els.nextMeta.textContent = '—';
             els.nextCountdown.textContent = '—';
-        } else {
-            const mins = Math.floor(nextDiff / 60000);
-            const hours = Math.floor(mins / 60);
-            const remain = mins % 60;
-            const text = hours > 0 ? `${hours}г ${remain}хв` : `${remain} хв`;
-            els.nextLesson.textContent = next.l.discipline || 'Пара';
-            els.nextMeta.textContent = `${next.l.date} · ${next.l.displayTime} · ${next.l.room || '—'}`;
-            els.nextCountdown.textContent = `Через ${text}`;
+            return;
         }
+
+        const mins = Math.floor(nextDiff / 60000);
+        const hours = Math.floor(mins / 60);
+        const remain = mins % 60;
+        const text = hours > 0 ? `${hours}г ${remain}хв` : `${remain} хв`;
+        els.nextLesson.textContent = next.l.discipline || 'Пара';
+        els.nextMeta.textContent = `${next.l.date} · ${next.l.displayTime} · ${next.l.room || '—'}`;
+        els.nextCountdown.textContent = `Через ${text}`;
     }
 
     function renderScore(lessons) {
@@ -291,8 +292,8 @@ window.ScheduleApp = window.ScheduleApp || {};
     function pushBoardEvent(type, text) {
         state.liveBoardEvents.unshift({
             at: new Date().toLocaleTimeString('uk-UA'),
-            type: type,
-            text: text
+            type,
+            text
         });
         state.liveBoardEvents = state.liveBoardEvents.slice(0, 80);
         renderBoard();
@@ -333,6 +334,146 @@ window.ScheduleApp = window.ScheduleApp || {};
         });
     }
 
+    function getItemLabel(item, fallback) {
+        if (!item || typeof item !== 'object') return fallback || '';
+        return String(item.Value ?? item.value ?? item.Name ?? item.name ?? item.Title ?? item.title ?? fallback ?? '');
+    }
+
+    function getItemKey(item, fallback) {
+        if (!item || typeof item !== 'object') return fallback || '';
+        return String(item.Key ?? item.key ?? item.ID ?? item.Id ?? item.id ?? fallback ?? '');
+    }
+
+    function fillSelect(selectEl, values, labelKey, valueKey, options) {
+        const opts = options || {};
+        const autoSelectFirst = !!opts.autoSelectFirst;
+        const current = selectEl.value;
+
+        while (selectEl.options.length > 1) selectEl.remove(1);
+
+        values.forEach((item) => {
+            const opt = document.createElement('option');
+            opt.value = valueKey ? String(item[valueKey] ?? '') : getItemKey(item, '');
+            opt.textContent = labelKey ? String(item[labelKey] ?? '') : getItemLabel(item, opt.value);
+            selectEl.appendChild(opt);
+        });
+
+        const hasCurrent = values.some((item) => {
+            const k = valueKey ? String(item[valueKey] ?? '') : getItemKey(item, '');
+            return k === current;
+        });
+
+        if (current && hasCurrent) {
+            selectEl.value = current;
+        } else if (autoSelectFirst && selectEl.options.length > 1) {
+            selectEl.selectedIndex = 1;
+        } else {
+            selectEl.selectedIndex = 0;
+        }
+    }
+
+    function setModeUI() {
+        const isGroup = state.mode === 'group';
+        els.eduFormSelect.classList.toggle('hidden', !isGroup);
+        els.courseSelect.classList.toggle('hidden', !isGroup);
+        els.chairSelect.classList.toggle('hidden', isGroup);
+        const label = isGroup ? 'Оберіть групу...' : 'Оберіть викладача...';
+        els.entitySelect.innerHTML = `<option value="">${label}</option>`;
+        state.entities = [];
+        state.selectedEntity = null;
+    }
+
+    async function loadBaseFilters() {
+        try {
+            setStatus('Завантаження фільтрів...');
+            const data = await SA.fetchApi('GetStudentScheduleFiltersData', {}, { useCache: false });
+            if (!data) {
+                setStatus('Не вдалося завантажити фільтри', true);
+                return;
+            }
+            state.faculties = data.faculties || [];
+            state.eduForms = data.educForms || [];
+            state.courses = data.courses || [];
+            fillSelect(els.facultySelect, state.faculties, 'Value', 'Key', { autoSelectFirst: true });
+            fillSelect(els.eduFormSelect, state.eduForms, 'Value', 'Key', { autoSelectFirst: true });
+            fillSelect(els.courseSelect, state.courses, 'Value', 'Key', { autoSelectFirst: true });
+            setStatus('Оберіть параметри і натисніть Завантажити Smart Day');
+        } catch (e) {
+            setStatus(`Помилка завантаження фільтрів: ${e.message}`, true);
+        }
+    }
+
+    async function loadGroups() {
+        if (!els.facultySelect.value) {
+            state.entities = [];
+            fillSelect(els.entitySelect, [], null, null);
+            return;
+        }
+
+        try {
+            setStatus('Завантаження груп...');
+            const data = await SA.fetchApi('GetStudyGroups', {
+                aFacultyID: els.facultySelect.value,
+                aEducationForm: els.eduFormSelect.value || '0',
+                aCourse: els.courseSelect.value || '0'
+            }, { useCache: false });
+
+            state.entities = (data && data.studyGroups) ? data.studyGroups : [];
+            fillSelect(els.entitySelect, state.entities, 'Value', 'Key', { autoSelectFirst: state.entities.length === 1 });
+            setStatus(`Знайдено груп: ${state.entities.length}`);
+        } catch (e) {
+            setStatus(`Помилка завантаження груп: ${e.message}`, true);
+        }
+    }
+
+    async function loadChairsAndEmployees() {
+        if (!els.facultySelect.value) {
+            state.chairs = [];
+            state.entities = [];
+            fillSelect(els.chairSelect, [], null, null);
+            fillSelect(els.entitySelect, [], null, null);
+            return;
+        }
+
+        try {
+            setStatus('Завантаження кафедр...');
+            const c = await SA.fetchApi('GetEmployeeChairs', { aFacultyID: els.facultySelect.value }, { useCache: false });
+            state.chairs = (c && c.chairs) ? c.chairs : [];
+            fillSelect(els.chairSelect, state.chairs, 'Value', 'Key', { autoSelectFirst: true });
+            setStatus(`Знайдено кафедр: ${state.chairs.length}`);
+            if (els.chairSelect.value) {
+                await loadEmployees();
+            } else {
+                state.entities = [];
+                fillSelect(els.entitySelect, [], null, null);
+            }
+        } catch (e) {
+            setStatus(`Помилка завантаження кафедр: ${e.message}`, true);
+        }
+    }
+
+    async function loadEmployees() {
+        if (!els.facultySelect.value || !els.chairSelect.value) {
+            state.entities = [];
+            fillSelect(els.entitySelect, [], null, null);
+            return;
+        }
+
+        try {
+            setStatus('Завантаження викладачів...');
+            const data = await SA.fetchApi('GetEmployees', {
+                aFacultyID: els.facultySelect.value,
+                aChairID: els.chairSelect.value
+            }, { useCache: false });
+
+            state.entities = Array.isArray(data) ? data : [];
+            fillSelect(els.entitySelect, state.entities, 'Value', 'Key', { autoSelectFirst: state.entities.length === 1 });
+            setStatus(`Знайдено викладачів: ${state.entities.length}`);
+        } catch (e) {
+            setStatus(`Помилка завантаження викладачів: ${e.message}`, true);
+        }
+    }
+
     async function fetchScheduleAndRender(isRefresh) {
         if (!state.currentAction || !state.currentPayload) return;
         const data = await SA.fetchApi(state.currentAction, state.currentPayload, { silent: true, useCache: false });
@@ -350,6 +491,47 @@ window.ScheduleApp = window.ScheduleApp || {};
         state.prevStableMap = newMap;
     }
 
+    async function loadSmartDay() {
+        const entityId = els.entitySelect.value;
+        if (!entityId) {
+            setStatus('Оберіть групу або викладача', true);
+            return;
+        }
+
+        const entityName = els.entitySelect.selectedOptions[0] ? els.entitySelect.selectedOptions[0].textContent : entityId;
+        state.selectedEntity = {
+            id: entityId,
+            name: entityName,
+            type: state.mode === 'group' ? 'Група' : 'Викладач'
+        };
+
+        const start = toDmyFromIso(els.dateStart.value);
+        const end = toDmyFromIso(els.dateEnd.value);
+        if (!start || !end) {
+            setStatus('Оберіть коректний діапазон дат', true);
+            return;
+        }
+
+        const payload = {
+            aStartDate: start,
+            aEndDate: end,
+            aStudyTypeID: ''
+        };
+
+        if (state.mode === 'group') payload.aStudyGroupID = entityId;
+        else payload.aEmployeeID = entityId;
+
+        state.currentAction = state.mode === 'group' ? 'GetScheduleDataX' : 'GetScheduleDataEmp';
+        state.currentPayload = payload;
+        state.liveBoardEvents = [];
+        state.prevStableMap = new Map();
+        renderBoard();
+
+        setStatus('Завантаження розкладу...');
+        await fetchScheduleAndRender(false);
+        setStatus(`Smart Day готовий: ${state.normalized.length} занять`);
+    }
+
     async function runWhatIf() {
         const idx = parseInt(els.simLessonSelect.value, 10);
         if (Number.isNaN(idx)) {
@@ -365,124 +547,20 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         if (action === 'shift+1') target.pair = clamp(target.pair + 1, 1, 7);
         if (action === 'shift-1') target.pair = clamp(target.pair - 1, 1, 7);
+
         const t = PAIR_TIMES[target.pair];
         if (t) {
             target.start = t.start;
             target.end = t.end;
             target.displayTime = `${target.pair} пара (${t.start}-${t.end})`;
         }
+
         if (room) target.room = room;
 
         const sim = computeComfortScore(copy);
         const delta = sim.score - state.simBaseScore;
         const sign = delta >= 0 ? '+' : '';
         els.simResult.textContent = `Було: ${state.simBaseScore} → Стало: ${sim.score} (${sign}${delta}). Вікна: ${sim.windows}, пізні: ${sim.latePairs}, переходи: ${sim.moves}`;
-    }
-
-    function setModeUI() {
-        const isGroup = state.mode === 'group';
-        els.eduFormSelect.classList.toggle('hidden', !isGroup);
-        els.courseSelect.classList.toggle('hidden', !isGroup);
-        els.chairSelect.classList.toggle('hidden', isGroup);
-        els.entitySelect.innerHTML = '<option value="">Оберіть...</option>';
-    }
-
-    function fillSelect(selectEl, values, labelKey, valueKey) {
-        const current = selectEl.value;
-        while (selectEl.options.length > 1) selectEl.remove(1);
-        values.forEach((item) => {
-            const opt = document.createElement('option');
-            opt.value = String(item[valueKey]);
-            opt.textContent = String(item[labelKey]);
-            opt._raw = item;
-            selectEl.appendChild(opt);
-        });
-        if (current) selectEl.value = current;
-    }
-
-    async function loadBaseFilters() {
-        setStatus('Завантаження фільтрів...');
-        const data = await SA.fetchApi('GetStudentScheduleFiltersData', {}, { useCache: false });
-        if (!data) {
-            setStatus('Не вдалося завантажити фільтри', true);
-            return;
-        }
-        state.faculties = data.faculties || [];
-        state.eduForms = data.educForms || [];
-        state.courses = data.courses || [];
-        fillSelect(els.facultySelect, state.faculties, 'Value', 'Key');
-        fillSelect(els.eduFormSelect, state.eduForms, 'Value', 'Key');
-        fillSelect(els.courseSelect, state.courses, 'Value', 'Key');
-        setStatus('Оберіть параметри і завантажте Smart Day');
-    }
-
-    async function loadGroups() {
-        if (!els.facultySelect.value) return;
-        setStatus('Завантаження груп...');
-        const data = await SA.fetchApi('GetStudyGroups', {
-            aFacultyID: els.facultySelect.value,
-            aEducationForm: els.eduFormSelect.value || '0',
-            aCourse: els.courseSelect.value || '0'
-        }, { useCache: false });
-        state.entities = (data && data.studyGroups) ? data.studyGroups : [];
-        fillSelect(els.entitySelect, state.entities, 'Value', 'Key');
-        setStatus(`Знайдено груп: ${state.entities.length}`);
-    }
-
-    async function loadChairsAndEmployees() {
-        if (!els.facultySelect.value) return;
-        setStatus('Завантаження кафедр...');
-        const c = await SA.fetchApi('GetEmployeeChairs', { aFacultyID: els.facultySelect.value }, { useCache: false });
-        state.chairs = (c && c.chairs) ? c.chairs : [];
-        fillSelect(els.chairSelect, state.chairs, 'Value', 'Key');
-        setStatus(`Знайдено кафедр: ${state.chairs.length}`);
-    }
-
-    async function loadEmployees() {
-        if (!els.facultySelect.value || !els.chairSelect.value) return;
-        setStatus('Завантаження викладачів...');
-        const data = await SA.fetchApi('GetEmployees', {
-            aFacultyID: els.facultySelect.value,
-            aChairID: els.chairSelect.value
-        }, { useCache: false });
-        state.entities = Array.isArray(data) ? data : [];
-        fillSelect(els.entitySelect, state.entities, 'Value', 'Key');
-        setStatus(`Знайдено викладачів: ${state.entities.length}`);
-    }
-
-    async function loadSmartDay() {
-        const entityId = els.entitySelect.value;
-        if (!entityId) {
-            setStatus('Оберіть групу або викладача', true);
-            return;
-        }
-        const entityName = els.entitySelect.selectedOptions[0]?.textContent || entityId;
-        state.selectedEntity = { id: entityId, name: entityName, type: state.mode === 'group' ? 'Група' : 'Викладач' };
-
-        const start = toDmyFromIso(els.dateStart.value);
-        const end = toDmyFromIso(els.dateEnd.value);
-        if (!start || !end) {
-            setStatus('Оберіть коректний діапазон дат', true);
-            return;
-        }
-
-        const payload = {
-            aStartDate: start,
-            aEndDate: end,
-            aStudyTypeID: ''
-        };
-        if (state.mode === 'group') payload.aStudyGroupID = entityId;
-        else payload.aEmployeeID = entityId;
-
-        state.currentAction = state.mode === 'group' ? 'GetScheduleDataX' : 'GetScheduleDataEmp';
-        state.currentPayload = payload;
-        state.liveBoardEvents = [];
-        state.prevStableMap = new Map();
-        renderBoard();
-
-        setStatus('Завантаження розкладу...');
-        await fetchScheduleAndRender(false);
-        setStatus(`Smart Day готовий: ${state.normalized.length} занять`);
     }
 
     async function pollLiveBoard() {
@@ -495,15 +573,16 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (state.boardMode) {
             els.root.classList.add('max-w-none');
             els.root.classList.add('px-2');
-            try {
-                if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-            } catch (e) { }
-        } else {
-            els.root.classList.remove('max-w-none');
-            els.root.classList.remove('px-2');
-            try {
-                if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
-            } catch (e) { }
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+            return;
+        }
+
+        els.root.classList.remove('max-w-none');
+        els.root.classList.remove('px-2');
+        if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
         }
     }
 
@@ -527,8 +606,15 @@ window.ScheduleApp = window.ScheduleApp || {};
             if (state.mode === 'group') await loadGroups();
             else await loadChairsAndEmployees();
         });
-        els.eduFormSelect.addEventListener('change', loadGroups);
-        els.courseSelect.addEventListener('change', loadGroups);
+
+        els.eduFormSelect.addEventListener('change', async () => {
+            if (state.mode === 'group') await loadGroups();
+        });
+
+        els.courseSelect.addEventListener('change', async () => {
+            if (state.mode === 'group') await loadGroups();
+        });
+
         els.chairSelect.addEventListener('change', loadEmployees);
         els.loadBtn.addEventListener('click', loadSmartDay);
         els.runSimBtn.addEventListener('click', runWhatIf);
@@ -541,8 +627,12 @@ window.ScheduleApp = window.ScheduleApp || {};
         setModeUI();
         await loadBaseFilters();
 
+        if (state.mode === 'group') await loadGroups();
+        else await loadChairsAndEmployees();
+
         if (state.pollingTimer) clearInterval(state.pollingTimer);
         state.pollingTimer = setInterval(pollLiveBoard, 30000);
+
         if (state.clockTimer) clearInterval(state.clockTimer);
         state.clockTimer = setInterval(updateSmartDayWidgets, 1000);
     }
