@@ -215,20 +215,20 @@ window.ScheduleApp = window.ScheduleApp || {};
             grid[dow][pair] += 1;
         });
 
-        els.heatmap.appendChild(createCell(''));
-        for (let p = 1; p <= 7; p++) els.heatmap.appendChild(createCell(`${p} пара`, 'font-semibold'));
+        els.heatmap.appendChild(createCell('', 'heat-head'));
+        for (let p = 1; p <= 7; p++) els.heatmap.appendChild(createCell(`${p} пара`, 'heat-head'));
 
         for (let d = 1; d <= 7; d++) {
-            els.heatmap.appendChild(createCell(dayNames[d - 1], 'font-semibold'));
+            els.heatmap.appendChild(createCell(dayNames[d - 1], 'heat-head'));
             for (let p = 1; p <= 7; p++) {
                 const occupied = grid[d][p];
                 const totalDays = dayOccurrences[d] || 1;
                 const ratio = occupied / totalDays;
-                let cls = 'bg-gray-100 dark:bg-gray-700';
-                if (ratio >= 0.67) cls = 'bg-red-200 dark:bg-red-900/40';
-                else if (ratio >= 0.34) cls = 'bg-amber-200 dark:bg-amber-900/40';
-                else if (ratio > 0) cls = 'bg-emerald-200 dark:bg-emerald-900/40';
-                const cell = createCell(`${occupied}/${dayOccurrences[d] || 0}`, `heat-cell rounded text-center py-2 ${cls}`);
+                let cls = 'heat-empty';
+                if (ratio >= 0.67) cls = 'heat-high';
+                else if (ratio >= 0.34) cls = 'heat-mid';
+                else if (ratio > 0) cls = 'heat-low';
+                const cell = createCell(`${occupied}/${dayOccurrences[d] || 0}`, `heat-cell ${cls}`);
                 cell.title = `Зайнято ${occupied} з ${dayOccurrences[d] || 0} днів (${Math.round(ratio * 100)}%)`;
                 els.heatmap.appendChild(cell);
             }

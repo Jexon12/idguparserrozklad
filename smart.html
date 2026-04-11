@@ -23,7 +23,28 @@
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260411-1" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="css/styles.css?v=20260410-1">
     <style>
-        .heat-cell { min-height: 34px; }
+        #heatmap {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            gap: 4px;
+            font-size: 12px;
+        }
+        .heat-cell {
+            min-height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+        }
+        .heat-head { font-weight: 700; }
+        .heat-empty { background: #f3f4f6; color: #4b5563; }
+        .heat-low { background: #d1fae5; color: #065f46; }
+        .heat-mid { background: #fde68a; color: #92400e; }
+        .heat-high { background: #fecaca; color: #991b1b; }
+        .dark .heat-empty { background: #374151; color: #d1d5db; }
+        .dark .heat-low { background: #064e3b; color: #a7f3d0; }
+        .dark .heat-mid { background: #78350f; color: #fcd34d; }
+        .dark .heat-high { background: #7f1d1d; color: #fecaca; }
         .board-card { border-left: 4px solid #f59e0b; }
     </style>
 </head>
@@ -101,7 +122,7 @@
                 <h2 class="font-bold">Теплокарта навантаження (день × пара)</h2>
                 <div class="text-xs text-gray-500">0 = вільно, 1+ = зайнято</div>
             </div>
-            <div id="heatmap" class="grid grid-cols-8 gap-1 text-xs"></div>
+            <div id="heatmap"></div>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
@@ -131,6 +152,6 @@
 
     <script src="js/utils.js?v=20260410-1"></script>
     <script src="js/api.js?v=20260410-1"></script>
-    <script src="js/smart-day.js?v=20260411-1"></script>
+    <script src="js/smart-day.js?v=20260411-2"></script>
 </body>
 </html>
