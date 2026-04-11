@@ -30,6 +30,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         prevWeekBtn: document.getElementById('prevWeekBtn'),
         nextWeekBtn: document.getElementById('nextWeekBtn'),
         buildBtn: document.getElementById('buildBtn'),
+        buildBtnPrimary: document.getElementById('buildBtnPrimary'),
         status: document.getElementById('status'),
         tableHead: document.getElementById('tableHead'),
         tableBody: document.getElementById('tableBody'),
@@ -451,6 +452,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.prevWeekBtn.addEventListener('click', () => shiftWeek(-1));
         els.nextWeekBtn.addEventListener('click', () => shiftWeek(1));
         els.buildBtn.addEventListener('click', buildWeekSchedule);
+        if (els.buildBtnPrimary) els.buildBtnPrimary.addEventListener('click', buildWeekSchedule);
     }
 
     async function init() {
