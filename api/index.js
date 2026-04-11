@@ -797,17 +797,17 @@ const apiHandler = async (req, res) => {
             });
 
             if (sem1Lessons.length > 0) {
-                const semSheet = workbook.addWorksheet('Р—РІРµРґРµРЅС– РґР°РЅС– (1 СЃРµРј)');
-                generateSummarySheet(semSheet, sem1Lessons, '1 СЃРµРјРµСЃС‚СЂ');
+                const semSheet = workbook.addWorksheet('Зведені дані (1 сем)');
+                generateSummarySheet(semSheet, sem1Lessons, '1 семестр');
             }
             if (sem2Lessons.length > 0) {
-                const semSheet = workbook.addWorksheet('Р—РІРµРґРµРЅС– РґР°РЅС– (2 СЃРµРј)');
-                generateSummarySheet(semSheet, sem2Lessons, '2 СЃРµРјРµСЃС‚СЂ');
+                const semSheet = workbook.addWorksheet('Зведені дані (2 сем)');
+                generateSummarySheet(semSheet, sem2Lessons, '2 семестр');
             }
 
             // --- Send Response ---
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-            const safeName = encodeURIComponent(`Р—РІС–С‚_${teacherName}_${monthStartStr}_${monthEndStr}.xlsx`);
+            const safeName = encodeURIComponent(`Звіт_${teacherName}_${monthStartStr}_${monthEndStr}.xlsx`);
             res.setHeader('Content-Disposition', `attachment; filename="Report.xlsx"; filename*=UTF-8''${safeName}`);
 
             // #11: ExcelJS closes the stream internally вЂ” no res.end() needed
@@ -822,10 +822,10 @@ const apiHandler = async (req, res) => {
     // Helper: Determine Row Color based on Study Type
     function getRowColor(studyType) {
         const type = (studyType || '').toLowerCase();
-        if (type.includes('Р»РµРєС†')) return 'FFFFE0B2'; // Orange-ish
-        if (type.includes('Р»Р°Р±')) return 'FFC8E6C9';  // Green-ish
-        if (type.includes('РїСЂР°РєС‚')) return 'FFBBDEFB'; // Blue-ish
-        if (type.includes('РµРєР·Р°Рј') || type.includes('РєРѕРЅСЃСѓР»СЊС‚')) return 'FFF8BBD0'; // Pink-ish
+        if (type.includes('лекц')) return 'FFFFE0B2'; // Orange-ish
+        if (type.includes('лаб')) return 'FFC8E6C9';  // Green-ish
+        if (type.includes('практ')) return 'FFBBDEFB'; // Blue-ish
+        if (type.includes('екзам') || type.includes('консульт')) return 'FFF8BBD0'; // Pink-ish
         return 'FFFFFFFF'; // White
     }
 
@@ -870,33 +870,33 @@ const apiHandler = async (req, res) => {
         };
 
         // Header Rows 1-7
-        mergeAndSet('A1:S2', 'РљРђР РўРљРђ', { name: 'Arial', size: 12, bold: true }, centerStyle, false);
+        mergeAndSet('A1:S2', 'КАРТКА', { name: 'Arial', size: 12, bold: true }, centerStyle, false);
 
-        mergeAndSet('A3:H3', 'РѕР±Р»С–РєСѓ СЂРѕР±РѕС‚Рё РІРёРєР»Р°РґР°С‡Р° РєР°С„РµРґСЂРё', fontNormal, { vertical: 'middle', horizontal: 'right' }, false);
+        mergeAndSet('A3:H3', 'обліку роботи викладача кафедри', fontNormal, { vertical: 'middle', horizontal: 'right' }, false);
         mergeAndSet('I3:S3', departmentName, { ...fontNormal, italic: true }, { vertical: 'middle', horizontal: 'center', wrapText: true }, false);
         sheet.getCell('I3').border = { bottom: { style: 'thin' } };
 
-        mergeAndSet('A4:D4', 'С„Р°РєСѓР»СЊС‚РµС‚Сѓ', fontNormal, { vertical: 'middle', horizontal: 'right' }, false);
+        mergeAndSet('A4:D4', 'факультету', fontNormal, { vertical: 'middle', horizontal: 'right' }, false);
         mergeAndSet('E4:M4', facultyName, { ...fontNormal, italic: true }, { vertical: 'middle', horizontal: 'center', wrapText: true }, false);
         sheet.getCell('E4').border = { bottom: { style: 'thin' } };
 
-        mergeAndSet('N4:O4', 'Р†Р”Р“РЈ ', fontBold, centerStyle, false);
+        mergeAndSet('N4:O4', 'ІДГУ', fontBold, centerStyle, false);
 
-        const monthNames = ["СЃС–С‡РµРЅСЊ", "Р»СЋС‚РёР№", "Р±РµСЂРµР·РµРЅСЊ", "РєРІС–С‚РµРЅСЊ", "С‚СЂР°РІРµРЅСЊ", "С‡РµСЂРІРµРЅСЊ", "Р»РёРїРµРЅСЊ", "СЃРµСЂРїРµРЅСЊ", "РІРµСЂРµСЃРµРЅСЊ", "Р¶РѕРІС‚РµРЅСЊ", "Р»РёСЃС‚РѕРїР°Рґ", "РіСЂСѓРґРµРЅСЊ"];
-        const monthText = `${monthNames[month]} ${year}СЂ.`;
+        const monthNames = ["січень", "лютий", "березень", "квітень", "травень", "червень", "липень", "серпень", "вересень", "жовтень", "листопад", "грудень"];
+        const monthText = `${monthNames[month]} ${year}р.`;
         mergeAndSet('P4:S4', monthText, fontNormal, centerStyle, false);
         sheet.getCell('P4').border = { bottom: { style: 'thin' } };
 
         mergeAndSet('A5:S5', teacherName, { ...fontBold, size: 12, underline: true }, centerStyle, false);
 
-        mergeAndSet('A7:C7', 'Р”Р°С‚Р°', fontBold, centerStyle, true);
-        mergeAndSet('D7:N7', 'РќР°Р·РІР° РґРёСЃС†РёРїР»С–РЅРё Р°Р±Рѕ С–РЅС€РѕРіРѕ РѕСЃРІС–С‚РЅСЊРѕРіРѕ РєРѕРјРїРѕРЅРµРЅС‚Сѓ', fontBold, centerStyle, true);
-        mergeAndSet('O7:Q7', 'Р’РёРґРё СЂРѕР±С–С‚', fontBold, centerStyle, true);
-        mergeAndSet('R7:S7', 'РљС–Р»СЊРєС–СЃС‚СЊ РіРѕРґРёРЅ', fontBold, centerStyle, true);
+        mergeAndSet('A7:C7', 'Дата', fontBold, centerStyle, true);
+        mergeAndSet('D7:N7', 'Назва дисципліни або іншого освітнього компоненту', fontBold, centerStyle, true);
+        mergeAndSet('O7:Q7', 'Види робіт', fontBold, centerStyle, true);
+        mergeAndSet('R7:S7', 'Кількість годин', fontBold, centerStyle, true);
 
         // T Header
         const tCell = sheet.getCell('T7');
-        tCell.value = 'Р“СЂСѓРїРё';
+        tCell.value = 'Групи';
         tCell.font = fontBold;
         tCell.alignment = centerStyle;
         tCell.border = borderStyle;
@@ -905,13 +905,13 @@ const apiHandler = async (req, res) => {
         let currentRow = 8;
         const normalizeType = (t) => {
             const s = (t || '').toLowerCase();
-            if (s.includes('Р»РµРєС†')) return 'Р›РµРєС†С–С—';
-            if (s.includes('Р»Р°Р±')) return 'Р›Р°Р±РѕСЂР°С‚РѕСЂРЅС–';
-            if (s.includes('РїСЂР°РєС‚')) return 'РџСЂР°РєС‚РёС‡РЅС–';
-            if (s.includes('РєРѕРЅСЃСѓР»СЊС‚') && s.includes('РµРєР·Р°Рј')) return 'РµРєР·Р°РјРµРЅ.РєРѕРЅСЃСѓР»СЊС‚Р°С†С–СЏ';
-            if (s.includes('РєРѕРЅСЃСѓР»СЊС‚')) return 'РџСЂРѕРІРµРґРµРЅРЅСЏ РєРѕРЅСЃСѓР»СЊС‚Р°С†С–Р№ Р· РґРёСЃС†РёРїР»С–РЅ РїСЂРѕС‚СЏРіРѕРј СЃРµРјРµСЃС‚СЂСѓ';
-            if (s.includes('РµРєР·Р°Рј')) return 'РµРєР·Р°РјРµРЅ';
-            if (s.includes('Р·Р°Р»С–Рє')) return 'Р·Р°Р»С–Рє';
+            if (s.includes('лекц')) return 'Лекції';
+            if (s.includes('лаб')) return 'Лабораторні';
+            if (s.includes('практ')) return 'Практичні';
+            if (s.includes('консульт') && s.includes('екзам')) return 'екзамен.консультація';
+            if (s.includes('консульт')) return 'Проведення консультацій з дисциплін протягом семестру';
+            if (s.includes('екзам')) return 'екзамен';
+            if (s.includes('залік')) return 'залік';
             return s;
         };
 
@@ -970,16 +970,16 @@ const apiHandler = async (req, res) => {
         const footerStartRow = Math.max(23, currentRow);
         const titleRow = footerStartRow;
 
-        mergeAndSet(`A${titleRow}:S${titleRow}`, 'Р’РёРєРѕРЅР°РЅРЅСЏ РЅР°РІС‡Р°Р»СЊРЅРѕРіРѕ РЅР°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ РІ РіРѕРґРёРЅР°С… РїРѕ РІРёРґР°С… СЂРѕР±С–С‚', fontNormal, centerStyle, true);
+        mergeAndSet(`A${titleRow}:S${titleRow}`, 'Виконання навчального навантаження в годинах по видах робіт', fontNormal, centerStyle, true);
 
         const hRow = titleRow + 1;
         const statHeaders = [
-            'Р§РёС‚Р°РЅРЅСЏ Р»РµРєС†С–Р№', 'РџСЂРІРµРґРµРЅРЅСЏ РїСЂР°РєС‚.Р·Р°РЅСЏС‚СЊ', 'РџСЂРѕРІРµРґРµРЅРЅСЏ Р»Р°Р±РѕСЂ.СЂРѕР±С–С‚', 'РџСЂРІРµРґРµРЅРЅСЏ СЃРµРјС–РЅР°СЂ.Р·Р°РЅСЏС‚СЊ',
-            'РџСЂРѕРІРµРґРµРЅРЅСЏ РєРѕРЅСЃСѓР»СЊС‚Р°С†С–Р№ Р· РґРёСЃС†РёРїР»С–РЅ РїСЂРѕС‚СЏРіРѕРј СЃРµРјРµСЃС‚СЂСѓ', 'РљРµСЂС–РІРЅРёС†С‚РІРѕ РїСЂР°РєС‚РёРєРѕСЋ', 'РљРѕРЅСЃСѓР»СЊС‚Р°С†С–СЏ РґРѕ РµРєР·Р°РјРµРЅС–РІ(Р°СѓРґРёС‚РѕСЂРЅС–)',
-            'РџСЂРѕРІРµРґРµРЅРЅСЏ РµРєР·Р°РјРµРЅР°С†С–Р№РЅРёС… РєРѕРЅСЃСѓР»СЊС‚Р°С†С–Р№', 'РџРµСЂРµРІС–СЂРєР° РєРѕРЅС‚СЂРѕР»СЊРЅРёС…(РјРѕРґСѓР»СЊРЅРёС…) СЂРѕР±С–С‚', 'РџСЂРѕРјС–Р¶РЅРёР№ (РјРѕРґСѓР»СЊРЅРёР№) РєРѕРЅС‚СЂРѕР»СЊ',
-            'СЂРµС„РµСЂР°С‚С–РІ, Р°РЅР°Р»С–С‚РёС‡РЅРёС… РѕРіР»СЏРґС–РІ, РїРµСЂРµРєР»Р°РґС–РІ', 'РіСЂР°С„С–С‡РЅРёС… С‚Р° СЂРѕР·СЂР°С…СѓРЅРєРѕРІРѕ-РіСЂР°С„С–С‡РЅРёС… СЂРѕР±С–С‚', 'РєСѓСЂСЃРѕРІРёС…СЂРѕР±С–С‚(РїСЂРѕРµРєС‚С–РІ)',
-            'РџСЂРѕРІРµРґРµРЅРЅСЏ Р·Р°Р»С–РєСѓ', 'РџСЂРѕРІРµРґРµРЅРЅСЏ СЃРµРјРµСЃС‚СЂРѕРІРёС… РµРєР·Р°РјРµРЅС–РІ', 'РџС–РґСЃСѓРјРєРѕРІР° Р°С‚РµСЃС‚Р°С†С–СЏ(РµРєР·Р°РјРµРЅ)', 'Р†РЅРґРёРІС–РґСѓР°Р»СЊРЅС– Р·Р°РЅСЏС‚С‚СЏ',
-            'РљРµСЂС–РЅРёС†С‚РІРѕ Р°СЃРїС–СЂР°РЅС‚Р°РјРё', 'РЈСЃСЊРѕРіРѕ'
+            'Читання лекцій', 'Проведення практичних занять', 'Проведення лабораторних робіт', 'Проведення семінарських занять',
+            'Проведення консультацій з дисциплін протягом семестру', 'Керівництво практикою', 'Консультація до екзаменів (аудиторні)',
+            'Проведення екзаменаційних консультацій', 'Перевірка контрольних (модульних) робіт', 'Проміжний (модульний) контроль',
+            'Реферати, аналітичні огляди, переклади', 'Графічні та розрахунково-графічні роботи', 'Курсові роботи (проєкти)',
+            'Проведення заліку', 'Проведення семестрових екзаменів', 'Підсумкова атестація (екзамен)', 'Індивідуальні заняття',
+            'Керівництво аспірантами', 'Усього'
         ];
         sheet.getRow(hRow).height = 100;
         statHeaders.forEach((txt, idx) => {
@@ -993,9 +993,9 @@ const apiHandler = async (req, res) => {
 
         const fRow = hRow + 1;
         const formulaCriteria = {
-            0: 'Р›РµРєС†С–С—', 1: 'РџСЂР°РєС‚РёС‡РЅС–', 2: 'Р›Р°Р±РѕСЂР°С‚РѕСЂРЅС–', 3: 'СЃРµРј.СЂР°Р±РѕС‚Р°',
-            5: 'РїСЂР°РєС‚РёРєР°', 7: 'РµРєР·Р°РјРµРЅ.РєРѕРЅСЃСѓР»СЊС‚Р°С†С–СЏ', 9: 'РњРљР ',
-            12: 'РєСѓСЂСЃРѕРІС– СЂРѕР±РѕС‚Рё', 13: 'Р·Р°Р»С–Рє', 14: 'РµРєР·Р°РјРµРЅ', 16: 'Р†РЅРґ.Р·Р°РЅСЏС‚С‚СЏ'
+            0: 'Лекції', 1: 'Практичні', 2: 'Лабораторні', 3: 'сем.работа',
+            5: 'практика', 7: 'екзамен.консультація', 9: 'МКР',
+            12: 'курсові роботи', 13: 'залік', 14: 'екзамен', 16: 'Інд.заняття'
         };
 
         for (let i = 0; i < 19; i++) {
@@ -1012,23 +1012,23 @@ const apiHandler = async (req, res) => {
         }
 
         const signRow = fRow + 2;
-        sheet.getCell(`A${signRow}`).value = '"Р—РђРўР’Р•Р Р”Р–РЈР®"';
+        sheet.getCell(`A${signRow}`).value = '"ЗАТВЕРДЖУЮ"';
         const signRow2 = signRow + 1;
-        sheet.getCell(`A${signRow2}`).value = 'Р—Р°РІС–РґСѓРІР°С‡ РєР°С„РµРґСЂРё';
-        sheet.getCell(`K${signRow2}`).value = 'РџС–РґРїРёСЃ РІРёРєР»Р°РґР°С‡Р°';
+        sheet.getCell(`A${signRow2}`).value = 'Завідувач кафедри';
+        sheet.getCell(`K${signRow2}`).value = 'Підпис викладача';
 
         // --- Detailed Subject Statistics ---
         const detailedStatsStart = signRow2 + 4;
-        sheet.getCell(`A${detailedStatsStart}`).value = "РЎС‚Р°С‚РёСЃС‚РёРєР° РїРѕ РїСЂРµРґРјРµС‚Р°С… С‚Р° РіСЂСѓРїР°С…:";
+        sheet.getCell(`A${detailedStatsStart}`).value = "Статистика по предметах та групах:";
         sheet.getCell(`A${detailedStatsStart}`).font = fontBold;
 
         const tableHead = detailedStatsStart + 1;
-        sheet.getCell(`A${tableHead}`).value = "РџСЂРµРґРјРµС‚";
-        sheet.getCell(`D${tableHead}`).value = "Р“СЂСѓРїР°";
-        sheet.getCell(`G${tableHead}`).value = "Р›РµРєС†С–С—";
-        sheet.getCell(`I${tableHead}`).value = "РџСЂР°РєС‚.";
-        sheet.getCell(`K${tableHead}`).value = "Р›Р°Р±.";
-        sheet.getCell(`M${tableHead}`).value = "Р’СЃСЊРѕРіРѕ";
+        sheet.getCell(`A${tableHead}`).value = "Предмет";
+        sheet.getCell(`D${tableHead}`).value = "Група";
+        sheet.getCell(`G${tableHead}`).value = "Лекції";
+        sheet.getCell(`I${tableHead}`).value = "Практ.";
+        sheet.getCell(`K${tableHead}`).value = "Лаб.";
+        sheet.getCell(`M${tableHead}`).value = "Всього";
 
         ['A', 'D', 'G', 'I', 'K', 'M'].forEach(c => {
             sheet.getCell(`${c}${tableHead}`).font = fontBold;
@@ -1063,8 +1063,8 @@ const apiHandler = async (req, res) => {
     function computeSubjectStats(lessons) {
         const map = new Map();
         lessons.forEach(l => {
-            const group = l.contingent || l.group || 'РќРµ РІРєР°Р·Р°РЅРѕ';
-            const subject = l.discipline || 'Р‘РµР· РЅР°Р·РІРё';
+            const group = l.contingent || l.group || 'Не вказано';
+            const subject = l.discipline || 'Без назви';
             const key = `${subject}||${group}`;
             if (!map.has(key)) map.set(key, { subject, group, lectures: 0, practices: 0, labs: 0, other: 0 });
 
@@ -1072,9 +1072,9 @@ const apiHandler = async (req, res) => {
             const type = (l.study_type || '').toLowerCase();
             const hours = l.study_hours ? Number(l.study_hours) : 2;
 
-            if (type.includes('Р»РµРєС†')) entry.lectures += hours;
-            else if (type.includes('РїСЂР°РєС‚')) entry.practices += hours;
-            else if (type.includes('Р»Р°Р±')) entry.labs += hours;
+            if (type.includes('лекц')) entry.lectures += hours;
+            else if (type.includes('практ')) entry.practices += hours;
+            else if (type.includes('лаб')) entry.labs += hours;
             else entry.other += hours;
         });
         return Array.from(map.values()).sort((a, b) => a.subject.localeCompare(b.subject));
@@ -1087,7 +1087,7 @@ const apiHandler = async (req, res) => {
         const tableHead = 3;
         const fontBold = { bold: true };
         sheet.columns = [{ width: 30 }, { width: 20 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }];
-        sheet.getRow(tableHead).values = ['РџСЂРµРґРјРµС‚', 'Р“СЂСѓРїР°', 'Р›РµРєС†С–С—', 'РџСЂР°РєС‚РёС‡РЅС–', 'Р›Р°Р±РѕСЂР°С‚РѕСЂРЅС–', 'Р’СЃСЊРѕРіРѕ'];
+        sheet.getRow(tableHead).values = ['Предмет', 'Група', 'Лекції', 'Практичні', 'Лабораторні', 'Всього'];
         sheet.getRow(tableHead).font = fontBold;
 
         const stats = computeSubjectStats(lessons);
