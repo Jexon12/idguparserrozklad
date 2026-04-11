@@ -84,6 +84,13 @@ window.ScheduleApp = window.ScheduleApp || {};
         return new Date(`${p[2]}-${p[1]}-${p[0]}T00:00:00`);
     }
 
+    function dayNameByDateDmy(dmy) {
+        const d = parseDmy(dmy);
+        if (!d) return dmy || '';
+        const names = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота'];
+        return names[d.getDay()] || dmy || '';
+    }
+
     function getMonday(date) {
         const d = new Date(date);
         const day = d.getDay();
@@ -450,7 +457,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.optimizationSection.classList.toggle('hidden', !isFaculty);
         if (!isFaculty) return;
         const current = Array.isArray(baseLessons) ? baseLessons : state.baselineNormalized;
-        const optimized = Array.isArray(optimizedLessons) ? optimizedLessons : null;
+        const optimized = Array.isArray(optimizedLessons) ? optimizedLessons : optimizeFacultySchedule(current);
         const stats = getWindowsSummary(current).map((x) => {
             const byDay = x.byDay;
             const avgStart = byDay.size
@@ -502,7 +509,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (!els.optMoves) return;
         els.optMoves.innerHTML = '';
         if (!optimized || !optimized.length) {
-            els.optMoves.textContent = 'Натисніть "Новий оптимізований розклад", щоб побачити конкретні переноси.';
+            els.optMoves.textContent = 'Не вдалося згенерувати конкретні кроки.';
             return;
         }
 
@@ -525,7 +532,10 @@ window.ScheduleApp = window.ScheduleApp || {};
             .slice(0, 80)
             .forEach((m) => {
                 const div = document.createElement('div');
-                div.textContent = `${m.group} · ${m.date}: "${m.discipline}" ${m.from}→${m.to} пара`;
+                const dayName = dayNameByDateDmy(m.date);
+                const lesson = (current.find((x) => x.group === m.group && x.date === m.date && x.discipline === m.discipline && x.pair === m.from) || {});
+                const teacher = lesson.teacher ? `, викл. ${lesson.teacher}` : '';
+                div.textContent = `${m.group}: "${m.discipline}"${teacher} — перенести на ${dayName} (${m.date}) з ${m.from}-ї на ${m.to}-у пару`;
                 els.optMoves.appendChild(div);
             });
     }
