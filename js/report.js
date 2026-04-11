@@ -88,13 +88,20 @@ const reportMethods = {
                     monthEnd: reportState.reportForm.monthEnd
                 })
             });
-
+            if (!startRes.ok) {
+                const text = await startRes.text();
+                throw new Error(`HTTP ${startRes.status}: ${text || 'Помилка запуску звіту'}`);
+            }
             const { jobId } = await startRes.json();
             if (!jobId) throw new Error('Не вдалося розпочати генерацію');
 
             const statusUrl = apiBase + '/report/status?jobId=' + jobId;
             const poll = async () => {
                 const r = await fetch(statusUrl);
+                if (!r.ok) {
+                    const t = await r.text();
+                    throw new Error(`HTTP ${r.status}: ${t || 'Помилка отримання статусу'}`);
+                }
                 const s = await r.json();
                 reportState.reportProgress = {
                     current: s.current || 0,
@@ -135,5 +142,6 @@ const reportMethods = {
 window.ReportModule = {
     state: reportState,
     computed: reportComputed,
-    methods: reportMethods
+    methods: reportMethods,
+    __real: true
 };

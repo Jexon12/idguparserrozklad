@@ -1085,8 +1085,17 @@ try {
             };
 
             const ensureReportModule = async () => {
-                if (window.ReportModule && window.ReportModule.methods) return window.ReportModule;
-                await SA.loadScriptOnce('/js/report.js');
+                const hasRealModule = !!(
+                    window.ReportModule &&
+                    window.ReportModule.__real === true &&
+                    window.ReportModule.methods &&
+                    typeof window.ReportModule.methods.openReportModal === 'function' &&
+                    typeof window.ReportModule.methods.loadReportChairs === 'function' &&
+                    typeof window.ReportModule.methods.loadReportEmployees === 'function' &&
+                    typeof window.ReportModule.methods.downloadReport === 'function'
+                );
+                if (hasRealModule) return window.ReportModule;
+                await SA.loadScriptOnce('/js/report.js?v=20260411-1');
                 return window.ReportModule;
             };
 
