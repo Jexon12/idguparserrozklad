@@ -615,7 +615,12 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         const tasks = Array.from(byGroupDay.entries()).map(([key, arr]) => ({
             key,
-            lessons: arr.slice().sort((a, b) => (a.pair - b.pair) || a.discipline.localeCompare(b.discipline, 'uk'))
+            // New schedule is built from scratch: do not prioritize old pair numbers.
+            lessons: arr.slice().sort((a, b) =>
+                a.discipline.localeCompare(b.discipline, 'uk') ||
+                a.teacher.localeCompare(b.teacher, 'uk') ||
+                a.group.localeCompare(b.group, 'uk')
+            )
         }));
         tasks.sort((a, b) => b.lessons.length - a.lessons.length);
 
