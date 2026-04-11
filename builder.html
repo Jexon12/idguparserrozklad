@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Конструктор тижневого розкладу: автоматична збірка пн-пт для групи або викладача">
+    <meta name="description" content="Конструктор тижневого розкладу: автозбірка пн-пт для групи, викладача або всього факультету">
     <title>Конструктор Розкладу · Week Builder</title>
     <script>
         window.__loadTailwindFallback = function () {
@@ -23,13 +23,15 @@
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260411-1" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="css/styles.css?v=20260410-1">
     <style>
-        .slot-cell { min-width: 180px; vertical-align: top; }
+        .slot-cell { min-width: 220px; vertical-align: top; }
         .lesson-chip { border-left: 3px solid #0284c7; }
         .lesson-conflict { border-left-color: #dc2626; }
+        .mode-faculty-only { display: none; }
+        .is-faculty .mode-faculty-only { display: block; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
-    <div class="max-w-7xl mx-auto p-3 md:p-6 space-y-4">
+    <div class="max-w-7xl mx-auto p-3 md:p-6 space-y-4" id="builderRoot">
         <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
             <div class="flex items-center justify-between gap-3 flex-wrap">
                 <div>
@@ -49,6 +51,7 @@
                 <select id="modeSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                     <option value="group">Група</option>
                     <option value="teacher">Викладач</option>
+                    <option value="faculty">Факультет (усі групи)</option>
                 </select>
                 <select id="facultySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                     <option value="">Факультет...</option>
@@ -75,15 +78,20 @@
                 <button id="buildBtn" class="rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold py-2">Зібрати</button>
             </div>
 
+            <div class="mode-faculty-only text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2">
+                Режим факультету може зробити багато API-запитів. Зачекайте завершення прогресу.
+            </div>
+
             <p id="status" class="text-sm text-gray-500">Підготовка...</p>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm mb-3">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2 text-sm mb-3">
                 <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumLessons">0</b> занять</div>
                 <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumDays">0</b> активних днів</div>
                 <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumConflicts">0</b> конфліктних слотів</div>
                 <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumDuplicates">0</b> дублікатів</div>
+                <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumSources">0</b> джерел</div>
             </div>
 
             <div class="overflow-auto">
@@ -97,6 +105,6 @@
 
     <script src="js/utils.js?v=20260410-1"></script>
     <script src="js/api.js?v=20260410-1"></script>
-    <script src="js/builder.js?v=20260411-1"></script>
+    <script src="js/builder.js?v=20260411-2"></script>
 </body>
 </html>

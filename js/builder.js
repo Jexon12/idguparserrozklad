@@ -13,10 +13,12 @@ window.ScheduleApp = window.ScheduleApp || {};
         chairs: [],
         entities: [],
         weekDays: [],
-        normalized: []
+        normalized: [],
+        lastSourceCount: 0
     };
 
     const els = {
+        root: document.getElementById('builderRoot'),
         modeSelect: document.getElementById('modeSelect'),
         facultySelect: document.getElementById('facultySelect'),
         eduFormSelect: document.getElementById('eduFormSelect'),
@@ -34,7 +36,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         sumLessons: document.getElementById('sumLessons'),
         sumDays: document.getElementById('sumDays'),
         sumConflicts: document.getElementById('sumConflicts'),
-        sumDuplicates: document.getElementById('sumDuplicates')
+        sumDuplicates: document.getElementById('sumDuplicates'),
+        sumSources: document.getElementById('sumSources')
     };
 
     function setStatus(msg, isError) {
@@ -107,11 +110,14 @@ window.ScheduleApp = window.ScheduleApp || {};
         return txt.replace(/\s+/g, ' ').trim();
     }
 
-    function normalizeLesson(raw) {
+    function normalizeLesson(raw, sourceName) {
         const dt = parseDmy(raw.full_date || '');
         if (!dt) return null;
         const dow = dt.getDay();
         if (dow === 0 || dow === 6) return null;
+
+        const groupName = String(raw.contingent || raw.study_group || raw.groupName || sourceName || '').trim();
+
         return {
             date: raw.full_date || '',
             dow,
@@ -119,7 +125,8 @@ window.ScheduleApp = window.ScheduleApp || {};
             discipline: String(raw.discipline || '').trim(),
             type: String(raw.study_type || '').trim(),
             teacher: stripTeacher(raw),
-            group: String(raw.contingent || raw.study_group || raw.groupName || '').trim(),
+            group: groupName,
+            sourceName: sourceName || groupName,
             room: String(raw.cabinet || '').trim(),
             start: String(raw.study_time_begin || '').slice(0, 5),
             end: String(raw.study_time_end || '').slice(0, 5)
@@ -146,10 +153,19 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     function setModeUI() {
         const isGroup = state.mode === 'group';
+        const isTeacher = state.mode === 'teacher';
+        const isFaculty = state.mode === 'faculty';
+
+        els.root.classList.toggle('is-faculty', isFaculty);
+
         els.eduFormSelect.classList.toggle('hidden', !isGroup);
         els.courseSelect.classList.toggle('hidden', !isGroup);
-        els.chairSelect.classList.toggle('hidden', isGroup);
-        els.entitySelect.innerHTML = `<option value="">${isGroup ? 'Оберіть групу...' : 'Оберіть викладача...'}</option>`;
+        els.chairSelect.classList.toggle('hidden', !isTeacher);
+        els.entitySelect.classList.toggle('hidden', isFaculty);
+
+        if (isGroup) els.entitySelect.innerHTML = '<option value="">Оберіть групу...</option>';
+        else if (isTeacher) els.entitySelect.innerHTML = '<option value="">Оберіть викладача...</option>';
+        else els.entitySelect.innerHTML = '<option value="">У режимі факультету вибір не потрібен</option>';
     }
 
     async function loadBaseFilters() {
@@ -252,10 +268,17 @@ window.ScheduleApp = window.ScheduleApp || {};
                 const cellKey = `${day.dow}-${pair}`;
                 const items = map.get(cellKey) || [];
                 if (items.length > 1) conflictSlots += 1;
+
                 const chipHtml = items.map((it) => {
-                    const subtitle = state.mode === 'group'
-                        ? (it.teacher || 'Викладач не вказаний')
-                        : (it.group || 'Група не вказана');
+                    let subtitle = '';
+                    if (state.mode === 'group') {
+                        subtitle = it.teacher || 'Викладач не вказаний';
+                    } else if (state.mode === 'teacher') {
+                        subtitle = it.group || it.sourceName || 'Група не вказана';
+                    } else {
+                        subtitle = `${it.group || it.sourceName || 'Група ?'} · ${it.teacher || 'Викладач ?'}`;
+                    }
+
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
                     return `
                         <div class="lesson-chip ${items.length > 1 ? 'lesson-conflict' : ''} bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
@@ -273,22 +296,85 @@ window.ScheduleApp = window.ScheduleApp || {};
             els.tableBody.appendChild(tr);
         });
 
-        const activeDays = state.weekDays.filter((day) => {
-            return PAIRS.some((pair) => {
-                const key = `${day.dow}-${pair}`;
-                return (map.get(key) || []).length > 0;
-            });
-        }).length;
+        const activeDays = state.weekDays.filter((day) => PAIRS.some((pair) => (map.get(`${day.dow}-${pair}`) || []).length > 0)).length;
 
         els.sumLessons.textContent = String(lessons.length);
         els.sumDays.textContent = String(activeDays);
         els.sumConflicts.textContent = String(conflictSlots);
         els.sumDuplicates.textContent = String(duplicates);
+        els.sumSources.textContent = String(state.lastSourceCount || 0);
+    }
+
+    function chunk(items, size) {
+        const out = [];
+        for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+        return out;
+    }
+
+    async function fetchAllFacultyGroups(facultyId) {
+        const eduKeys = (state.eduForms || []).map((x) => String(x.Key || '')).filter(Boolean);
+        const courseKeys = (state.courses || []).map((x) => String(x.Key || '')).filter(Boolean);
+        const pairs = [];
+        eduKeys.forEach((ef) => courseKeys.forEach((c) => pairs.push({ ef, c })));
+
+        const all = [];
+        for (const batch of chunk(pairs, 8)) {
+            const responses = await Promise.all(batch.map(({ ef, c }) => SA.fetchApi('GetStudyGroups', {
+                aFacultyID: facultyId,
+                aEducationForm: ef,
+                aCourse: c
+            }, { useCache: false })));
+
+            responses.forEach((data) => {
+                const groups = (data && data.studyGroups) ? data.studyGroups : [];
+                all.push(...groups);
+            });
+        }
+
+        const seen = new Set();
+        const unique = [];
+        all.forEach((g) => {
+            const key = String(g.Key || '');
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            unique.push(g);
+        });
+        return unique;
+    }
+
+    async function fetchFacultySchedule(groups, startDmy, endDmy) {
+        const allRows = [];
+        let done = 0;
+
+        for (const batch of chunk(groups, 6)) {
+            const responses = await Promise.all(batch.map((g) => SA.fetchApi('GetScheduleDataX', {
+                aStudyGroupID: String(g.Key || ''),
+                aStartDate: startDmy,
+                aEndDate: endDmy,
+                aStudyTypeID: ''
+            }, { useCache: false, silent: true })));
+
+            responses.forEach((rows, idx) => {
+                const g = batch[idx];
+                const name = String(g.Value || g.Key || '');
+                if (Array.isArray(rows)) {
+                    rows.forEach((r) => allRows.push(normalizeLesson(r, name)));
+                }
+                done += 1;
+            });
+
+            setStatus(`Факультет: завантажено ${done}/${groups.length} груп...`);
+        }
+
+        return allRows.filter(Boolean);
     }
 
     async function buildWeekSchedule() {
-        const entityId = els.entitySelect.value;
-        if (!entityId) {
+        if (!els.facultySelect.value) {
+            setStatus('Оберіть факультет', true);
+            return;
+        }
+        if (state.mode !== 'faculty' && !els.entitySelect.value) {
             setStatus('Оберіть групу або викладача', true);
             return;
         }
@@ -300,6 +386,27 @@ window.ScheduleApp = window.ScheduleApp || {};
         buildWeekDays();
         const startDmy = toDmyIso(els.weekStart.value);
         const endDmy = toDmyIso(els.weekEnd.value);
+        const weekDmySet = new Set(state.weekDays.map((d) => d.dmy));
+
+        if (state.mode === 'faculty') {
+            setStatus('Збір всіх груп факультету...');
+            const groups = await fetchAllFacultyGroups(els.facultySelect.value);
+            state.lastSourceCount = groups.length;
+            if (!groups.length) {
+                state.normalized = [];
+                renderTable(state.normalized);
+                setStatus('Для цього факультету не знайдено груп', true);
+                return;
+            }
+
+            const rows = await fetchFacultySchedule(groups, startDmy, endDmy);
+            state.normalized = rows.filter((l) => l && weekDmySet.has(l.date));
+            renderTable(state.normalized);
+            setStatus(`Готово: факультет, груп ${groups.length}, занять ${state.normalized.length}`);
+            return;
+        }
+
+        const entityId = els.entitySelect.value;
         const payload = { aStartDate: startDmy, aEndDate: endDmy, aStudyTypeID: '' };
         const action = state.mode === 'group' ? 'GetScheduleDataX' : 'GetScheduleDataEmp';
         if (state.mode === 'group') payload.aStudyGroupID = entityId;
@@ -312,11 +419,8 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
 
-        const weekDmySet = new Set(state.weekDays.map((d) => d.dmy));
-        state.normalized = data
-            .map(normalizeLesson)
-            .filter((l) => l && weekDmySet.has(l.date));
-
+        state.lastSourceCount = 1;
+        state.normalized = data.map((x) => normalizeLesson(x, '')).filter((l) => l && weekDmySet.has(l.date));
         renderTable(state.normalized);
         setStatus(`Готово: зібрано ${state.normalized.length} занять за тиждень`);
     }
@@ -326,12 +430,13 @@ window.ScheduleApp = window.ScheduleApp || {};
             state.mode = els.modeSelect.value;
             setModeUI();
             if (state.mode === 'group') await loadGroups();
-            else await loadChairs();
+            else if (state.mode === 'teacher') await loadChairs();
+            else setStatus('Режим факультету: виберіть факультет і натисніть Зібрати');
         });
 
         els.facultySelect.addEventListener('change', async () => {
             if (state.mode === 'group') await loadGroups();
-            else await loadChairs();
+            else if (state.mode === 'teacher') await loadChairs();
         });
 
         els.eduFormSelect.addEventListener('change', async () => {
