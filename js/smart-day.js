@@ -181,17 +181,38 @@ window.ScheduleApp = window.ScheduleApp || {};
     function renderHeatmap(lessons) {
         els.heatmap.innerHTML = '';
         const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+        const occupiedByDatePair = new Set();
+        const dayOccurrences = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
         const grid = {};
         for (let d = 1; d <= 7; d++) {
             grid[d] = {};
             for (let p = 1; p <= 7; p++) grid[d][p] = 0;
         }
 
+        const startRange = els.dateStart && els.dateStart.value ? new Date(`${els.dateStart.value}T00:00:00`) : null;
+        const endRange = els.dateEnd && els.dateEnd.value ? new Date(`${els.dateEnd.value}T00:00:00`) : null;
+        if (startRange && endRange && !Number.isNaN(startRange.getTime()) && !Number.isNaN(endRange.getTime()) && startRange <= endRange) {
+            const cursor = new Date(startRange);
+            while (cursor <= endRange) {
+                const dow = cursor.getDay() === 0 ? 7 : cursor.getDay();
+                dayOccurrences[dow] += 1;
+                cursor.setDate(cursor.getDate() + 1);
+            }
+        }
+
         lessons.forEach((l) => {
             const dt = parseDmy(l.date);
             if (!dt || !l.pair) return;
+            occupiedByDatePair.add(`${l.date}||${l.pair}`);
+        });
+
+        occupiedByDatePair.forEach((key) => {
+            const [date, pairStr] = key.split('||');
+            const dt = parseDmy(date);
+            const pair = parseInt(pairStr, 10);
+            if (!dt || !pair) return;
             const dow = dt.getDay() === 0 ? 7 : dt.getDay();
-            grid[dow][l.pair] += 1;
+            grid[dow][pair] += 1;
         });
 
         els.heatmap.appendChild(createCell(''));
@@ -200,12 +221,16 @@ window.ScheduleApp = window.ScheduleApp || {};
         for (let d = 1; d <= 7; d++) {
             els.heatmap.appendChild(createCell(dayNames[d - 1], 'font-semibold'));
             for (let p = 1; p <= 7; p++) {
-                const v = grid[d][p];
+                const occupied = grid[d][p];
+                const totalDays = dayOccurrences[d] || 1;
+                const ratio = occupied / totalDays;
                 let cls = 'bg-gray-100 dark:bg-gray-700';
-                if (v >= 3) cls = 'bg-red-200 dark:bg-red-900/40';
-                else if (v === 2) cls = 'bg-amber-200 dark:bg-amber-900/40';
-                else if (v === 1) cls = 'bg-emerald-200 dark:bg-emerald-900/40';
-                els.heatmap.appendChild(createCell(String(v), `heat-cell rounded text-center py-2 ${cls}`));
+                if (ratio >= 0.67) cls = 'bg-red-200 dark:bg-red-900/40';
+                else if (ratio >= 0.34) cls = 'bg-amber-200 dark:bg-amber-900/40';
+                else if (ratio > 0) cls = 'bg-emerald-200 dark:bg-emerald-900/40';
+                const cell = createCell(`${occupied}/${dayOccurrences[d] || 0}`, `heat-cell rounded text-center py-2 ${cls}`);
+                cell.title = `Зайнято ${occupied} з ${dayOccurrences[d] || 0} днів (${Math.round(ratio * 100)}%)`;
+                els.heatmap.appendChild(cell);
             }
         }
     }
