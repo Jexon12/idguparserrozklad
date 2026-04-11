@@ -45,7 +45,14 @@ window.ScheduleApp = window.ScheduleApp || {};
         groupsApplyBtn: document.getElementById('groupsApplyBtn'),
         groupsTableMeta: document.getElementById('groupsTableMeta'),
         groupsTableHead: document.getElementById('groupsTableHead'),
-        groupsTableBody: document.getElementById('groupsTableBody')
+        groupsTableBody: document.getElementById('groupsTableBody'),
+        optimizationSection: document.getElementById('optimizationSection'),
+        runOptimizationBtn: document.getElementById('runOptimizationBtn'),
+        optAvgWindows: document.getElementById('optAvgWindows'),
+        optNoFirstPairGroups: document.getElementById('optNoFirstPairGroups'),
+        optMaxWindowsGroup: document.getElementById('optMaxWindowsGroup'),
+        optTableHead: document.getElementById('optTableHead'),
+        optTableBody: document.getElementById('optTableBody')
     };
 
     function setStatus(msg, isError) {
@@ -389,6 +396,99 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.groupsTableMeta.textContent = `День: ${dayObj ? dayObj.label : dayDow}. Груп у таблиці: ${trimmed.length}${groups.length > MAX_GROUPS ? ` (показано перші ${MAX_GROUPS})` : ''}.`;
     }
 
+    function computeGroupWindows(dayLessons) {
+        const pairs = [...new Set(dayLessons.map((x) => x.pair).filter(Boolean))].sort((a, b) => a - b);
+        if (!pairs.length) return { windows: 0, firstPair: 0 };
+        let windows = 0;
+        for (let i = 1; i < pairs.length; i++) {
+            const gap = pairs[i] - pairs[i - 1] - 1;
+            if (gap > 0) windows += gap;
+        }
+        return { windows, firstPair: pairs[0] };
+    }
+
+    function renderOptimizationReport() {
+        if (!els.optimizationSection) return;
+        const isFaculty = state.mode === 'faculty';
+        els.optimizationSection.classList.toggle('hidden', !isFaculty);
+        if (!isFaculty) return;
+
+        const byGroup = new Map();
+        state.normalized.forEach((l) => {
+            const g = String(l.group || l.sourceName || '').trim();
+            if (!g) return;
+            if (!byGroup.has(g)) byGroup.set(g, []);
+            byGroup.get(g).push(l);
+        });
+
+        const stats = [];
+        byGroup.forEach((rows, group) => {
+            const byDay = new Map();
+            rows.forEach((r) => {
+                if (!byDay.has(r.date)) byDay.set(r.date, []);
+                byDay.get(r.date).push(r);
+            });
+
+            let windowsWeek = 0;
+            let noFirstPairDays = 0;
+            let activeDays = 0;
+
+            byDay.forEach((dayRows) => {
+                const info = computeGroupWindows(dayRows);
+                windowsWeek += info.windows;
+                if (info.firstPair > 1) noFirstPairDays += 1;
+                if (info.firstPair > 0) activeDays += 1;
+            });
+
+            const avgStart = byDay.size
+                ? (Array.from(byDay.values()).reduce((s, dayRows) => s + (computeGroupWindows(dayRows).firstPair || 0), 0) / byDay.size)
+                : 0;
+
+            stats.push({
+                group,
+                windowsWeek,
+                noFirstPairDays,
+                activeDays,
+                avgStart: avgStart ? avgStart.toFixed(2) : '0.00',
+                suggestion: windowsWeek >= 3
+                    ? 'Ущільнити пари в межах дня (зменшити вікна)'
+                    : (noFirstPairDays >= 3 ? 'Перевірити можливість старту з 1-2 пари' : 'Розклад близький до оптимального')
+            });
+        });
+
+        stats.sort((a, b) => b.windowsWeek - a.windowsWeek || b.noFirstPairDays - a.noFirstPairDays || a.group.localeCompare(b.group, 'uk'));
+
+        const avgWindows = stats.length
+            ? (stats.reduce((s, x) => s + x.windowsWeek, 0) / stats.length).toFixed(2)
+            : '0.00';
+        const noFirstPairGroups = stats.filter((x) => x.noFirstPairDays > 0).length;
+        const max = stats[0];
+
+        els.optAvgWindows.textContent = String(avgWindows);
+        els.optNoFirstPairGroups.textContent = String(noFirstPairGroups);
+        els.optMaxWindowsGroup.textContent = max ? `${max.group} (${max.windowsWeek})` : '—';
+
+        els.optTableHead.innerHTML = '<tr>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Група</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Вікна/тиждень</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Днів без 1-ї пари</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Сер. старт пари</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Рекомендація</th>' +
+            '</tr>';
+        els.optTableBody.innerHTML = '';
+
+        stats.slice(0, 40).forEach((x) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                `<td class="p-2 border dark:border-gray-700 font-semibold">${x.group}</td>` +
+                `<td class="p-2 border dark:border-gray-700">${x.windowsWeek}</td>` +
+                `<td class="p-2 border dark:border-gray-700">${x.noFirstPairDays}</td>` +
+                `<td class="p-2 border dark:border-gray-700">${x.avgStart}</td>` +
+                `<td class="p-2 border dark:border-gray-700 text-xs">${x.suggestion}</td>`;
+            els.optTableBody.appendChild(tr);
+        });
+    }
+
     function fillGroupsDaySelect() {
         if (!els.groupsDaySelect) return;
         els.groupsDaySelect.innerHTML = '';
@@ -501,6 +601,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             renderTable(state.normalized);
             fillGroupsDaySelect();
             renderGroupsTable();
+            renderOptimizationReport();
             setStatus(`Готово: факультет, груп ${groups.length}, занять ${state.normalized.length}`);
             return;
         }
@@ -522,6 +623,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         state.normalized = data.map((x) => normalizeLesson(x, '')).filter((l) => l && weekDmySet.has(l.date));
         renderTable(state.normalized);
         if (els.groupsTableSection) els.groupsTableSection.classList.add('hidden');
+        if (els.optimizationSection) els.optimizationSection.classList.add('hidden');
         setStatus(`Готово: зібрано ${state.normalized.length} занять за тиждень`);
     }
 
@@ -554,6 +656,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (els.buildBtnPrimary) els.buildBtnPrimary.addEventListener('click', buildWeekSchedule);
         if (els.groupsApplyBtn) els.groupsApplyBtn.addEventListener('click', renderGroupsTable);
         if (els.groupsDaySelect) els.groupsDaySelect.addEventListener('change', renderGroupsTable);
+        if (els.runOptimizationBtn) els.runOptimizationBtn.addEventListener('click', renderOptimizationReport);
     }
 
     async function init() {
