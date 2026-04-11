@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Конструктор тижневого розкладу: автоматична збірка пн-пт для групи або викладача">
+    <title>Конструктор Розкладу · Week Builder</title>
+    <script>
+        window.__loadTailwindFallback = function () {
+            if (window.__tailwindFallbackLoaded) return;
+            window.__tailwindFallbackLoaded = true;
+            var s = document.createElement('script');
+            s.src = 'https://cdn.tailwindcss.com/3.4.1';
+            document.head.appendChild(s);
+        };
+    </script>
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' ||
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260411-1" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/styles.css?v=20260410-1">
+    <style>
+        .slot-cell { min-width: 180px; vertical-align: top; }
+        .lesson-chip { border-left: 3px solid #0284c7; }
+        .lesson-conflict { border-left-color: #dc2626; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-3 md:p-6 space-y-4">
+        <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black text-sky-700 dark:text-sky-300">Week Builder</h1>
+                    <p class="text-xs text-gray-500">Автозбірка розкладу на пн-пт з API</p>
+                </div>
+                <div class="flex gap-2">
+                    <a href="/index.html?desktop=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
+                    <a href="/index2.html?mobile=1" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Mobile</a>
+                    <a href="/smart.html" class="px-3 py-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">Smart</a>
+                </div>
+            </div>
+        </header>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                <select id="modeSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="group">Група</option>
+                    <option value="teacher">Викладач</option>
+                </select>
+                <select id="facultySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Факультет...</option>
+                </select>
+                <select id="eduFormSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Форма...</option>
+                </select>
+                <select id="courseSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="">Курс...</option>
+                </select>
+                <select id="chairSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 hidden">
+                    <option value="">Кафедра...</option>
+                </select>
+                <select id="entitySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2">
+                    <option value="">Оберіть...</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                <input id="weekStart" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="weekEnd" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <button id="prevWeekBtn" class="rounded-xl bg-gray-200 dark:bg-gray-700 font-bold py-2">← Тиждень</button>
+                <button id="nextWeekBtn" class="rounded-xl bg-gray-200 dark:bg-gray-700 font-bold py-2">Тиждень →</button>
+                <button id="buildBtn" class="rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold py-2">Зібрати</button>
+            </div>
+
+            <p id="status" class="text-sm text-gray-500">Підготовка...</p>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm mb-3">
+                <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumLessons">0</b> занять</div>
+                <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumDays">0</b> активних днів</div>
+                <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumConflicts">0</b> конфліктних слотів</div>
+                <div class="rounded-xl bg-gray-50 dark:bg-gray-700 p-3"><b id="sumDuplicates">0</b> дублікатів</div>
+            </div>
+
+            <div class="overflow-auto">
+                <table class="w-full text-sm border-collapse">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="js/utils.js?v=20260410-1"></script>
+    <script src="js/api.js?v=20260410-1"></script>
+    <script src="js/builder.js?v=20260411-1"></script>
+</body>
+</html>
