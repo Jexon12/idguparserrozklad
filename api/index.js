@@ -586,7 +586,7 @@ const apiHandler = async (req, res) => {
         // #2 fix: declare payload with let
         let payload;
         try { payload = (req.body && typeof req.body === 'object') ? req.body : (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : {}); } catch (e) { payload = {}; }
-        const { facultyName = 'Р¤Р°РєСѓР»СЊС‚РµС‚', departmentName = 'РљР°С„РµРґСЂР°', teacherName = '', teacherId = '', monthStart = '', monthEnd = '' } = payload;
+        const { facultyName = 'Факультет', departmentName = 'Кафедра', teacherName = '', teacherId = '', monthStart = '', monthEnd = '' } = payload;
         if (!teacherId || !monthStart || !monthEnd) {
             res.status(400).json({ error: 'Missing teacherId, monthStart or monthEnd' });
             return;
@@ -609,7 +609,7 @@ const apiHandler = async (req, res) => {
             const API_URL = 'http://vnz.osvita.net/WidgetSchedule.asmx/GetScheduleDataEmp';
             for (let i = 0; i < months.length; i++) {
                 const m = months[i];
-                job.current = i; job.progress = `${i + 1}/${months.length} РјС–СЃСЏС†С–РІ`;
+                job.current = i; job.progress = `${i + 1}/${months.length} місяців`;
                 try {
                     const u = `${API_URL}?aVuzID=${VUZ_ID}&aEmployeeID="${teacherId}"&aStartDate="${m.apiStart}"&aEndDate="${m.apiEnd}"&aStudyTypeID=&aGiveStudyTimes=true`;
                     const controller = new AbortController();
@@ -626,7 +626,7 @@ const apiHandler = async (req, res) => {
                     return;
                 }
             }
-            job.status = 'done'; job.done = true; job.progress = `${months.length}/${months.length} РјС–СЃСЏС†С–РІ`;
+            job.status = 'done'; job.done = true; job.progress = `${months.length}/${months.length} місяців`;
         })();
         return;
     }
@@ -676,16 +676,16 @@ const apiHandler = async (req, res) => {
                 });
                 const sem1 = job.allSemLessons.filter(l => { const m = l.monthObj.getMonth(); return (m >= 8 && m <= 11) || m === 0; });
                 const sem2 = job.allSemLessons.filter(l => { const m = l.monthObj.getMonth(); return m >= 1 && m <= 6; });
-                if (sem1.length > 0) { const s = workbook.addWorksheet('Р—РІРµРґРµРЅС– РґР°РЅС– (1 СЃРµРј)'); generateSummarySheet(s, sem1, '1 СЃРµРјРµСЃС‚СЂ'); }
-                if (sem2.length > 0) { const s = workbook.addWorksheet('Р—РІРµРґРµРЅС– РґР°РЅС– (2 СЃРµРј)'); generateSummarySheet(s, sem2, '2 СЃРµРјРµСЃС‚СЂ'); }
+                if (sem1.length > 0) { const s = workbook.addWorksheet('Зведені дані (1 сем)'); generateSummarySheet(s, sem1, '1 семестр'); }
+                if (sem2.length > 0) { const s = workbook.addWorksheet('Зведені дані (2 сем)'); generateSummarySheet(s, sem2, '2 семестр'); }
                 res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Р—РІС–С‚_${teacherName}_${monthStart}_${monthEnd}.xlsx`)}`);
+                res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Звіт_${teacherName}_${monthStart}_${monthEnd}.xlsx`)}`);
                 await workbook.xlsx.write(res);
                 reportJobs.delete(jobId);
                 return;
             }
-            const facultyName = urlObj.searchParams.get('faculty') || 'Р¤Р°РєСѓР»СЊС‚РµС‚';
-            const departmentName = urlObj.searchParams.get('department') || 'РљР°С„РµРґСЂР°';
+            const facultyName = urlObj.searchParams.get('faculty') || 'Факультет';
+            const departmentName = urlObj.searchParams.get('department') || 'Кафедра';
             const teacherName = urlObj.searchParams.get('teacherName') || '';
             const teacherId = urlObj.searchParams.get('teacherId') || '';
             const monthStartStr = urlObj.searchParams.get('monthStart') || '';
