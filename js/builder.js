@@ -295,10 +295,10 @@ window.ScheduleApp = window.ScheduleApp || {};
 
             state.weekDays.forEach((day) => {
                 const cellKey = `${day.dow}-${pair}`;
-                const items = map.get(cellKey) || [];
+                const rawItems = map.get(cellKey) || [];
                 if (state.mode === 'faculty') {
                     const byGroup = new Map();
-                    items.forEach((it) => {
+                    rawItems.forEach((it) => {
                         const g = String(it.group || it.sourceName || '').trim();
                         if (!g) return;
                         if (!byGroup.has(g)) byGroup.set(g, 0);
@@ -307,9 +307,37 @@ window.ScheduleApp = window.ScheduleApp || {};
                     byGroup.forEach((count, g) => {
                         if (count > 1) trueConflictKeys.add(`${day.dow}-${pair}-${g}`);
                     });
-                } else if (items.length > 1) {
+                } else if (rawItems.length > 1) {
                     conflictSlots += 1;
                 }
+
+                const items = (state.mode === 'faculty')
+                    ? (() => {
+                        const merged = new Map();
+                        rawItems.forEach((it) => {
+                            const mergeKey = [
+                                it.date || '',
+                                it.pair || '',
+                                it.discipline || '',
+                                it.teacher || '',
+                                it.type || '',
+                                it.room || '',
+                                it.start || '',
+                                it.end || ''
+                            ].join('||');
+                            if (!merged.has(mergeKey)) {
+                                merged.set(mergeKey, {
+                                    ...it,
+                                    groupsList: []
+                                });
+                            }
+                            const ref = merged.get(mergeKey);
+                            const g = String(it.group || it.sourceName || '').trim();
+                            if (g && !ref.groupsList.includes(g)) ref.groupsList.push(g);
+                        });
+                        return Array.from(merged.values());
+                    })()
+                    : rawItems;
 
                 const chipHtml = items.map((it) => {
                     let subtitle = '';
@@ -318,7 +346,9 @@ window.ScheduleApp = window.ScheduleApp || {};
                     } else if (state.mode === 'teacher') {
                         subtitle = it.group || it.sourceName || 'Група не вказана';
                     } else {
-                        subtitle = `${it.group || it.sourceName || 'Група ?'} · ${it.teacher || 'Викладач ?'}`;
+                        const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Група ?'];
+                        const groupsText = groups.join(', ');
+                        subtitle = `${groups.length > 1 ? 'Потік' : 'Група'}: ${groupsText} · ${it.teacher || 'Викладач ?'}`;
                     }
 
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
