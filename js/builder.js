@@ -18,7 +18,11 @@ window.ScheduleApp = window.ScheduleApp || {};
         baselineNormalized: [],
         optimizedNormalized: [],
         loadedFacultyKey: '',
-        parseCounter: 0
+        parseCounter: 0,
+        teacherIdByName: {},
+        teacherScheduleCache: {},
+        teacherIndexFacultyKey: '',
+        currentViewLabel: 'базовий'
     };
 
     const els = {
@@ -38,6 +42,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         status: document.getElementById('status'),
         tableHead: document.getElementById('tableHead'),
         tableBody: document.getElementById('tableBody'),
+        dataModeBadge: document.getElementById('dataModeBadge'),
         sumLessons: document.getElementById('sumLessons'),
         sumDays: document.getElementById('sumDays'),
         sumConflicts: document.getElementById('sumConflicts'),
@@ -65,6 +70,15 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.status.className = isError ? 'text-sm text-red-600' : 'text-sm text-gray-500';
     }
 
+    function setDataModeBadge(text, isOptimized) {
+        state.currentViewLabel = text;
+        if (!els.dataModeBadge) return;
+        els.dataModeBadge.textContent = `Режим: ${text}`;
+        els.dataModeBadge.className = isOptimized
+            ? 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+            : 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100';
+    }
+
     function toIso(date) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -89,6 +103,14 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (!d) return dmy || '';
         const names = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота'];
         return names[d.getDay()] || dmy || '';
+    }
+
+    function normalizeTeacherName(name) {
+        return String(name || '')
+            .toLowerCase()
+            .replace(/\./g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     function getMonday(date) {
@@ -481,7 +503,59 @@ window.ScheduleApp = window.ScheduleApp || {};
         return stats;
     }
 
-    function renderOptimizationReport(baseLessons, optimizedLessons) {
+    async function ensureTeacherIndexForSelectedFaculty() {
+        const facultyId = String(els.facultySelect.value || '');
+        if (!facultyId) return;
+        if (state.teacherIndexFacultyKey === facultyId && Object.keys(state.teacherIdByName).length > 0) return;
+
+        state.teacherIdByName = {};
+        state.teacherScheduleCache = {};
+        state.teacherIndexFacultyKey = facultyId;
+
+        const c = await SA.fetchApi('GetEmployeeChairs', { aFacultyID: facultyId }, { useCache: true, silent: true });
+        const chairs = (c && c.chairs) ? c.chairs : [];
+        for (const chair of chairs) {
+            const emps = await SA.fetchApi('GetEmployees', {
+                aFacultyID: facultyId,
+                aChairID: String(chair.Key || '')
+            }, { useCache: true, silent: true });
+            const arr = Array.isArray(emps) ? emps : [];
+            arr.forEach((e) => {
+                const n = normalizeTeacherName(e.Value || '');
+                if (n && !state.teacherIdByName[n]) {
+                    state.teacherIdByName[n] = String(e.Key || '');
+                }
+            });
+        }
+    }
+
+    async function getTeacherBusyMap(teacherName) {
+        const keyName = normalizeTeacherName(teacherName);
+        if (!keyName) return null;
+        if (state.teacherScheduleCache[keyName]) return state.teacherScheduleCache[keyName];
+        const teacherId = state.teacherIdByName[keyName];
+        if (!teacherId) return null;
+
+        const startDmy = toDmyIso(els.weekStart.value);
+        const endDmy = toDmyIso(els.weekEnd.value);
+        const rows = await SA.fetchApi('GetScheduleDataEmp', {
+            aEmployeeID: teacherId,
+            aStartDate: startDmy,
+            aEndDate: endDmy,
+            aStudyTypeID: ''
+        }, { useCache: true, silent: true });
+
+        const busy = new Set();
+        (Array.isArray(rows) ? rows : []).forEach((r) => {
+            const p = parsePair(r);
+            const d = String(r.full_date || '');
+            if (d && p) busy.add(`${d}||${p}`);
+        });
+        state.teacherScheduleCache[keyName] = busy;
+        return busy;
+    }
+
+    async function renderOptimizationReport(baseLessons, optimizedLessons) {
         if (!els.optimizationSection) return;
         const isFaculty = state.mode === 'faculty';
         els.optimizationSection.classList.toggle('hidden', !isFaculty);
@@ -568,6 +642,25 @@ window.ScheduleApp = window.ScheduleApp || {};
                 div.textContent = `${m.group}: "${m.discipline}"${teacher} — перенести на ${dayName} (${m.date}) з ${m.from}-ї на ${m.to}-у пару`;
                 els.optMoves.appendChild(div);
             });
+
+        await ensureTeacherIndexForSelectedFaculty();
+        const allMoveEls = Array.from(els.optMoves.children);
+        for (let i = 0; i < Math.min(moves.length, allMoveEls.length, 80); i++) {
+            const m = moves[i];
+            const el = allMoveEls[i];
+            const lesson = (current.find((x) => x.group === m.group && x.date === m.date && x.discipline === m.discipline && x.pair === m.from) || {});
+            const tName = lesson.teacher || '';
+            if (!tName) continue;
+            const busy = await getTeacherBusyMap(tName);
+            if (!busy) continue;
+            const targetKey = `${m.date}||${m.to}`;
+            if (busy.has(targetKey)) {
+                const warn = document.createElement('span');
+                warn.className = 'text-red-600 font-bold';
+                warn.textContent = ' ⚠ викладач зайнятий у цей слот (перевірено по його загальному розкладу)';
+                el.appendChild(warn);
+            }
+        }
     }
 
     function fillGroupsDaySelect() {
@@ -735,10 +828,11 @@ window.ScheduleApp = window.ScheduleApp || {};
         setModeUI();
         await ensureFacultyLoaded();
         state.normalized = state.baselineNormalized.slice();
+        setDataModeBadge('базовий (аналіз)', false);
         renderTable(state.normalized);
         fillGroupsDaySelect();
         renderGroupsTable();
-        renderOptimizationReport(state.baselineNormalized, null);
+        await renderOptimizationReport(state.baselineNormalized, null);
         setStatus(`Допоміжний аналіз готовий: ${state.normalized.length} занять`);
     }
 
@@ -758,10 +852,11 @@ window.ScheduleApp = window.ScheduleApp || {};
         setStatus('Будую новий оптимізований розклад...');
         state.optimizedNormalized = optimizeFacultySchedule(state.baselineNormalized);
         state.normalized = state.optimizedNormalized.slice();
+        setDataModeBadge('новий оптимізований', true);
         renderTable(state.normalized);
         fillGroupsDaySelect();
         renderGroupsTable();
-        renderOptimizationReport(state.baselineNormalized, state.optimizedNormalized);
+        await renderOptimizationReport(state.baselineNormalized, state.optimizedNormalized);
 
         const before = getWindowsSummary(state.baselineNormalized).reduce((s, x) => s + x.windowsWeek, 0);
         const after = getWindowsSummary(state.optimizedNormalized).reduce((s, x) => s + x.windowsWeek, 0);
@@ -813,6 +908,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         state.lastSourceCount = 1;
         state.normalized = data.map((x) => normalizeLesson(x, '')).filter((l) => l && weekDmySet.has(l.date));
+        setDataModeBadge('базовий', false);
         renderTable(state.normalized);
         if (els.groupsTableSection) els.groupsTableSection.classList.add('hidden');
         if (els.optimizationSection) els.optimizationSection.classList.add('hidden');
