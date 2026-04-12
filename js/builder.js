@@ -550,7 +550,10 @@ window.ScheduleApp = window.ScheduleApp || {};
         const optSlotMap = bySlot(optimized);
 
         const buildDaySheetAoA = (day) => {
-            const header = ['Пара', ...allGroups.map((g) => `Група: ${g}`)];
+            const header = ['Пара', ...allGroups.map((g) => {
+                const clean = String(g || '').replace(/^група:\s*/i, '').trim();
+                return `Група: ${clean}`;
+            })];
             const aoa = [header];
 
             PAIRS.forEach((pair) => {
@@ -1004,13 +1007,29 @@ window.ScheduleApp = window.ScheduleApp || {};
             const dayDow = task.lessons[0].dow;
             const n = task.lessons.length;
             const maxStart = Math.max(1, 8 - n);
+            const preferredMaxPair = n <= 4 ? 4 : 5;
+            const preferredMaxStart = Math.max(1, preferredMaxPair - n + 1);
+
+            let startCandidates = [];
+            for (let s = 1; s <= maxStart; s++) startCandidates.push(s);
+            const preferred = startCandidates.filter((s) => s <= preferredMaxStart);
+            if (preferred.length) startCandidates = preferred;
+
             let bestStart = 1;
             let bestCost = Infinity;
-            for (let start = 1; start <= maxStart; start++) {
+            for (const start of startCandidates) {
                 let load = 0;
                 for (let i = 0; i < n; i++) load += occupancy[dayDow][start + i] || 0;
-                const earlyPenalty = (start - 1) * 2.5;
-                const cost = load * 1.3 + earlyPenalty;
+                const pairList = [];
+                for (let i = 0; i < n; i++) pairList.push(start + i);
+                const latePenalty = pairList.reduce((sum, p) => {
+                    if (p >= 7) return sum + 100;
+                    if (p === 6) return sum + 40;
+                    if (p === 5) return sum + 10;
+                    return sum;
+                }, 0);
+                const startPenalty = (start - 1) * 4.5;
+                const cost = load * 1.3 + startPenalty + latePenalty;
                 if (cost < bestCost) {
                     bestCost = cost;
                     bestStart = start;
