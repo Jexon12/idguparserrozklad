@@ -42,6 +42,9 @@ window.ScheduleApp = window.ScheduleApp || {};
         status: document.getElementById('status'),
         tableHead: document.getElementById('tableHead'),
         tableBody: document.getElementById('tableBody'),
+        optimizedTableSection: document.getElementById('optimizedTableSection'),
+        optimizedTableHead: document.getElementById('optimizedTableHead'),
+        optimizedTableBody: document.getElementById('optimizedTableBody'),
         dataModeBadge: document.getElementById('dataModeBadge'),
         sumLessons: document.getElementById('sumLessons'),
         sumDays: document.getElementById('sumDays'),
@@ -398,6 +401,68 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.sumConflicts.textContent = String(conflictSlots);
         els.sumDuplicates.textContent = String(duplicates);
         els.sumSources.textContent = String(state.lastSourceCount || 0);
+    }
+
+    function renderOptimizedTable(lessons) {
+        if (!els.optimizedTableSection || !els.optimizedTableHead || !els.optimizedTableBody) return;
+        const map = new Map();
+        lessons.forEach((l) => {
+            if (!l || !l.pair) return;
+            const key = `${l.dow}-${l.pair}`;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(l);
+        });
+
+        els.optimizedTableHead.innerHTML = '';
+        els.optimizedTableBody.innerHTML = '';
+        const trHead = document.createElement('tr');
+        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${
+            state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${d.label}</th>`).join('')
+        }`;
+        els.optimizedTableHead.appendChild(trHead);
+
+        PAIRS.forEach((pair) => {
+            const tr = document.createElement('tr');
+            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} пара</td>`;
+            state.weekDays.forEach((day) => {
+                const rawItems = map.get(`${day.dow}-${pair}`) || [];
+                const merged = new Map();
+                rawItems.forEach((it) => {
+                    const mergeKey = [
+                        it.date || '',
+                        it.pair || '',
+                        it.discipline || '',
+                        it.teacher || '',
+                        it.type || '',
+                        it.room || '',
+                        it.start || '',
+                        it.end || ''
+                    ].join('||');
+                    if (!merged.has(mergeKey)) merged.set(mergeKey, { ...it, groupsList: [] });
+                    const ref = merged.get(mergeKey);
+                    const g = String(it.group || it.sourceName || '').trim();
+                    if (g && !ref.groupsList.includes(g)) ref.groupsList.push(g);
+                });
+                const items = Array.from(merged.values());
+                const chipHtml = items.map((it) => {
+                    const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Група ?'];
+                    const subtitle = `${groups.length > 1 ? 'Потік' : 'Група'}: ${groups.join(', ')} · ${it.teacher || 'Викладач ?'}`;
+                    const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
+                    return `
+                        <div class="lesson-chip bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
+                            <div class="font-semibold">${it.discipline || 'Без назви'}</div>
+                            <div class="text-xs text-gray-500">${subtitle}</div>
+                            <div class="text-xs text-gray-500">${it.type || 'Тип не вказано'} · ${it.room || '—'} ${timeText ? `· ${timeText}` : ''}</div>
+                        </div>
+                    `;
+                }).join('');
+                row += `<td class="slot-cell p-2 border dark:border-gray-700">${chipHtml || '<span class="text-xs text-gray-400">—</span>'}</td>`;
+            });
+            tr.innerHTML = row;
+            els.optimizedTableBody.appendChild(tr);
+        });
+
+        els.optimizedTableSection.classList.remove('hidden');
     }
 
     function getWeekDayByDow(dow) {
@@ -830,6 +895,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         state.normalized = state.baselineNormalized.slice();
         setDataModeBadge('базовий (аналіз)', false);
         renderTable(state.normalized);
+        if (els.optimizedTableSection) els.optimizedTableSection.classList.add('hidden');
         fillGroupsDaySelect();
         renderGroupsTable();
         await renderOptimizationReport(state.baselineNormalized, null);
@@ -854,6 +920,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         state.normalized = state.optimizedNormalized.slice();
         setDataModeBadge('новий оптимізований', true);
         renderTable(state.normalized);
+        renderOptimizedTable(state.optimizedNormalized);
         fillGroupsDaySelect();
         renderGroupsTable();
         await renderOptimizationReport(state.baselineNormalized, state.optimizedNormalized);
@@ -912,6 +979,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         renderTable(state.normalized);
         if (els.groupsTableSection) els.groupsTableSection.classList.add('hidden');
         if (els.optimizationSection) els.optimizationSection.classList.add('hidden');
+        if (els.optimizedTableSection) els.optimizedTableSection.classList.add('hidden');
         setStatus(`Готово: зібрано ${state.normalized.length} занять за тиждень`);
     }
 
