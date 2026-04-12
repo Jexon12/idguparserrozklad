@@ -550,20 +550,18 @@ window.ScheduleApp = window.ScheduleApp || {};
         const optSlotMap = bySlot(optimized);
 
         const buildDaySheetAoA = (day) => {
-            const header = ['Pair', ...allGroups.map((g) => `Group: ${g}`)];
+            const header = ['Пара', ...allGroups.map((g) => `Група: ${g}`)];
             const aoa = [header];
 
             PAIRS.forEach((pair) => {
-                const row = [`${pair} pair`];
+                const row = [`${pair} пара`];
                 allGroups.forEach((group) => {
                     const key = `${day.dow}||${pair}||${group}`;
                     const items = optSlotMap.get(key) || [];
                     const cellText = items.length
                         ? items.map((x) => `${x.discipline || '-'}${x.room ? ` (${x.room})` : ''}`).join(' / ')
                         : '—';
-
-                    const changed = normalizeCell(baseSlotMap.get(key)) !== normalizeCell(items);
-                    row.push(changed ? `[CHANGED] ${cellText}` : cellText);
+                    row.push(cellText);
                 });
                 aoa.push(row);
             });
@@ -578,11 +576,11 @@ window.ScheduleApp = window.ScheduleApp || {};
             const moved = b.pair !== l.pair || b.date !== l.date || b.dow !== l.dow;
             if (!moved) return;
             movedRows.push({
-                Group: l.group || l.sourceName || '',
-                Discipline: l.discipline || '',
-                Teacher: l.teacher || '',
-                Before: `${b.date || ''} | ${b.pair || ''}`,
-                After: `${l.date || ''} | ${l.pair || ''}`
+                Група: l.group || l.sourceName || '',
+                Дисципліна: l.discipline || '',
+                Викладач: l.teacher || '',
+                Було: `${b.date || ''} | ${b.pair || ''}`,
+                Стало: `${l.date || ''} | ${l.pair || ''}`
             });
         });
 
@@ -599,20 +597,23 @@ window.ScheduleApp = window.ScheduleApp || {};
             ];
         days.forEach((day) => {
             const sheet = XLSX.utils.aoa_to_sheet(buildDaySheetAoA(day));
+            sheet['!cols'] = [{ wch: 10 }, ...allGroups.map(() => ({ wch: 24 }))];
+            sheet['!rows'] = [{ hpt: 20 }, ...PAIRS.map(() => ({ hpt: 54 }))];
+            sheet['!freeze'] = { xSplit: 1, ySplit: 1 };
             const safeName = String(day.label || `D${day.dow}`).slice(0, 31);
             XLSX.utils.book_append_sheet(wb, sheet, safeName);
         });
 
         XLSX.utils.book_append_sheet(
             wb,
-            XLSX.utils.json_to_sheet(movedRows.length ? movedRows : [{ Message: 'No moved lessons' }]),
-            'Changes'
+            XLSX.utils.json_to_sheet(movedRows.length ? movedRows : [{ Повідомлення: 'Перенесень не виявлено' }]),
+            'Зміни'
         );
 
         const start = els.weekStart && els.weekStart.value ? els.weekStart.value : 'week';
         const end = els.weekEnd && els.weekEnd.value ? els.weekEnd.value : 'week';
         XLSX.writeFile(wb, `optimized-schedule-${start}_${end}.xlsx`);
-        setStatus(`Excel exported: matrix by days + changes (${movedRows.length})`);
+        setStatus(`Експортовано Excel: таблиці по днях + лист "Зміни" (${movedRows.length})`);
     }
 
     function getWeekDayByDow(dow) {
