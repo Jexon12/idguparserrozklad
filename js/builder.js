@@ -66,7 +66,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         optTableHead: document.getElementById('optTableHead'),
         optTableBody: document.getElementById('optTableBody'),
         optMoves: document.getElementById('optMoves'),
-        exportOptimizedBtn: document.getElementById('exportOptimizedBtn')
+        exportOptimizedBtn: document.getElementById('exportOptimizedBtn'),
+        exportOptimizedBtnTop: document.getElementById('exportOptimizedBtnTop')
     };
 
     function setStatus(msg, isError) {
@@ -1128,6 +1129,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (els.groupsDaySelect) els.groupsDaySelect.addEventListener('change', renderGroupsTable);
         if (els.runOptimizationBtn) els.runOptimizationBtn.addEventListener('click', runAuxiliaryAnalysis);
         if (els.exportOptimizedBtn) els.exportOptimizedBtn.addEventListener('click', exportOptimizedToExcel);
+        if (els.exportOptimizedBtnTop) els.exportOptimizedBtnTop.addEventListener('click', exportOptimizedToExcel);
         if (els.buildBtnPrimary) {
             els.buildBtnPrimary.removeEventListener('click', buildWeekSchedule);
             els.buildBtnPrimary.addEventListener('click', buildOptimizedFacultySchedule);
