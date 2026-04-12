@@ -515,49 +515,104 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
 
-        const baseById = new Map((state.baselineNormalized || []).map((x) => [x.id, x]));
-        const sorted = state.optimizedNormalized.slice().sort((a, b) => {
-            const da = parseDmy(a.date || '');
-            const db = parseDmy(b.date || '');
-            const ta = da ? da.getTime() : 0;
-            const tb = db ? db.getTime() : 0;
-            if (ta !== tb) return ta - tb;
-            if ((a.pair || 0) !== (b.pair || 0)) return (a.pair || 0) - (b.pair || 0);
-            return String(a.group || '').localeCompare(String(b.group || ''), 'uk');
-        });
+        const baseline = Array.isArray(state.baselineNormalized) ? state.baselineNormalized : [];
+        const optimized = state.optimizedNormalized;
 
-        const rows = sorted.map((l) => {
+        const normalizeCell = (arr) => (arr || [])
+            .map((x) => [
+                String(x.discipline || ''),
+                String(x.teacher || ''),
+                String(x.room || ''),
+                String(x.type || ''),
+                String(x.start || ''),
+                String(x.end || '')
+            ].join('|'))
+            .sort()
+            .join('||');
+
+        const allGroups = Array.from(new Set(
+            optimized.map((l) => String(l.group || l.sourceName || '').trim()).filter(Boolean)
+        )).sort((a, b) => a.localeCompare(b, 'uk'));
+
+        const bySlot = (rows) => {
+            const map = new Map();
+            rows.forEach((l) => {
+                const g = String(l.group || l.sourceName || '').trim();
+                if (!g || !l.pair || !l.dow) return;
+                const key = `${l.dow}||${l.pair}||${g}`;
+                if (!map.has(key)) map.set(key, []);
+                map.get(key).push(l);
+            });
+            return map;
+        };
+
+        const baseSlotMap = bySlot(baseline);
+        const optSlotMap = bySlot(optimized);
+
+        const buildDaySheetAoA = (day) => {
+            const header = ['Pair', ...allGroups.map((g) => `Group: ${g}`)];
+            const aoa = [header];
+
+            PAIRS.forEach((pair) => {
+                const row = [`${pair} pair`];
+                allGroups.forEach((group) => {
+                    const key = `${day.dow}||${pair}||${group}`;
+                    const items = optSlotMap.get(key) || [];
+                    const cellText = items.length
+                        ? items.map((x) => `${x.discipline || '-'}${x.room ? ` (${x.room})` : ''}`).join(' / ')
+                        : '—';
+
+                    const changed = normalizeCell(baseSlotMap.get(key)) !== normalizeCell(items);
+                    row.push(changed ? `[CHANGED] ${cellText}` : cellText);
+                });
+                aoa.push(row);
+            });
+            return aoa;
+        };
+
+        const movedRows = [];
+        const baseById = new Map(baseline.map((x) => [x.id, x]));
+        optimized.forEach((l) => {
             const b = baseById.get(l.id);
-            const moved = !!(b && (b.pair !== l.pair || b.date !== l.date || b.dow !== l.dow));
-            return {
-                Date: l.date || '',
-                Day: dayNameByDateDmy(l.date || ''),
-                Pair: l.pair || '',
-                Time: (l.start && l.end) ? `${l.start}-${l.end}` : '',
+            if (!b) return;
+            const moved = b.pair !== l.pair || b.date !== l.date || b.dow !== l.dow;
+            if (!moved) return;
+            movedRows.push({
                 Group: l.group || l.sourceName || '',
                 Discipline: l.discipline || '',
-                Type: l.type || '',
                 Teacher: l.teacher || '',
-                Room: l.room || '',
-                Before: b ? `${b.date || ''} | ${b.pair || ''}` : '',
-                After: `${l.date || ''} | ${l.pair || ''}`,
-                Changed: moved ? 'yes' : 'no'
-            };
+                Before: `${b.date || ''} | ${b.pair || ''}`,
+                After: `${l.date || ''} | ${l.pair || ''}`
+            });
         });
 
-        const movedRows = rows.filter((r) => r.Changed === 'yes');
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Optimized');
+
+        const days = Array.isArray(state.weekDays) && state.weekDays.length
+            ? state.weekDays
+            : [
+                { dow: 1, label: 'Mon' },
+                { dow: 2, label: 'Tue' },
+                { dow: 3, label: 'Wed' },
+                { dow: 4, label: 'Thu' },
+                { dow: 5, label: 'Fri' }
+            ];
+        days.forEach((day) => {
+            const sheet = XLSX.utils.aoa_to_sheet(buildDaySheetAoA(day));
+            const safeName = String(day.label || `D${day.dow}`).slice(0, 31);
+            XLSX.utils.book_append_sheet(wb, sheet, safeName);
+        });
+
         XLSX.utils.book_append_sheet(
             wb,
-            XLSX.utils.json_to_sheet(movedRows.length ? movedRows : [{ Message: 'No changes detected' }]),
+            XLSX.utils.json_to_sheet(movedRows.length ? movedRows : [{ Message: 'No moved lessons' }]),
             'Changes'
         );
 
         const start = els.weekStart && els.weekStart.value ? els.weekStart.value : 'week';
         const end = els.weekEnd && els.weekEnd.value ? els.weekEnd.value : 'week';
         XLSX.writeFile(wb, `optimized-schedule-${start}_${end}.xlsx`);
-        setStatus(`Excel exported: ${rows.length} rows, changes: ${movedRows.length}`);
+        setStatus(`Excel exported: matrix by days + changes (${movedRows.length})`);
     }
 
     function getWeekDayByDow(dow) {
