@@ -601,7 +601,6 @@ window.ScheduleApp = window.ScheduleApp || {};
         days.forEach((day) => {
             const sheet = XLSX.utils.aoa_to_sheet(buildDaySheetAoA(day));
             sheet['!cols'] = [{ wch: 10 }, ...allGroups.map(() => ({ wch: 24 }))];
-            sheet['!rows'] = [{ hpt: 20 }, ...PAIRS.map(() => ({ hpt: 54 }))];
             sheet['!freeze'] = { xSplit: 1, ySplit: 1 };
             const safeName = String(day.label || `D${day.dow}`).slice(0, 31);
             XLSX.utils.book_append_sheet(wb, sheet, safeName);
@@ -1006,6 +1005,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         tasks.forEach((task) => {
             const dayDow = task.lessons[0].dow;
             const n = task.lessons.length;
+            const originalMinPair = Math.max(1, Math.min(...task.lessons.map((x) => x.pair || 7)));
             const maxStart = Math.max(1, 8 - n);
             const preferredMaxPair = n <= 4 ? 4 : 5;
             const preferredMaxStart = Math.max(1, preferredMaxPair - n + 1);
@@ -1028,8 +1028,9 @@ window.ScheduleApp = window.ScheduleApp || {};
                     if (p === 5) return sum + 10;
                     return sum;
                 }, 0);
+                const laterThanOriginalPenalty = Math.max(0, start - originalMinPair) * 18;
                 const startPenalty = (start - 1) * 4.5;
-                const cost = load * 1.3 + startPenalty + latePenalty;
+                const cost = load * 1.3 + startPenalty + latePenalty + laterThanOriginalPenalty;
                 if (cost < bestCost) {
                     bestCost = cost;
                     bestStart = start;
