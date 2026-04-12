@@ -99,12 +99,18 @@
 
 ### Backend
 - `api/index.js` — Vercel serverless API (proxy, кеші, report, admin routes).
+- `api/job-queue.js` — проста черга задач для важких фонових обчислень (report).
 - `server.js` — локальний HTTP-сервер для dev/standalone запуску.
 - `vercel.json` — rewrites + cache headers.
 
 ## API (основні маршрути)
 
 - `GET /api/health` — healthcheck.
+- `GET /api/monitor` — стан черги/останні monitor-події.
+- `POST /api/monitor/log` — прийом frontend-помилок/метрик.
+- `GET /api/audit?limit=...` — журнал admin-дій.
+- `GET /api/versions?scope=session|times|links` — метадані версій змін.
+- `POST /api/cache/invalidate` — ручна інвалідація кешу (`scope: proxy|all`, admin).
 - `GET /api/times` — отримати глобальні часи пар.
 - `POST /api/times` — зберегти глобальні часи (admin).
 - `GET /api/links` — отримати глобальні посилання.
@@ -151,6 +157,18 @@ npm run watch:css
 npm test -- --runInBand --forceExit
 ```
 
+Smoke-тести (pages + health):
+
+```bash
+npm run test:smoke
+```
+
+Перевірка кодування (mojibake):
+
+```bash
+npm run lint:encoding
+```
+
 ## Деплой (Vercel)
 
 1. Пуш у GitHub.
@@ -174,6 +192,30 @@ npm test -- --runInBand --forceExit
 
 - Tailwind зібраний локально через CLI в `css/tailwind.generated.css`. Після зміни класів у HTML/JS запускайте `npm run build:css` (або `npm run watch:css` під час розробки).
 - Частина тестового виводу містить debug-логи API (це очікувано для поточної конфігурації).
+
+## Runbook (оператор)
+
+### Швидка перевірка після деплою
+1. `GET /api/health` має повертати `status: ok`.
+2. `GET /api/monitor` — перевірити, що `reportQueue.active/queued` в адекватних межах.
+3. Відкрити `index.html`, `index2.html`, `builder.html`, `session.html`, `smart.html`.
+4. Зробити hard reload (`Ctrl+F5`) при підозрі на старий JS/SW кеш.
+
+### Якщо admin-збереження не працює
+1. Перевірити `ADMIN_PASSWORD` в env.
+2. Подивитись `GET /api/audit?limit=50` на події `admin_auth_failed`.
+3. Для production перевірити доступність `REDIS_URL` або Vercel KV.
+
+### Якщо звіти “зависли”
+1. Перевірити `GET /api/monitor` — `reportQueue.queued`.
+2. Перевірити `GET /api/report/status?jobId=...`.
+3. Перезапустити деплой, якщо є накопичені помилки мережі зовнішнього API.
+
+### Відстеження змін даних
+- `GET /api/versions?scope=times`
+- `GET /api/versions?scope=links`
+- `GET /api/versions?scope=session`
+
 
 ## Корисні файли
 

@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "test": "jest --testPathPattern=tests/",
+    "test:smoke": "jest tests/smoke-pages.test.js --runInBand",
+    "test:ui": "jest tests/ui-links-buttons.test.js --runInBand",
     "start": "node server.js",
+    "lint:encoding": "node scripts/check-encoding.js",
     "build:css": "tailwindcss -c tailwind.config.js -i ./css/tailwind.input.css -o ./css/tailwind.generated.css --minify",
     "watch:css": "tailwindcss -c tailwind.config.js -i ./css/tailwind.input.css -o ./css/tailwind.generated.css --watch"
   },

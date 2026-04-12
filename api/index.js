@@ -2,6 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
+const JobQueue = require('./job-queue');
 
 const DB_FILE = path.join(__dirname, '../db.json');
 const SESSION_FALLBACK_FILE = path.join(__dirname, '../data/session-2025-26.json');
@@ -19,6 +20,9 @@ const inFlightProxyRequests = new Map();
 // --- Report jobs (progress flow) ---
 const reportJobs = new Map();
 const REPORT_JOB_TTL = 10 * 60 * 1000;
+const AUDIT_LOG_LIMIT = 1000;
+const VERSION_LIMIT = 50;
+const MONITOR_EVENTS_LIMIT = 500;
 const CACHE_TTL = {
     default: 5 * 60 * 1000,    // 5 minutes for filters, groups, teachers
     schedule: 3 * 60 * 1000    // 3 minutes for schedule data
@@ -29,6 +33,7 @@ const RATE_LIMITS = {
     adminPost: { windowMs: 60 * 1000, max: 20 },
     proxy: { windowMs: 60 * 1000, max: 120 }
 };
+const reportQueue = new JobQueue({ concurrency: 2 });
 
 function getClientIp(req) {
     const xff = (req.headers['x-forwarded-for'] || '').toString();
@@ -202,6 +207,118 @@ const getDb = async () => {
     return null;
 };
 
+function safeStringify(obj) {
+    try {
+        return JSON.stringify(obj);
+    } catch (e) {
+        return JSON.stringify({ error: 'stringify-failed' });
+    }
+}
+
+function hashString(input) {
+    let h = 0;
+    const s = String(input || '');
+    for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h) + s.charCodeAt(i);
+        h |= 0;
+    }
+    return `h${(h >>> 0).toString(16)}`;
+}
+
+function sanitizePayloadForLog(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    const clone = Array.isArray(payload) ? payload.slice(0, 20) : { ...payload };
+    if (clone.password) clone.password = '***';
+    if (clone.items && Array.isArray(clone.items)) clone.items = `[items:${clone.items.length}]`;
+    return clone;
+}
+
+async function readJsonKey(db, key, fallback = null) {
+    if (db) {
+        if (db.type === 'kv') return (await db.client.get(key)) || fallback;
+        if (db.type === 'redis') {
+            const raw = await db.client.get(key);
+            return raw ? JSON.parse(raw) : fallback;
+        }
+    }
+    const local = getLocalDb();
+    return local[key] !== undefined ? local[key] : fallback;
+}
+
+async function writeJsonKey(db, key, value) {
+    if (db) {
+        if (db.type === 'kv') {
+            await db.client.set(key, value);
+            return;
+        }
+        if (db.type === 'redis') {
+            await db.client.set(key, safeStringify(value));
+            return;
+        }
+    }
+    const local = getLocalDb();
+    local[key] = value;
+    if (!saveLocalDb(local)) throw new Error(`Failed to write local key: ${key}`);
+}
+
+async function appendAuditEvent(req, action, scope, meta = {}) {
+    try {
+        const db = await getDb();
+        const events = await readJsonKey(db, 'audit_log', []);
+        const list = Array.isArray(events) ? events : [];
+        list.push({
+            ts: new Date().toISOString(),
+            action,
+            scope,
+            ip: getClientIp(req),
+            userAgent: String(req.headers['user-agent'] || '').slice(0, 180),
+            meta: sanitizePayloadForLog(meta)
+        });
+        while (list.length > AUDIT_LOG_LIMIT) list.shift();
+        await writeJsonKey(db, 'audit_log', list);
+    } catch (e) {
+        console.error('appendAuditEvent error', e);
+    }
+}
+
+async function saveVersion(scope, payload, extra = {}) {
+    try {
+        const db = await getDb();
+        const key = `versions:${scope}`;
+        const versions = await readJsonKey(db, key, []);
+        const list = Array.isArray(versions) ? versions : [];
+        const json = safeStringify(payload);
+        list.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            ts: new Date().toISOString(),
+            hash: hashString(json),
+            size: json.length,
+            extra
+        });
+        while (list.length > VERSION_LIMIT) list.shift();
+        await writeJsonKey(db, key, list);
+    } catch (e) {
+        console.error('saveVersion error', e);
+    }
+}
+
+async function appendMonitorEvent(type, payload) {
+    try {
+        const db = await getDb();
+        const events = await readJsonKey(db, 'monitor:events', []);
+        const list = Array.isArray(events) ? events : [];
+        list.push({
+            ts: new Date().toISOString(),
+            type,
+            payload: sanitizePayloadForLog(payload)
+        });
+        while (list.length > MONITOR_EVENTS_LIMIT) list.shift();
+        await writeJsonKey(db, 'monitor:events', list);
+    } catch (e) {
+        console.error('appendMonitorEvent error', e);
+    }
+}
+
 const apiHandler = async (req, res) => {
     if (req.method === 'OPTIONS') {
         res.status(204).end();
@@ -242,6 +359,110 @@ const apiHandler = async (req, res) => {
     // =========================================================
     if (pathname === '/api/health') {
         res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+        return;
+    }
+
+    // =========================================================
+    // ROUTE: Monitoring snapshot (/api/monitor)
+    // =========================================================
+    if (pathname === '/api/monitor' && req.method === 'GET') {
+        const db = await getDb();
+        const events = await readJsonKey(db, 'monitor:events', []);
+        const last = Array.isArray(events) ? events.slice(-100) : [];
+        const byType = {};
+        last.forEach((e) => {
+            const t = e && e.type ? e.type : 'unknown';
+            byType[t] = (byType[t] || 0) + 1;
+        });
+        res.status(200).json({
+            status: 'ok',
+            now: new Date().toISOString(),
+            reportQueue: {
+                active: reportQueue.activeCount,
+                queued: reportQueue.pendingCount
+            },
+            lastEventsCount: last.length,
+            byType,
+            recent: last
+        });
+        return;
+    }
+
+    // =========================================================
+    // ROUTE: Monitor ingest (/api/monitor/log)
+    // =========================================================
+    if (pathname === '/api/monitor/log' && req.method === 'POST') {
+        const body = (req.body && typeof req.body === 'object') ? req.body : {};
+        await appendMonitorEvent(body.type || 'frontend', {
+            ...body,
+            ip: getClientIp(req)
+        });
+        res.status(200).json({ success: true });
+        return;
+    }
+
+    // =========================================================
+    // ROUTE: Audit log (/api/audit)
+    // =========================================================
+    if (pathname === '/api/audit' && req.method === 'GET') {
+        const db = await getDb();
+        const limit = Math.max(1, Math.min(parseInt(urlObj.searchParams.get('limit') || '200', 10), 1000));
+        const events = await readJsonKey(db, 'audit_log', []);
+        const list = Array.isArray(events) ? events.slice(-limit).reverse() : [];
+        res.status(200).json({ items: list, count: list.length });
+        return;
+    }
+
+    // =========================================================
+    // ROUTE: Versions metadata (/api/versions)
+    // =========================================================
+    if (pathname === '/api/versions' && req.method === 'GET') {
+        const db = await getDb();
+        const scope = String(urlObj.searchParams.get('scope') || 'session');
+        const key = `versions:${scope}`;
+        const versions = await readJsonKey(db, key, []);
+        const list = Array.isArray(versions) ? versions.slice().reverse() : [];
+        res.status(200).json({ scope, items: list, count: list.length });
+        return;
+    }
+
+    // =========================================================
+    // ROUTE: Cache invalidation (/api/cache/invalidate)
+    // =========================================================
+    if (pathname === '/api/cache/invalidate' && req.method === 'POST') {
+        if (!enforceRateLimit(req, res, 'admin-cache-invalidate', RATE_LIMITS.adminPost)) return;
+        const payload = (req.body && typeof req.body === 'object') ? req.body : {};
+        const password = payload.password || '';
+        const scope = String(payload.scope || 'proxy');
+        if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
+            await appendAuditEvent(req, 'admin_auth_failed', 'cache_invalidate', { scope });
+            res.status(403).json({ error: 'Wrong password' });
+            return;
+        }
+
+        let cleared = 0;
+        if (scope === 'proxy' || scope === 'all') {
+            cleared += proxyCache.size;
+            proxyCache.clear();
+            inFlightProxyRequests.clear();
+        }
+
+        const db = await getDb();
+        if (db && db.type === 'redis' && (scope === 'proxy' || scope === 'all')) {
+            try {
+                const keys = await db.client.keys('proxy:*');
+                if (keys.length) {
+                    await db.client.del(keys);
+                    cleared += keys.length;
+                }
+            } catch (e) {
+                console.error('Redis cache clear error', e);
+            }
+        }
+
+        await appendAuditEvent(req, 'invalidate', 'cache', { scope, cleared });
+        await appendMonitorEvent('cache_invalidate', { scope, cleared });
+        res.status(200).json({ success: true, scope, cleared });
         return;
     }
 
@@ -296,12 +517,14 @@ const apiHandler = async (req, res) => {
             const { password, times } = payload;
             if (password !== ADMIN_PASSWORD) {
                 console.log("Wrong password");
+                await appendAuditEvent(req, 'admin_auth_failed', 'times', { reason: 'wrong_password' });
                 res.status(403).json({ error: 'Wrong password' });
                 return;
             }
 
             // #22: If 'times' is undefined, treat it as a password check only (don't overwrite)
             if (times === undefined) {
+                await appendAuditEvent(req, 'admin_auth_ok', 'times', { checkOnly: true });
                 res.status(200).json({ success: true, message: 'Password valid' });
                 return;
             }
@@ -320,6 +543,10 @@ const apiHandler = async (req, res) => {
                         await db.client.set('times', JSON.stringify(times));
                     }
                 }
+                await saveVersion('times', times, { updatedByIp: getClientIp(req) });
+                await appendAuditEvent(req, 'update', 'times', {
+                    keys: Object.keys(times || {}).length
+                });
                 res.status(200).json({ success: true });
             } catch (e) {
                 console.error("DB Save Error:", e);
@@ -373,6 +600,7 @@ const apiHandler = async (req, res) => {
                 const { password, key, value } = payload;
 
                 if (password !== ADMIN_PASSWORD) {
+                    await appendAuditEvent(req, 'admin_auth_failed', 'links', { reason: 'wrong_password' });
                     res.status(403).json({ error: 'Wrong password' });
                     return;
                 }
@@ -404,6 +632,8 @@ const apiHandler = async (req, res) => {
                     } else if (db.type === 'redis') {
                         await db.client.set('links', JSON.stringify(links));
                     }
+                    await saveVersion('links', links, { updatedByIp: getClientIp(req), key, op: value === null ? 'delete' : 'upsert' });
+                    await appendAuditEvent(req, 'update', 'links', { key, op: value === null ? 'delete' : 'upsert' });
                     res.status(200).json({ success: true, storage: db.type });
                 } else {
                     res.status(500).json({ error: 'No database connection available on Vercel' });
@@ -456,6 +686,7 @@ const apiHandler = async (req, res) => {
 
                 const { password, data } = payload;
                 if (password !== ADMIN_PASSWORD) {
+                    await appendAuditEvent(req, 'admin_auth_failed', 'session', { reason: 'wrong_password' });
                     res.status(403).json({ error: 'Wrong password' });
                     return;
                 }
@@ -523,6 +754,8 @@ const apiHandler = async (req, res) => {
 
                 const storage = await saveSessionData(storedPayload);
                 const total = store.sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
+                await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), term, added });
+                await appendAuditEvent(req, 'update', 'session', { term, added, total });
                 res.status(200).json({ success: true, storage, added, count: total, term });
                 return;
             }
@@ -537,7 +770,12 @@ const apiHandler = async (req, res) => {
     // ROUTE: Search (/api/search?q=...)
     // =========================================================
     if (pathname === '/api/search' && req.method === 'GET') {
-        const q = (urlObj.searchParams.get('q') || '').toLowerCase().trim();
+        const normalizeSearch = (value) => String(value || '')
+            .toLowerCase()
+            .replace(/\./g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const q = normalizeSearch(urlObj.searchParams.get('q') || '');
         if (!q || q.length < 2) {
             res.status(400).json({ error: 'Query too short (min 2 chars)' });
             return;
@@ -560,15 +798,22 @@ const apiHandler = async (req, res) => {
         }
 
         if (cached && Array.isArray(cached)) {
+            const seen = new Set();
             // Filter cached items
             const results = cached
-                .filter(item => item.label.toLowerCase().includes(q))
+                .filter((item) => normalizeSearch(item.label).includes(q))
                 .sort((a, b) => {
-                    const aStarts = a.label.toLowerCase().startsWith(q);
-                    const bStarts = b.label.toLowerCase().startsWith(q);
+                    const aStarts = normalizeSearch(a.label).startsWith(q);
+                    const bStarts = normalizeSearch(b.label).startsWith(q);
                     if (aStarts && !bStarts) return -1;
                     if (!aStarts && bStarts) return 1;
                     return 0;
+                })
+                .filter((item) => {
+                    const key = `${item.type || ''}|${normalizeSearch(item.label)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
                 })
                 .slice(0, 15);
             res.status(200).json(results);
@@ -596,7 +841,9 @@ const apiHandler = async (req, res) => {
         reportJobs.set(jobId, job);
         setTimeout(() => { if (reportJobs.has(jobId)) reportJobs.delete(jobId); }, REPORT_JOB_TTL);
         res.status(200).json({ jobId });
-        (async () => {
+        appendAuditEvent(req, 'start', 'report', { jobId, teacherId, monthStart, monthEnd }).catch(() => {});
+        appendMonitorEvent('report_start', { jobId }).catch(() => {});
+        reportQueue.enqueue(async () => {
             const getMonthDate = (str) => { const [y, m] = str.split('-').map(Number); return new Date(y, m - 1, 1); };
             const formatDate = (d) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
             const startDt = getMonthDate(monthStart);
@@ -623,11 +870,18 @@ const apiHandler = async (req, res) => {
                     job.status = 'error';
                     job.error = err.message;
                     job.done = true;
+                    await appendMonitorEvent('report_error', { jobId, error: err.message });
                     return;
                 }
             }
             job.status = 'done'; job.done = true; job.progress = `${months.length}/${months.length} місяців`;
-        })();
+            await appendMonitorEvent('report_done', { jobId, months: months.length, lessons: job.allSemLessons.length });
+        }).catch(async (err) => {
+            job.status = 'error';
+            job.error = err.message;
+            job.done = true;
+            await appendMonitorEvent('report_error', { jobId, error: err.message, phase: 'queue' });
+        });
         return;
     }
 

@@ -177,6 +177,27 @@ describe('API routing', () => {
         expect(res.json).not.toBeNull();
     });
 
+    test('GET /api/monitor returns snapshot', async () => {
+        const res = await makeRequest('/api/monitor');
+        expect(res.status).toBe(200);
+        expect(res.json).not.toBeNull();
+        expect(res.json.status).toBe('ok');
+    });
+
+    test('GET /api/audit returns list', async () => {
+        const res = await makeRequest('/api/audit?limit=10');
+        expect(res.status).toBe(200);
+        expect(res.json).not.toBeNull();
+        expect(Array.isArray(res.json.items)).toBe(true);
+    });
+
+    test('GET /api/versions returns list', async () => {
+        const res = await makeRequest('/api/versions?scope=session');
+        expect(res.status).toBe(200);
+        expect(res.json).not.toBeNull();
+        expect(Array.isArray(res.json.items)).toBe(true);
+    });
+
     test('OPTIONS /api/times returns 204', async () => {
         const res = await makeRequest('/api/times', { method: 'OPTIONS' });
         expect(res.status).toBe(204);
@@ -204,6 +225,61 @@ describe('API routing', () => {
         const responses = await Promise.all(requests);
         const has429 = responses.some((r) => r.status === 429);
         expect(has429).toBe(true);
+    });
+
+    test('Report job success path provides download URL and XLSX file', async () => {
+        apiHandler.__setFetchForTests(async () => ({
+            json: async () => ({
+                d: [
+                    {
+                        full_date: '10.03.2026',
+                        study_time_begin: '10:00',
+                        discipline: 'Тестова дисципліна',
+                        study_type: 'Лекції',
+                        study_hours: 2,
+                        contingent: '121У'
+                    }
+                ]
+            })
+        }));
+
+        const startRes = await makeRequest('/api/report/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: {
+                teacherId: 'T123',
+                teacherName: 'Test Teacher',
+                monthStart: '2026-03',
+                monthEnd: '2026-03'
+            }
+        });
+
+        expect(startRes.status).toBe(200);
+        expect(startRes.json).not.toBeNull();
+        expect(typeof startRes.json.jobId).toBe('string');
+
+        const jobId = startRes.json.jobId;
+        let statusRes = null;
+
+        for (let i = 0; i < 40; i++) {
+            statusRes = await makeRequest(`/api/report/status?jobId=${encodeURIComponent(jobId)}`);
+            if (statusRes.status === 200 && statusRes.json && statusRes.json.done) {
+                break;
+            }
+            await sleep(25);
+        }
+
+        expect(statusRes.status).toBe(200);
+        expect(statusRes.json.status).toBe('done');
+        expect(statusRes.json.done).toBe(true);
+        expect(statusRes.json.error).toBeNull();
+        expect(statusRes.json.downloadUrl).toBe(`/api/report/download?jobId=${jobId}`);
+
+        const downloadRes = await makeRequest(`/api/report/download?jobId=${encodeURIComponent(jobId)}`);
+        expect(downloadRes.status).toBe(200);
+        expect(downloadRes.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        expect(downloadRes.headers['content-disposition']).toContain('.xlsx');
+        expect(downloadRes.data.length).toBeGreaterThan(100);
     });
 
     test('Report job error state does not expose download URL and blocks download', async () => {
