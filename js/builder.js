@@ -1,7 +1,7 @@
 window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
-    const DAY_NAMES = ['Р СџР Р…', 'Р вЂ™РЎвЂљ', 'Р РЋРЎР‚', 'Р В§РЎвЂљ', 'Р СџРЎвЂљ'];
+    const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
     const PAIRS = [1, 2, 3, 4, 5, 6, 7];
     const PAIR_TIMES = SA.defaultTimes || {};
 
@@ -22,7 +22,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         teacherIdByName: {},
         teacherScheduleCache: {},
         teacherIndexFacultyKey: '',
-        currentViewLabel: 'Р В±Р В°Р В·Р С•Р Р†Р С‘Р в„–'
+        currentViewLabel: 'базовий'
     };
 
     const els = {
@@ -76,7 +76,7 @@ window.ScheduleApp = window.ScheduleApp || {};
     function setDataModeBadge(text, isOptimized) {
         state.currentViewLabel = text;
         if (!els.dataModeBadge) return;
-        els.dataModeBadge.textContent = `Р В Р ВµР В¶Р С‘Р С: ${text}`;
+        els.dataModeBadge.textContent = `Режим: ${text}`;
         els.dataModeBadge.className = isOptimized
             ? 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
             : 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100';
@@ -104,7 +104,7 @@ window.ScheduleApp = window.ScheduleApp || {};
     function dayNameByDateDmy(dmy) {
         const d = parseDmy(dmy);
         if (!d) return dmy || '';
-        const names = ['Р СњР ВµР Т‘РЎвЂ“Р В»РЎРЏ', 'Р СџР С•Р Р…Р ВµР Т‘РЎвЂ“Р В»Р С•Р С”', 'Р вЂ™РЎвЂ“Р Р†РЎвЂљР С•РЎР‚Р С•Р С”', 'Р РЋР ВµРЎР‚Р ВµР Т‘Р В°', 'Р В§Р ВµРЎвЂљР Р†Р ВµРЎР‚', "Р Сџ'РЎРЏРЎвЂљР Р…Р С‘РЎвЂ РЎРЏ", 'Р РЋРЎС“Р В±Р С•РЎвЂљР В°'];
+        const names = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота'];
         return names[d.getDay()] || dmy || '';
     }
 
@@ -216,16 +216,16 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.chairSelect.classList.toggle('hidden', !isTeacher);
         els.entitySelect.classList.toggle('hidden', isFaculty);
 
-        if (isGroup) els.entitySelect.innerHTML = '<option value="">Р С›Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ Р С–РЎР‚РЎС“Р С—РЎС“...</option>';
-        else if (isTeacher) els.entitySelect.innerHTML = '<option value="">Р С›Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ Р Р†Р С‘Р С”Р В»Р В°Р Т‘Р В°РЎвЂЎР В°...</option>';
-        else els.entitySelect.innerHTML = '<option value="">Р Р€ РЎР‚Р ВµР В¶Р С‘Р СРЎвЂ“ РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљРЎС“ Р Р†Р С‘Р В±РЎвЂ“РЎР‚ Р Р…Р Вµ Р С—Р С•РЎвЂљРЎР‚РЎвЂ“Р В±Р ВµР Р…</option>';
+        if (isGroup) els.entitySelect.innerHTML = '<option value="">Оберіть групу...</option>';
+        else if (isTeacher) els.entitySelect.innerHTML = '<option value="">Оберіть викладача...</option>';
+        else els.entitySelect.innerHTML = '<option value="">У режимі факультету вибір не потрібен</option>';
     }
 
     async function loadBaseFilters() {
-        setStatus('Р вЂ”Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р ВµР Р…Р Р…РЎРЏ РЎвЂћРЎвЂ“Р В»РЎРЉРЎвЂљРЎР‚РЎвЂ“Р Р†...');
+        setStatus('Завантаження фільтрів...');
         const data = await SA.fetchApi('GetStudentScheduleFiltersData', {}, { useCache: false });
         if (!data) {
-            setStatus('Р СњР Вµ Р Р†Р Т‘Р В°Р В»Р С•РЎРѓРЎРЏ Р В·Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р С‘РЎвЂљР С‘ РЎвЂћРЎвЂ“Р В»РЎРЉРЎвЂљРЎР‚Р С‘', true);
+            setStatus('Не вдалося завантажити фільтри', true);
             return;
         }
         state.faculties = data.faculties || [];
@@ -234,12 +234,12 @@ window.ScheduleApp = window.ScheduleApp || {};
         fillSelect(els.facultySelect, state.faculties, 'Value', 'Key', true);
         fillSelect(els.eduFormSelect, state.eduForms, 'Value', 'Key', true);
         fillSelect(els.courseSelect, state.courses, 'Value', 'Key', true);
-        setStatus('Р В¤РЎвЂ“Р В»РЎРЉРЎвЂљРЎР‚Р С‘ Р С–Р С•РЎвЂљР С•Р Р†РЎвЂ“');
+        setStatus('Фільтри готові');
     }
 
     async function loadGroups() {
         if (!els.facultySelect.value) return;
-        setStatus('Р вЂ”Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р ВµР Р…Р Р…РЎРЏ Р С–РЎР‚РЎС“Р С—...');
+        setStatus('Завантаження груп...');
         const data = await SA.fetchApi('GetStudyGroups', {
             aFacultyID: els.facultySelect.value,
             aEducationForm: els.eduFormSelect.value || '0',
@@ -247,12 +247,12 @@ window.ScheduleApp = window.ScheduleApp || {};
         }, { useCache: false });
         state.entities = (data && data.studyGroups) ? data.studyGroups : [];
         fillSelect(els.entitySelect, state.entities, 'Value', 'Key', false);
-        setStatus(`Р вЂ”Р Р…Р В°Р в„–Р Т‘Р ВµР Р…Р С• Р С–РЎР‚РЎС“Р С—: ${state.entities.length}`);
+        setStatus(`Знайдено груп: ${state.entities.length}`);
     }
 
     async function loadChairs() {
         if (!els.facultySelect.value) return;
-        setStatus('Р вЂ”Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р ВµР Р…Р Р…РЎРЏ Р С”Р В°РЎвЂћР ВµР Т‘РЎР‚...');
+        setStatus('Завантаження кафедр...');
         const data = await SA.fetchApi('GetEmployeeChairs', { aFacultyID: els.facultySelect.value }, { useCache: false });
         state.chairs = (data && data.chairs) ? data.chairs : [];
         fillSelect(els.chairSelect, state.chairs, 'Value', 'Key', true);
@@ -261,14 +261,14 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     async function loadEmployees() {
         if (!els.facultySelect.value || !els.chairSelect.value) return;
-        setStatus('Р вЂ”Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р ВµР Р…Р Р…РЎРЏ Р Р†Р С‘Р С”Р В»Р В°Р Т‘Р В°РЎвЂЎРЎвЂ“Р Р†...');
+        setStatus('Завантаження викладачів...');
         const data = await SA.fetchApi('GetEmployees', {
             aFacultyID: els.facultySelect.value,
             aChairID: els.chairSelect.value
         }, { useCache: false });
         state.entities = Array.isArray(data) ? data : [];
         fillSelect(els.entitySelect, state.entities, 'Value', 'Key', false);
-        setStatus(`Р вЂ”Р Р…Р В°Р в„–Р Т‘Р ВµР Р…Р С• Р Р†Р С‘Р С”Р В»Р В°Р Т‘Р В°РЎвЂЎРЎвЂ“Р Р†: ${state.entities.length}`);
+        setStatus(`Знайдено викладачів: ${state.entities.length}`);
     }
 
     function buildWeekDays() {
@@ -307,7 +307,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.tableBody.innerHTML = '';
 
         const trHead = document.createElement('tr');
-        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р СџР В°РЎР‚Р В°</th>${
+        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${
             state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${d.label}</th>`).join('')
         }`;
         els.tableHead.appendChild(trHead);
@@ -316,7 +316,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         const trueConflictKeys = new Set();
         PAIRS.forEach((pair) => {
             const tr = document.createElement('tr');
-            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} Р С—Р В°РЎР‚Р В°</td>`;
+            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} пара</td>`;
 
             state.weekDays.forEach((day) => {
                 const cellKey = `${day.dow}-${pair}`;
@@ -367,26 +367,26 @@ window.ScheduleApp = window.ScheduleApp || {};
                 const chipHtml = items.map((it) => {
                     let subtitle = '';
                     if (state.mode === 'group') {
-                        subtitle = it.teacher || 'Р вЂ™Р С‘Р С”Р В»Р В°Р Т‘Р В°РЎвЂЎ Р Р…Р Вµ Р Р†Р С”Р В°Р В·Р В°Р Р…Р С‘Р в„–';
+                        subtitle = it.teacher || 'Викладач не вказаний';
                     } else if (state.mode === 'teacher') {
-                        subtitle = it.group || it.sourceName || 'Р вЂњРЎР‚РЎС“Р С—Р В° Р Р…Р Вµ Р Р†Р С”Р В°Р В·Р В°Р Р…Р В°';
+                        subtitle = it.group || it.sourceName || 'Група не вказана';
                     } else {
-                        const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Р вЂњРЎР‚РЎС“Р С—Р В° ?'];
+                        const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Група ?'];
                         const groupsText = groups.join(', ');
-                        subtitle = `${groups.length > 1 ? 'Р СџР С•РЎвЂљРЎвЂ“Р С”' : 'Р вЂњРЎР‚РЎС“Р С—Р В°'}: ${groupsText} Р’В· ${it.teacher || 'Р вЂ™Р С‘Р С”Р В»Р В°Р Т‘Р В°РЎвЂЎ ?'}`;
+                        subtitle = `${groups.length > 1 ? 'Потік' : 'Група'}: ${groupsText} · ${it.teacher || 'Викладач ?'}`;
                     }
 
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
                     return `
                         <div class="lesson-chip ${items.length > 1 ? 'lesson-conflict' : ''} bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
-                            <div class="font-semibold">${it.discipline || 'Р вЂР ВµР В· Р Р…Р В°Р В·Р Р†Р С‘'}</div>
+                            <div class="font-semibold">${it.discipline || 'Без назви'}</div>
                             <div class="text-xs text-gray-500">${subtitle}</div>
-                            <div class="text-xs text-gray-500">${it.type || 'Р СћР С‘Р С— Р Р…Р Вµ Р Р†Р С”Р В°Р В·Р В°Р Р…Р С•'} Р’В· ${it.room || 'РІР‚вЂќ'} ${timeText ? `Р’В· ${timeText}` : ''}</div>
+                            <div class="text-xs text-gray-500">${it.type || 'Тип не вказано'} · ${it.room || '—'} ${timeText ? `· ${timeText}` : ''}</div>
                         </div>
                     `;
                 }).join('');
 
-                row += `<td class="slot-cell p-2 border dark:border-gray-700">${chipHtml || '<span class="text-xs text-gray-400">РІР‚вЂќ</span>'}</td>`;
+                row += `<td class="slot-cell p-2 border dark:border-gray-700">${chipHtml || '<span class="text-xs text-gray-400">—</span>'}</td>`;
             });
 
             tr.innerHTML = row;
@@ -416,14 +416,14 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.optimizedTableHead.innerHTML = '';
         els.optimizedTableBody.innerHTML = '';
         const trHead = document.createElement('tr');
-        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р СџР В°РЎР‚Р В°</th>${
+        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${
             state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${d.label}</th>`).join('')
         }`;
         els.optimizedTableHead.appendChild(trHead);
 
         PAIRS.forEach((pair) => {
             const tr = document.createElement('tr');
-            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} Р С—Р В°РЎР‚Р В°</td>`;
+            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} пара</td>`;
             state.weekDays.forEach((day) => {
                 const rawItems = map.get(`${day.dow}-${pair}`) || [];
                 const merged = new Map();
@@ -445,18 +445,18 @@ window.ScheduleApp = window.ScheduleApp || {};
                 });
                 const items = Array.from(merged.values());
                 const chipHtml = items.map((it) => {
-                    const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Р вЂњРЎР‚РЎС“Р С—Р В° ?'];
-                    const subtitle = `${groups.length > 1 ? 'Р СџР С•РЎвЂљРЎвЂ“Р С”' : 'Р вЂњРЎР‚РЎС“Р С—Р В°'}: ${groups.join(', ')} Р’В· ${it.teacher || 'Р вЂ™Р С‘Р С”Р В»Р В°Р Т‘Р В°РЎвЂЎ ?'}`;
+                    const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Група ?'];
+                    const subtitle = `${groups.length > 1 ? 'Потік' : 'Група'}: ${groups.join(', ')} · ${it.teacher || 'Викладач ?'}`;
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
                     return `
                         <div class="lesson-chip bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
-                            <div class="font-semibold">${it.discipline || 'Р вЂР ВµР В· Р Р…Р В°Р В·Р Р†Р С‘'}</div>
+                            <div class="font-semibold">${it.discipline || 'Без назви'}</div>
                             <div class="text-xs text-gray-500">${subtitle}</div>
-                            <div class="text-xs text-gray-500">${it.type || 'Р СћР С‘Р С— Р Р…Р Вµ Р Р†Р С”Р В°Р В·Р В°Р Р…Р С•'} Р’В· ${it.room || 'РІР‚вЂќ'} ${timeText ? `Р’В· ${timeText}` : ''}</div>
+                            <div class="text-xs text-gray-500">${it.type || 'Тип не вказано'} · ${it.room || '—'} ${timeText ? `· ${timeText}` : ''}</div>
                         </div>
                     `;
                 }).join('');
-                row += `<td class="slot-cell p-2 border dark:border-gray-700">${chipHtml || '<span class="text-xs text-gray-400">РІР‚вЂќ</span>'}</td>`;
+                row += `<td class="slot-cell p-2 border dark:border-gray-700">${chipHtml || '<span class="text-xs text-gray-400">—</span>'}</td>`;
             });
             tr.innerHTML = row;
             els.optimizedTableBody.appendChild(tr);
@@ -507,23 +507,23 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.groupsTableHead.innerHTML = '';
         els.groupsTableBody.innerHTML = '';
         const th = document.createElement('tr');
-        th.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р СџР В°РЎР‚Р В°</th>${trimmed.map((g) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${g}</th>`).join('')}`;
+        th.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${trimmed.map((g) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${g}</th>`).join('')}`;
         els.groupsTableHead.appendChild(th);
 
         PAIRS.forEach((pair) => {
             const tr = document.createElement('tr');
-            let row = `<td class="p-2 border dark:border-gray-700 font-bold">${pair} Р С—Р В°РЎР‚Р В°</td>`;
+            let row = `<td class="p-2 border dark:border-gray-700 font-bold">${pair} пара</td>`;
             trimmed.forEach((g) => {
                 const cell = matrix.get(`${pair}||${g}`) || [];
-                const text = cell.map((x) => `${x.discipline || 'РІР‚вЂќ'}${x.room ? ` (${x.room})` : ''}`).join(' / ');
-                row += `<td class="p-2 border dark:border-gray-700 text-xs">${text || 'РІР‚вЂќ'}</td>`;
+                const text = cell.map((x) => `${x.discipline || '—'}${x.room ? ` (${x.room})` : ''}`).join(' / ');
+                row += `<td class="p-2 border dark:border-gray-700 text-xs">${text || '—'}</td>`;
             });
             tr.innerHTML = row;
             els.groupsTableBody.appendChild(tr);
         });
 
         const dayObj = getWeekDayByDow(dayDow);
-        els.groupsTableMeta.textContent = `Р вЂќР ВµР Р…РЎРЉ: ${dayObj ? dayObj.label : dayDow}. Р вЂњРЎР‚РЎС“Р С— РЎС“ РЎвЂљР В°Р В±Р В»Р С‘РЎвЂ РЎвЂ“: ${trimmed.length}${groups.length > MAX_GROUPS ? ` (Р С—Р С•Р С”Р В°Р В·Р В°Р Р…Р С• Р С—Р ВµРЎР‚РЎв‚¬РЎвЂ“ ${MAX_GROUPS})` : ''}.`;
+        els.groupsTableMeta.textContent = `День: ${dayObj ? dayObj.label : dayDow}. Груп у таблиці: ${trimmed.length}${groups.length > MAX_GROUPS ? ` (показано перші ${MAX_GROUPS})` : ''}.`;
     }
 
     function computeGroupWindows(dayLessons) {
@@ -638,8 +638,8 @@ window.ScheduleApp = window.ScheduleApp || {};
                 noFirstPairDays: x.noFirstPairDays,
                 avgStart: avgStart ? avgStart.toFixed(2) : '0.00',
                 suggestion: x.windowsWeek >= 3
-                    ? 'Р Р€РЎвЂ°РЎвЂ“Р В»РЎРЉР Р…Р С‘РЎвЂљР С‘ Р С—Р В°РЎР‚Р С‘ Р Р† Р СР ВµР В¶Р В°РЎвЂ¦ Р Т‘Р Р…РЎРЏ (Р В·Р СР ВµР Р…РЎв‚¬Р С‘РЎвЂљР С‘ Р Р†РЎвЂ“Р С”Р Р…Р В°)'
-                    : (x.noFirstPairDays >= 3 ? 'Р СџР ВµРЎР‚Р ВµР Р†РЎвЂ“РЎР‚Р С‘РЎвЂљР С‘ Р СР С•Р В¶Р В»Р С‘Р Р†РЎвЂ“РЎРѓРЎвЂљРЎРЉ РЎРѓРЎвЂљР В°РЎР‚РЎвЂљРЎС“ Р В· 1-2 Р С—Р В°РЎР‚Р С‘' : 'Р В Р С•Р В·Р С”Р В»Р В°Р Т‘ Р В±Р В»Р С‘Р В·РЎРЉР С”Р С‘Р в„– Р Т‘Р С• Р С•Р С—РЎвЂљР С‘Р СР В°Р В»РЎРЉР Р…Р С•Р С–Р С•')
+                    ? 'Ущільнити пари в межах дня (зменшити вікна)'
+                    : (x.noFirstPairDays >= 3 ? 'Перевірити можливість старту з 1-2 пари' : 'Розклад близький до оптимального')
             };
         });
 
@@ -653,14 +653,14 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         els.optAvgWindows.textContent = String(avgWindows);
         els.optNoFirstPairGroups.textContent = String(noFirstPairGroups);
-        els.optMaxWindowsGroup.textContent = max ? `${max.group} (${max.windowsWeek})` : 'РІР‚вЂќ';
+        els.optMaxWindowsGroup.textContent = max ? `${max.group} (${max.windowsWeek})` : '—';
 
         els.optTableHead.innerHTML = '<tr>' +
-            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р вЂњРЎР‚РЎС“Р С—Р В°</th>' +
-            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р вЂ™РЎвЂ“Р С”Р Р…Р В°/РЎвЂљР С‘Р В¶Р Т‘Р ВµР Р…РЎРЉ</th>' +
-            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р вЂќР Р…РЎвЂ“Р Р† Р В±Р ВµР В· 1-РЎвЂ” Р С—Р В°РЎР‚Р С‘</th>' +
-            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р РЋР ВµРЎР‚. РЎРѓРЎвЂљР В°РЎР‚РЎвЂљ Р С—Р В°РЎР‚Р С‘</th>' +
-            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Р В Р ВµР С”Р С•Р СР ВµР Р…Р Т‘Р В°РЎвЂ РЎвЂ“РЎРЏ</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Група</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Вікна/тиждень</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Днів без 1-ї пари</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Сер. старт пари</th>' +
+            '<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Рекомендація</th>' +
             '</tr>';
         els.optTableBody.innerHTML = '';
 
@@ -678,7 +678,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (!els.optMoves) return;
         els.optMoves.innerHTML = '';
         if (!optimized || !optimized.length) {
-            els.optMoves.textContent = 'Р СњР Вµ Р Р†Р Т‘Р В°Р В»Р С•РЎРѓРЎРЏ Р В·Р С–Р ВµР Р…Р ВµРЎР‚РЎС“Р Р†Р В°РЎвЂљР С‘ Р С”Р С•Р Р…Р С”РЎР‚Р ВµРЎвЂљР Р…РЎвЂ“ Р С”РЎР‚Р С•Р С”Р С‘.';
+            els.optMoves.textContent = 'Не вдалося згенерувати конкретні кроки.';
             return;
         }
 
@@ -692,7 +692,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             }
         });
         if (!moves.length) {
-            els.optMoves.textContent = 'Р Р‡Р Р†Р Р…Р С‘РЎвЂ¦ Р С—Р ВµРЎР‚Р ВµР Р…Р С•РЎРѓРЎвЂ“Р Р† Р Р…Р Вµ Р С—Р С•РЎвЂљРЎР‚РЎвЂ“Р В±Р Р…Р С• РІР‚вЂќ Р С—Р С•РЎвЂљР С•РЎвЂЎР Р…Р С‘Р в„– Р Р†Р В°РЎР‚РЎвЂ“Р В°Р Р…РЎвЂљ РЎС“Р В¶Р Вµ Р В±Р В»Р С‘Р В·РЎРЉР С”Р С‘Р в„– Р Т‘Р С• Р С•Р С—РЎвЂљР С‘Р СР В°Р В»РЎРЉР Р…Р С•Р С–Р С•.';
+            els.optMoves.textContent = 'Явних переносів не потрібно — поточний варіант уже близький до оптимального.';
             return;
         }
 
@@ -705,8 +705,8 @@ window.ScheduleApp = window.ScheduleApp || {};
                 const div = document.createElement('div');
                 const dayName = dayNameByDateDmy(m.date);
                 const lesson = (current.find((x) => x.group === m.group && x.date === m.date && x.discipline === m.discipline && x.pair === m.from) || {});
-                const teacher = lesson.teacher ? `, Р Р†Р С‘Р С”Р В». ${lesson.teacher}` : '';
-                div.textContent = `${m.group}: "${m.discipline}"${teacher} РІР‚вЂќ Р С—Р ВµРЎР‚Р ВµР Р…Р ВµРЎРѓРЎвЂљР С‘ Р Р…Р В° ${dayName} (${m.date}) Р В· ${m.from}-РЎвЂ” Р Р…Р В° ${m.to}-РЎС“ Р С—Р В°РЎР‚РЎС“`;
+                const teacher = lesson.teacher ? `, викл. ${lesson.teacher}` : '';
+                div.textContent = `${m.group}: "${m.discipline}"${teacher} — перенести на ${dayName} (${m.date}) з ${m.from}-ї на ${m.to}-у пару`;
                 els.optMoves.appendChild(div);
             });
 
@@ -805,7 +805,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                 done += 1;
             });
 
-            setStatus(`Р В¤Р В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљ: Р В·Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р ВµР Р…Р С• ${done}/${groups.length} Р С–РЎР‚РЎС“Р С—...`);
+            setStatus(`Факультет: завантажено ${done}/${groups.length} груп...`);
         }
 
         return allRows.filter(Boolean);
@@ -875,7 +875,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         buildWeekDays();
         const weekDmySet = new Set(state.weekDays.map((d) => d.dmy));
-        setStatus('Р вЂ”Р В±РЎвЂ“РЎР‚ Р Р†РЎРѓРЎвЂ“РЎвЂ¦ Р С–РЎР‚РЎС“Р С— РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљРЎС“...');
+        setStatus('Збір всіх груп факультету...');
         const groups = await fetchAllFacultyGroups(facultyId);
         state.lastSourceCount = groups.length;
         if (!groups.length) {
@@ -893,7 +893,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     async function runAuxiliaryAnalysis() {
         if (!els.facultySelect.value) {
-            setStatus('Р С›Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљ', true);
+            setStatus('Оберіть факультет', true);
             return;
         }
         state.mode = 'faculty';
@@ -901,18 +901,18 @@ window.ScheduleApp = window.ScheduleApp || {};
         setModeUI();
         await ensureFacultyLoaded();
         state.normalized = state.baselineNormalized.slice();
-        setDataModeBadge('Р В±Р В°Р В·Р С•Р Р†Р С‘Р в„– (Р В°Р Р…Р В°Р В»РЎвЂ“Р В·)', false);
+        setDataModeBadge('базовий (аналіз)', false);
         renderTable(state.normalized);
         if (els.optimizedTableSection) els.optimizedTableSection.classList.add('hidden');
         fillGroupsDaySelect();
         renderGroupsTable();
         await renderOptimizationReport(state.baselineNormalized, null);
-        setStatus(`Р вЂќР С•Р С—Р С•Р СРЎвЂ“Р В¶Р Р…Р С‘Р в„– Р В°Р Р…Р В°Р В»РЎвЂ“Р В· Р С–Р С•РЎвЂљР С•Р Р†Р С‘Р в„–: ${state.normalized.length} Р В·Р В°Р Р…РЎРЏРЎвЂљРЎРЉ`);
+        setStatus(`Допоміжний аналіз готовий: ${state.normalized.length} занять`);
     }
 
     async function buildOptimizedFacultySchedule() {
         if (!els.facultySelect.value) {
-            setStatus('Р С›Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљ', true);
+            setStatus('Оберіть факультет', true);
             return;
         }
         state.mode = 'faculty';
@@ -920,13 +920,13 @@ window.ScheduleApp = window.ScheduleApp || {};
         setModeUI();
         await ensureFacultyLoaded();
         if (!state.baselineNormalized.length) {
-            setStatus('Р вЂќР В»РЎРЏ РЎвЂ РЎРЉР С•Р С–Р С• РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљРЎС“ Р Р…Р Вµ Р В·Р Р…Р В°Р в„–Р Т‘Р ВµР Р…Р С• Р Т‘Р В°Р Р…Р С‘РЎвЂ¦', true);
+            setStatus('Для цього факультету не знайдено даних', true);
             return;
         }
-        setStatus('Р вЂРЎС“Р Т‘РЎС“РЎР‹ Р Р…Р С•Р Р†Р С‘Р в„– Р С•Р С—РЎвЂљР С‘Р СРЎвЂ“Р В·Р С•Р Р†Р В°Р Р…Р С‘Р в„– РЎР‚Р С•Р В·Р С”Р В»Р В°Р Т‘...');
+        setStatus('Будую новий оптимізований розклад...');
         state.optimizedNormalized = optimizeFacultySchedule(state.baselineNormalized);
         state.normalized = state.optimizedNormalized.slice();
-        setDataModeBadge('Р Р…Р С•Р Р†Р С‘Р в„– Р С•Р С—РЎвЂљР С‘Р СРЎвЂ“Р В·Р С•Р Р†Р В°Р Р…Р С‘Р в„–', true);
+        setDataModeBadge('новий оптимізований', true);
         renderTable(state.normalized);
         renderOptimizedTable(state.optimizedNormalized);
         fillGroupsDaySelect();
@@ -935,7 +935,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         const before = getWindowsSummary(state.baselineNormalized).reduce((s, x) => s + x.windowsWeek, 0);
         const after = getWindowsSummary(state.optimizedNormalized).reduce((s, x) => s + x.windowsWeek, 0);
-        setStatus(`Р С›Р С—РЎвЂљР С‘Р СРЎвЂ“Р В·Р С•Р Р†Р В°Р Р…Р С‘Р в„– РЎР‚Р С•Р В·Р С”Р В»Р В°Р Т‘ Р С–Р С•РЎвЂљР С•Р Р†Р С‘Р в„–: Р Р†РЎвЂ“Р С”Р Р…Р В° ${before} РІвЂ вЂ™ ${after}`);
+        setStatus(`Оптимізований розклад готовий: вікна ${before} → ${after}`);
     }
 
     async function buildWeekSchedule() {
@@ -944,17 +944,17 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
         if (!els.facultySelect.value) {
-            setStatus('Р С›Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљ', true);
+            setStatus('Оберіть факультет', true);
             return;
         }
         if (state.mode !== 'faculty' && !els.entitySelect.value) {
             state.mode = 'faculty';
             if (els.modeSelect) els.modeSelect.value = 'faculty';
             setModeUI();
-            setStatus('Р С’Р Р†РЎвЂљР С•Р СР В°РЎвЂљР С‘РЎвЂЎР Р…Р С• РЎС“Р Р†РЎвЂ“Р СР С”Р Р…Р ВµР Р…Р С• РЎР‚Р ВµР В¶Р С‘Р С РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљРЎС“. Р вЂ”Р В°Р С—РЎС“РЎРѓР С”Р В°РЎР‹ Р В·Р В±РЎвЂ“РЎР‚...');
+            setStatus('Автоматично увімкнено режим факультету. Запускаю збір...');
         }
         if (!els.weekStart.value || !els.weekEnd.value) {
-            setStatus('Р С›Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ Р С”Р С•РЎР‚Р ВµР С”РЎвЂљР Р…Р С‘Р в„– Р Т‘РЎвЂ“Р В°Р С—Р В°Р В·Р С•Р Р… Р Т‘Р В°РЎвЂљ', true);
+            setStatus('Оберіть коректний діапазон дат', true);
             return;
         }
 
@@ -974,21 +974,21 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (state.mode === 'group') payload.aStudyGroupID = entityId;
         else payload.aEmployeeID = entityId;
 
-        setStatus('Р СџР В°РЎР‚РЎРѓР С‘Р Р…Р С– API РЎвЂљР В° Р В°Р Р†РЎвЂљР С•Р В·Р В±РЎвЂ“РЎР‚Р С”Р В° РЎвЂљР С‘Р В¶Р Р…Р ВµР Р†Р С•Р С–Р С• РЎР‚Р С•Р В·Р С”Р В»Р В°Р Т‘РЎС“...');
+        setStatus('Парсинг API та автозбірка тижневого розкладу...');
         const data = await SA.fetchApi(action, payload, { useCache: false });
         if (!Array.isArray(data)) {
-            setStatus('Р СњР Вµ Р Р†Р Т‘Р В°Р В»Р С•РЎРѓРЎРЏ Р В·Р В°Р Р†Р В°Р Р…РЎвЂљР В°Р В¶Р С‘РЎвЂљР С‘ РЎР‚Р С•Р В·Р С”Р В»Р В°Р Т‘', true);
+            setStatus('Не вдалося завантажити розклад', true);
             return;
         }
 
         state.lastSourceCount = 1;
         state.normalized = data.map((x) => normalizeLesson(x, '')).filter((l) => l && weekDmySet.has(l.date));
-        setDataModeBadge('Р В±Р В°Р В·Р С•Р Р†Р С‘Р в„–', false);
+        setDataModeBadge('базовий', false);
         renderTable(state.normalized);
         if (els.groupsTableSection) els.groupsTableSection.classList.add('hidden');
         if (els.optimizationSection) els.optimizationSection.classList.add('hidden');
         if (els.optimizedTableSection) els.optimizedTableSection.classList.add('hidden');
-        setStatus(`Р вЂњР С•РЎвЂљР С•Р Р†Р С•: Р В·РЎвЂ“Р В±РЎР‚Р В°Р Р…Р С• ${state.normalized.length} Р В·Р В°Р Р…РЎРЏРЎвЂљРЎРЉ Р В·Р В° РЎвЂљР С‘Р В¶Р Т‘Р ВµР Р…РЎРЉ`);
+        setStatus(`Готово: зібрано ${state.normalized.length} занять за тиждень`);
     }
 
     function bind() {
@@ -997,7 +997,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             setModeUI();
             if (state.mode === 'group') await loadGroups();
             else if (state.mode === 'teacher') await loadChairs();
-            else setStatus('Р В Р ВµР В¶Р С‘Р С РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљРЎС“: Р Р†Р С‘Р В±Р ВµРЎР‚РЎвЂ“РЎвЂљРЎРЉ РЎвЂћР В°Р С”РЎС“Р В»РЎРЉРЎвЂљР ВµРЎвЂљ РЎвЂ“ Р Р…Р В°РЎвЂљР С‘РЎРѓР Р…РЎвЂ“РЎвЂљРЎРЉ Р вЂ”РЎвЂ“Р В±РЎР‚Р В°РЎвЂљР С‘');
+            else setStatus('Режим факультету: виберіть факультет і натисніть Зібрати');
         });
 
         els.facultySelect.addEventListener('change', async () => {
@@ -1035,5 +1035,5 @@ window.ScheduleApp = window.ScheduleApp || {};
         await loadGroups();
     }
 
-    init().catch((e) => setStatus(`Р СџР С•Р СР С‘Р В»Р С”Р В° РЎвЂ“Р Р…РЎвЂ“РЎвЂ РЎвЂ“Р В°Р В»РЎвЂ“Р В·Р В°РЎвЂ РЎвЂ“РЎвЂ”: ${e.message}`, true));
+    init().catch((e) => setStatus(`Помилка ініціалізації: ${e.message}`, true));
 })(window.ScheduleApp);
