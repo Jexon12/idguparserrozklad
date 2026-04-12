@@ -696,7 +696,19 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
 
-        const visibleMoves = moves
+        const safeMoves = moves.filter((m) => {
+            const shift = m.to - m.from;
+            if (shift >= 2) return false;
+            if (m.from <= 4 && m.to >= 6) return false;
+            return true;
+        });
+
+        if (!safeMoves.length) {
+            els.optMoves.textContent = 'Небезпечні переноси на пізні пари автоматично приховано.';
+            return;
+        }
+
+        const visibleMoves = safeMoves
             .slice()
             .sort((a, b) => (a.group.localeCompare(b.group, 'uk') || a.date.localeCompare(b.date, 'uk')))
             .slice(0, 80);
