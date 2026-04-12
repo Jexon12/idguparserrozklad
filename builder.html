@@ -25,7 +25,9 @@
     <style>
         .slot-cell { min-width: 220px; vertical-align: top; }
         .lesson-chip { border-left: 3px solid #0284c7; }
+        .lesson-chip-moved { border-left-color: #d97706; background: rgba(245, 158, 11, 0.12); }
         .lesson-conflict { border-left-color: #dc2626; }
+        .opt-cell-changed { background: rgba(56, 189, 248, 0.14); }
         .mode-faculty-only { display: none; }
         .is-faculty .mode-faculty-only { display: block; }
         #buildBtn,
@@ -125,10 +127,13 @@
         </section>
 
         <section id="optimizedTableSection" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 hidden">
-            <div class="mb-3">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
                     Новий оптимізований розклад
                 </span>
+                <button id="exportOptimizedBtn" class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 text-xs font-bold">
+                    Експорт Excel
+                </button>
             </div>
             <div class="overflow-auto">
                 <table class="w-full text-sm border-collapse">
@@ -180,6 +185,7 @@
 
     <script src="js/utils.js?v=20260410-1"></script>
     <script src="js/api.js?v=20260410-1"></script>
-    <script src="js/builder.js?v=20260411-2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="js/builder.js?v=20260412-1"></script>
 </body>
 </html>

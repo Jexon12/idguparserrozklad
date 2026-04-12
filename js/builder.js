@@ -65,7 +65,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         optMaxWindowsGroup: document.getElementById('optMaxWindowsGroup'),
         optTableHead: document.getElementById('optTableHead'),
         optTableBody: document.getElementById('optTableBody'),
-        optMoves: document.getElementById('optMoves')
+        optMoves: document.getElementById('optMoves'),
+        exportOptimizedBtn: document.getElementById('exportOptimizedBtn')
     };
 
     function setStatus(msg, isError) {
@@ -413,19 +414,55 @@ window.ScheduleApp = window.ScheduleApp || {};
             map.get(key).push(l);
         });
 
+        const baseById = new Map((state.baselineNormalized || []).map((x) => [x.id, x]));
+        const movedIds = new Set();
+        lessons.forEach((l) => {
+            const b = baseById.get(l.id);
+            if (!b) return;
+            if (b.pair !== l.pair || b.dow !== l.dow || b.date !== l.date) movedIds.add(l.id);
+        });
+
+        const baselineSlotMap = new Map();
+        (state.baselineNormalized || []).forEach((l) => {
+            if (!l || !l.pair) return;
+            const key = `${l.dow}-${l.pair}`;
+            if (!baselineSlotMap.has(key)) baselineSlotMap.set(key, new Set());
+            baselineSlotMap.get(key).add(l.id);
+        });
+        const optimizedSlotMap = new Map();
+        lessons.forEach((l) => {
+            if (!l || !l.pair) return;
+            const key = `${l.dow}-${l.pair}`;
+            if (!optimizedSlotMap.has(key)) optimizedSlotMap.set(key, new Set());
+            optimizedSlotMap.get(key).add(l.id);
+        });
+        const setsEqual = (a, b) => {
+            if (a === b) return true;
+            if (!a || !b) return false;
+            if (a.size !== b.size) return false;
+            for (const x of a) if (!b.has(x)) return false;
+            return true;
+        };
+        const changedSlots = new Set();
+        const allSlotKeys = new Set([...baselineSlotMap.keys(), ...optimizedSlotMap.keys()]);
+        allSlotKeys.forEach((k) => {
+            if (!setsEqual(baselineSlotMap.get(k), optimizedSlotMap.get(k))) changedSlots.add(k);
+        });
+
         els.optimizedTableHead.innerHTML = '';
         els.optimizedTableBody.innerHTML = '';
         const trHead = document.createElement('tr');
-        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${
+        trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Pair</th>${
             state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${d.label}</th>`).join('')
         }`;
         els.optimizedTableHead.appendChild(trHead);
 
         PAIRS.forEach((pair) => {
             const tr = document.createElement('tr');
-            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} пара</td>`;
+            let row = `<td class="p-2 border dark:border-gray-700 font-bold align-top">${pair} pair</td>`;
             state.weekDays.forEach((day) => {
-                const rawItems = map.get(`${day.dow}-${pair}`) || [];
+                const slotKey = `${day.dow}-${pair}`;
+                const rawItems = map.get(slotKey) || [];
                 const merged = new Map();
                 rawItems.forEach((it) => {
                     const mergeKey = [
@@ -438,31 +475,88 @@ window.ScheduleApp = window.ScheduleApp || {};
                         it.start || '',
                         it.end || ''
                     ].join('||');
-                    if (!merged.has(mergeKey)) merged.set(mergeKey, { ...it, groupsList: [] });
+                    if (!merged.has(mergeKey)) merged.set(mergeKey, { ...it, groupsList: [], hasMoved: false });
                     const ref = merged.get(mergeKey);
                     const g = String(it.group || it.sourceName || '').trim();
                     if (g && !ref.groupsList.includes(g)) ref.groupsList.push(g);
+                    if (movedIds.has(it.id)) ref.hasMoved = true;
                 });
                 const items = Array.from(merged.values());
                 const chipHtml = items.map((it) => {
-                    const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Група ?'];
-                    const subtitle = `${groups.length > 1 ? 'Потік' : 'Група'}: ${groups.join(', ')} · ${it.teacher || 'Викладач ?'}`;
+                    const groups = Array.isArray(it.groupsList) ? it.groupsList : [it.group || it.sourceName || 'Group ?'];
+                    const subtitle = `${groups.length > 1 ? 'Stream' : 'Group'}: ${groups.join(', ')} | ${it.teacher || 'Teacher ?'}`;
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
                     return `
-                        <div class="lesson-chip bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
-                            <div class="font-semibold">${it.discipline || 'Без назви'}</div>
+                        <div class="lesson-chip ${it.hasMoved ? 'lesson-chip-moved' : ''} bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
+                            <div class="font-semibold">${it.discipline || 'No title'}</div>
                             <div class="text-xs text-gray-500">${subtitle}</div>
-                            <div class="text-xs text-gray-500">${it.type || 'Тип не вказано'} · ${it.room || '—'} ${timeText ? `· ${timeText}` : ''}</div>
+                            <div class="text-xs text-gray-500">${it.type || 'Type n/a'} | ${it.room || '-'} ${timeText ? `| ${timeText}` : ''}</div>
                         </div>
                     `;
                 }).join('');
-                row += `<td class="slot-cell p-2 border dark:border-gray-700">${chipHtml || '<span class="text-xs text-gray-400">—</span>'}</td>`;
+                const changedCellClass = changedSlots.has(slotKey) ? 'opt-cell-changed' : '';
+                row += `<td class="slot-cell p-2 border dark:border-gray-700 ${changedCellClass}">${chipHtml || '<span class="text-xs text-gray-400">-</span>'}</td>`;
             });
             tr.innerHTML = row;
             els.optimizedTableBody.appendChild(tr);
         });
 
         els.optimizedTableSection.classList.remove('hidden');
+    }
+
+    function exportOptimizedToExcel() {
+        if (!Array.isArray(state.optimizedNormalized) || !state.optimizedNormalized.length) {
+            setStatus('Build optimized schedule first', true);
+            return;
+        }
+        if (typeof XLSX === 'undefined') {
+            setStatus('Excel module was not loaded', true);
+            return;
+        }
+
+        const baseById = new Map((state.baselineNormalized || []).map((x) => [x.id, x]));
+        const sorted = state.optimizedNormalized.slice().sort((a, b) => {
+            const da = parseDmy(a.date || '');
+            const db = parseDmy(b.date || '');
+            const ta = da ? da.getTime() : 0;
+            const tb = db ? db.getTime() : 0;
+            if (ta !== tb) return ta - tb;
+            if ((a.pair || 0) !== (b.pair || 0)) return (a.pair || 0) - (b.pair || 0);
+            return String(a.group || '').localeCompare(String(b.group || ''), 'uk');
+        });
+
+        const rows = sorted.map((l) => {
+            const b = baseById.get(l.id);
+            const moved = !!(b && (b.pair !== l.pair || b.date !== l.date || b.dow !== l.dow));
+            return {
+                Date: l.date || '',
+                Day: dayNameByDateDmy(l.date || ''),
+                Pair: l.pair || '',
+                Time: (l.start && l.end) ? `${l.start}-${l.end}` : '',
+                Group: l.group || l.sourceName || '',
+                Discipline: l.discipline || '',
+                Type: l.type || '',
+                Teacher: l.teacher || '',
+                Room: l.room || '',
+                Before: b ? `${b.date || ''} | ${b.pair || ''}` : '',
+                After: `${l.date || ''} | ${l.pair || ''}`,
+                Changed: moved ? 'yes' : 'no'
+            };
+        });
+
+        const movedRows = rows.filter((r) => r.Changed === 'yes');
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Optimized');
+        XLSX.utils.book_append_sheet(
+            wb,
+            XLSX.utils.json_to_sheet(movedRows.length ? movedRows : [{ Message: 'No changes detected' }]),
+            'Changes'
+        );
+
+        const start = els.weekStart && els.weekStart.value ? els.weekStart.value : 'week';
+        const end = els.weekEnd && els.weekEnd.value ? els.weekEnd.value : 'week';
+        XLSX.writeFile(wb, `optimized-schedule-${start}_${end}.xlsx`);
+        setStatus(`Excel exported: ${rows.length} rows, changes: ${movedRows.length}`);
     }
 
     function getWeekDayByDow(dow) {
@@ -1033,6 +1127,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         if (els.groupsApplyBtn) els.groupsApplyBtn.addEventListener('click', renderGroupsTable);
         if (els.groupsDaySelect) els.groupsDaySelect.addEventListener('change', renderGroupsTable);
         if (els.runOptimizationBtn) els.runOptimizationBtn.addEventListener('click', runAuxiliaryAnalysis);
+        if (els.exportOptimizedBtn) els.exportOptimizedBtn.addEventListener('click', exportOptimizedToExcel);
         if (els.buildBtnPrimary) {
             els.buildBtnPrimary.removeEventListener('click', buildWeekSchedule);
             els.buildBtnPrimary.addEventListener('click', buildOptimizedFacultySchedule);
