@@ -8,6 +8,20 @@ window.ScheduleApp = window.ScheduleApp || {};
     let scanWorker = null;
     let stopWatcher = null;
 
+    function toPlainClone(value) {
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (e) {
+            if (Array.isArray(value)) return value.map((x) => toPlainClone(x));
+            if (value && typeof value === 'object') {
+                const out = {};
+                Object.keys(value).forEach((k) => { out[k] = toPlainClone(value[k]); });
+                return out;
+            }
+            return value;
+        }
+    }
+
     function cleanupWorker() {
         if (stopWatcher) {
             clearInterval(stopWatcher);
@@ -103,10 +117,10 @@ window.ScheduleApp = window.ScheduleApp || {};
         scanWorker.postMessage({
             type: 'start',
             payload: {
-                occupancyDate: refs.occupancyDate.value,
-                faculties: refs.faculties.value,
-                courses: refs.courses.value,
-                eduForms: refs.eduForms.value
+                occupancyDate: String(refs.occupancyDate.value || ''),
+                faculties: toPlainClone(refs.faculties.value || []),
+                courses: toPlainClone(refs.courses.value || []),
+                eduForms: toPlainClone(refs.eduForms.value || [])
             }
         });
     };
