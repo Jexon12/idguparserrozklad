@@ -11,7 +11,7 @@ const ADMIN_PASSWORD = (_rawAdmin && _rawAdmin !== 'admin123' && _rawAdmin.lengt
     ? _rawAdmin
     : (process.env.NODE_ENV === 'production' ? null : 'admin123');
 
-// University ID вЂ” single source of truth
+// University ID — single source of truth
 const VUZ_ID = process.env.VUZ_ID || 11927;
 
 // --- Proxy cache: Redis/KV when available, else in-memory ---
@@ -331,7 +331,7 @@ const apiHandler = async (req, res) => {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
     const pathname = (urlObj.pathname || '').toLowerCase();
 
-    // Helper to allow CORS вЂ” restrict for admin mutations
+    // Helper to allow CORS — restrict for admin mutations
     const origin = req.headers.origin || '';
     // #21: strict pathname match for CORS instead of .includes()
     const isAdminPost = req.method === 'POST' && (
@@ -818,14 +818,14 @@ const apiHandler = async (req, res) => {
                 .slice(0, 15);
             res.status(200).json(results);
         } else {
-            // No cache вЂ” return empty, client handles client-side search
+            // No cache — return empty, client handles client-side search
             res.status(200).json([]);
         }
         return;
     }
 
     // =========================================================
-    // ROUTE: Report Start (POST) вЂ” two-phase with progress
+    // ROUTE: Report Start (POST) — two-phase with progress
     // =========================================================
     if (pathname === '/api/report/start' && req.method === 'POST') {
         // #2 fix: declare payload with let
@@ -886,7 +886,7 @@ const apiHandler = async (req, res) => {
     }
 
     // =========================================================
-    // ROUTE: Report Status (GET) вЂ” progress polling
+    // ROUTE: Report Status (GET) — progress polling
     // =========================================================
     if (pathname === '/api/report/status' && req.method === 'GET') {
         const jobId = urlObj.searchParams.get('jobId');
@@ -1064,7 +1064,7 @@ const apiHandler = async (req, res) => {
             const safeName = encodeURIComponent(`Звіт_${teacherName}_${monthStartStr}_${monthEndStr}.xlsx`);
             res.setHeader('Content-Disposition', `attachment; filename="Report.xlsx"; filename*=UTF-8''${safeName}`);
 
-            // #11: ExcelJS closes the stream internally вЂ” no res.end() needed
+            // #11: ExcelJS closes the stream internally — no res.end() needed
             await workbook.xlsx.write(res);
 
         } catch (e) {
@@ -1415,7 +1415,7 @@ const apiHandler = async (req, res) => {
     }
 
     // =========================================================
-    // ROUTE: PROXY (Osvita) вЂ” with in-memory cache
+    // ROUTE: PROXY (Osvita) — with in-memory cache
     // =========================================================
 
     // Safety check: Don't proxy 'links'
@@ -1448,7 +1448,7 @@ const apiHandler = async (req, res) => {
     console.log(`[Proxy] Action: ${action} -> Forwarding to: ${targetUrl}`);
     const isSchedule = action.toLowerCase().startsWith('getscheduledata');
 
-    // #16: node-fetch v2 ignores `timeout` option вЂ” use AbortController
+    // #16: node-fetch v2 ignores `timeout` option — use AbortController
     try {
         const proxyResult = await getOrCreateInFlightProxy(cacheKeyNorm, async () => {
             const proxyController = new AbortController();
@@ -1615,4 +1615,5 @@ const normalizeSessionTerm = (value) => String(value || '')
     .toLowerCase();
 
 module.exports = apiHandler;
+
 
