@@ -184,8 +184,8 @@
         items.forEach((it, idx) => {
             const id = `${kind}_${idx}_${String(it.key || it.Key || '')}`;
             const label = document.createElement('label');
-            label.className = 'flex items-center gap-2 text-sm';
-            label.innerHTML = `<input type="checkbox" data-kind="${kind}" value="${String(it.key || it.Key || '')}" checked> <span>${String(it.value || it.Value || '')}</span>`;
+            label.className = 'flex items-start gap-2 text-sm break-words';
+            label.innerHTML = `<input type="checkbox" class="mt-0.5 shrink-0" data-kind="${kind}" value="${String(it.key || it.Key || '')}" checked> <span class="leading-5 break-words">${String(it.value || it.Value || '')}</span>`;
             label.querySelector('input').id = id;
             container.appendChild(label);
         });
@@ -397,4 +397,3 @@
 
     init();
 })();
-

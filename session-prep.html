@@ -42,30 +42,30 @@
                 <input id="endDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="rounded-xl border dark:border-gray-700 p-3">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+                <div class="rounded-xl border dark:border-gray-700 p-3 min-h-[260px] flex flex-col">
                     <div class="font-bold mb-2">Курси</div>
                     <div class="flex gap-2 mb-2">
                         <button id="selectAllCourses" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
                         <button id="clearCourses" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Очистити</button>
                     </div>
-                    <div id="coursesBox" class="max-h-44 overflow-auto space-y-1"></div>
+                    <div id="coursesBox" class="flex-1 min-h-0 max-h-56 overflow-y-auto overflow-x-hidden space-y-1 pr-1"></div>
                 </div>
-                <div class="rounded-xl border dark:border-gray-700 p-3">
+                <div class="rounded-xl border dark:border-gray-700 p-3 min-h-[260px] flex flex-col">
                     <div class="font-bold mb-2">Групи</div>
                     <div class="flex gap-2 mb-2">
                         <button id="selectAllGroups" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
                         <button id="clearGroups" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Очистити</button>
                     </div>
-                    <div id="groupsBox" class="max-h-44 overflow-auto space-y-1"></div>
+                    <div id="groupsBox" class="flex-1 min-h-0 max-h-56 overflow-y-auto overflow-x-hidden space-y-1 pr-1"></div>
                 </div>
-                <div class="rounded-xl border dark:border-gray-700 p-3">
+                <div class="rounded-xl border dark:border-gray-700 p-3 min-h-[260px] flex flex-col">
                     <div class="font-bold mb-2">Викладачі (фільтр)</div>
                     <div class="flex gap-2 mb-2">
                         <button id="selectAllTeachers" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
                         <button id="clearTeachers" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Очистити</button>
                     </div>
-                    <div id="teachersBox" class="max-h-44 overflow-auto space-y-1"></div>
+                    <div id="teachersBox" class="flex-1 min-h-0 max-h-56 overflow-y-auto overflow-x-hidden space-y-1 pr-1"></div>
                 </div>
             </div>
 
@@ -102,4 +102,3 @@
     <script src="js/session-prep.js?v=20260430-1"></script>
 </body>
 </html>
-
