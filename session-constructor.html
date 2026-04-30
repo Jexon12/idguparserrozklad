@@ -83,6 +83,7 @@
                 <button id="addRowBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">+ Додати свій предмет</button>
                 <button id="uploadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">3) Завантажити в API</button>
                 <button id="excelBtn" class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">Експорт Excel</button>
+                <button id="wordBtn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm">Експорт Word</button>
                 <button id="copyBtn" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm">Скопіювати таблицю</button>
             </div>
 
@@ -91,6 +92,17 @@
                 <select id="groupFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
                 <select id="teacherFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
                 <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm">Записів: <span id="countLabel" class="font-bold">0</span></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <input id="zalikStartDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Початок заліків">
+                <input id="zalikEndDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Кінець заліків">
+                <input id="examStartDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Початок іспитів">
+                <input id="examEndDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Кінець іспитів">
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button id="autoPlanBtn" class="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm">Автодати (залік/іспит)</button>
+                <button id="conflictsBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm">Перевірити конфлікти</button>
+                <div id="conflictSummary" class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm">Конфліктів: 0</div>
             </div>
 
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
@@ -111,6 +123,7 @@
                             <th class="px-2 py-2 text-left">Група</th>
                             <th class="px-2 py-2 text-left">Викладачі</th>
                             <th class="px-2 py-2 text-left">Форма контролю</th>
+                            <th class="px-2 py-2 text-left">Дата</th>
                             <th class="px-2 py-2 text-left">Дія</th>
                         </tr>
                     </thead>
@@ -119,6 +132,8 @@
             </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260430-4"></script>
+    <script src="js/session-constructor.js?v=20260430-6"></script>
 </body>
 </html>
+
+
