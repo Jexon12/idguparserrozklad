@@ -181,6 +181,17 @@
 
     function renderCheckboxes(container, items, kind) {
         container.innerHTML = '';
+        if (!items || items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'text-xs text-gray-500';
+            if (kind === 'teacher') {
+                empty.textContent = 'Викладачі з’являться після завантаження розкладу груп.';
+            } else {
+                empty.textContent = 'Немає даних';
+            }
+            container.appendChild(empty);
+            return;
+        }
         items.forEach((it, idx) => {
             const id = `${kind}_${idx}_${String(it.key || it.Key || '')}`;
             const label = document.createElement('label');
@@ -234,10 +245,16 @@
     }
 
     function renderTeacherFilterOptions(rows) {
+        const prevSelected = new Set(getCheckedValues('teacher'));
         const teacherSet = new Set();
         rows.forEach((r) => r.teachers.forEach((t) => teacherSet.add(t)));
         state.teachers = Array.from(teacherSet).sort((a, b) => a.localeCompare(b, 'uk'));
         renderCheckboxes(el.teachersBox, state.teachers.map((t) => ({ key: t, value: t })), 'teacher');
+        if (prevSelected.size > 0) {
+            document.querySelectorAll('input[type="checkbox"][data-kind="teacher"]').forEach((x) => {
+                x.checked = prevSelected.has(x.value);
+            });
+        }
     }
 
     function renderTable(rows) {
@@ -326,6 +343,7 @@
 
         const byKey = new Map(state.groups.map((g) => [g.key, g.value]));
         const lessonsByGroup = {};
+        const progressiveRows = [];
 
         setLoading(true, 'Збір розкладу груп...');
         for (let i = 0; i < selectedGroups.length; i++) {
@@ -334,6 +352,12 @@
             setLoading(true, `Збір розкладу: ${i + 1}/${selectedGroups.length}`);
             const lessons = await loadGroupSchedule(key, start, end);
             lessonsByGroup[groupName] = lessons;
+
+            const partialRows = buildRows({ [groupName]: lessons });
+            if (partialRows.length > 0) progressiveRows.push(...partialRows);
+            if (i === 0 || i % 5 === 0 || i === selectedGroups.length - 1) {
+                renderTeacherFilterOptions(progressiveRows);
+            }
         }
         setLoading(false);
 
