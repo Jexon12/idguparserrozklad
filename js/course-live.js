@@ -306,14 +306,52 @@
 
   function renderHeatmap(items) {
     const pairs = [1, 2, 3, 4, 5, 6, 7];
-    const map = new Map();
-    items.forEach((l) => map.set(Number(l.pair), (map.get(Number(l.pair)) || 0) + 1));
-    const max = Math.max(1, ...Array.from(map.values()));
-    els.heatmap.innerHTML = pairs.map((p) => {
-      const v = map.get(p) || 0;
-      const alpha = Math.max(0.08, v / max);
-      return `<div class="grid grid-cols-[80px_1fr_56px] items-center gap-2"><div class="text-sm">${p} пара</div><div class="h-6 rounded" style="background: rgba(14,165,233,${alpha.toFixed(3)})"></div><div class="text-xs text-right">${v}</div></div>`;
+    const groups = Array.from(new Set(items.map((x) => x.group))).sort((a, b) => a.localeCompare(b, 'uk')).slice(0, 22);
+    if (!groups.length) {
+      els.heatmap.innerHTML = '<div class="text-sm text-gray-500">Немає даних для heatmap</div>';
+      return;
+    }
+    const matrix = new Map();
+    let max = 0;
+    groups.forEach((g) => {
+      matrix.set(g, new Map());
+      pairs.forEach((p) => matrix.get(g).set(p, 0));
+    });
+    items.forEach((x) => {
+      const g = x.group;
+      const p = Number(x.pair);
+      if (!matrix.has(g) || !pairs.includes(p)) return;
+      const next = (matrix.get(g).get(p) || 0) + 1;
+      matrix.get(g).set(p, next);
+      if (next > max) max = next;
+    });
+    max = Math.max(1, max);
+    const color = (v) => {
+      const t = v / max;
+      const light = 96 - Math.round(t * 48);
+      return `hsl(4 88% ${light}%)`;
+    };
+    const legend = [];
+    for (let i = 0; i <= 5; i++) {
+      const v = Math.round((max / 5) * i);
+      legend.push(`<div class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded" style="background:${color(v)}"></span><span>${v}</span></div>`);
+    }
+
+    const head = `<div class="grid" style="grid-template-columns:160px repeat(7,minmax(54px,1fr)) 120px;gap:1px;">
+      <div></div>${pairs.map((p) => `<div class="text-xs text-center text-gray-500">${p}</div>`).join('')}
+      <div class="text-xs text-gray-500 pl-2">Шкала</div>
+    </div>`;
+    const rows = groups.map((g, idx) => {
+      const cells = pairs.map((p) => {
+        const v = matrix.get(g).get(p) || 0;
+        return `<div class="h-9 flex items-center justify-center text-xs font-semibold rounded-sm" style="background:${color(v)}">${v || ''}</div>`;
+      }).join('');
+      const legendCol = idx === 0 ? `<div class="row-span-full text-xs pl-2 space-y-1">${legend.join('')}</div>` : '<div></div>';
+      return `<div class="grid items-center" style="grid-template-columns:160px repeat(7,minmax(54px,1fr)) 120px;gap:1px;">
+        <div class="text-xs font-semibold pr-2 truncate">${g}</div>${cells}${legendCol}
+      </div>`;
     }).join('');
+    els.heatmap.innerHTML = `<div class="overflow-x-auto">${head}<div class="space-y-1 mt-1">${rows}</div></div>`;
   }
 
   function renderRoomConflicts(items) {
