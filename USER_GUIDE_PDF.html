@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedule Viewer — Інструкція користувача</title>
+  <style>
+    :root { --ink:#111827; --muted:#4b5563; --line:#e5e7eb; --accent:#0ea5e9; }
+    html,body { margin:0; padding:0; font-family: "Segoe UI", Arial, sans-serif; color:var(--ink); }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px; }
+    h1 { font-size: 30px; margin: 0 0 8px; }
+    .sub { color:var(--muted); margin-bottom:20px; }
+    h2 { border-top:1px solid var(--line); padding-top:16px; margin-top:22px; font-size:22px; }
+    h3 { margin: 14px 0 8px; font-size: 18px; color:#0f172a; }
+    ul,ol { margin: 8px 0 8px 22px; }
+    li { margin: 6px 0; line-height: 1.45; }
+    code { background:#f3f4f6; padding:2px 6px; border-radius:6px; }
+    .box { border:1px solid var(--line); border-left:4px solid var(--accent); padding:12px; border-radius:10px; margin:10px 0; }
+    .muted { color:var(--muted); }
+    @media print {
+      .wrap { max-width: none; padding: 10mm; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Schedule Viewer — Інструкція користувача</h1>
+    <div class="sub">Повний гайд по всіх сторінках і кнопках · Оновлено: 30.04.2026</div>
+
+    <div class="box">
+      PDF: натисніть <b>Ctrl+P</b> → <b>Save as PDF</b> → увімкніть <b>Background graphics</b>.
+    </div>
+
+    <h2>1. Швидкий старт</h2>
+    <ol>
+      <li>Відкрийте <code>index.html</code> (desktop) або <code>index2.html</code> (mobile).</li>
+      <li>Оберіть режим: <b>Група</b> / <b>Викладач</b> / <b>Ауд.</b></li>
+      <li>Оберіть факультет, форму, курс, групу або викладача.</li>
+      <li>Вкажіть дати та натисніть <b>+ Додати</b>.</li>
+    </ol>
+
+    <h2>2. Основні сторінки</h2>
+    <h3>2.1 Головна (Desktop/Mobile)</h3>
+    <ul>
+      <li>Пошук і порівняння розкладу по групах/викладачах.</li>
+      <li>Фільтри: офлайн/онлайн, дисципліни, типи занять.</li>
+      <li>Експорт, календар, обране, тема, очистка даних.</li>
+    </ul>
+
+    <h3>2.2 Сесія — <code>session.html</code></h3>
+    <ul>
+      <li>Фільтри по сесії, формі, групі, викладачу, дисципліні, даті, типу контролю.</li>
+      <li>Експорт відфільтрованої таблиці в XLSX.</li>
+    </ul>
+
+    <h3>2.3 Адмін сесій — <code>session-admin.html</code></h3>
+    <ul>
+      <li>Завантаження DOCX, парсинг, відправка в API.</li>
+      <li>Операції з сесіями: перейменування, архів, видалення, backup.</li>
+    </ul>
+
+    <h3>2.4 Конструктор сесії — <code>session-constructor.html</code></h3>
+    <ul>
+      <li>Ручне редагування предметів/груп/викладачів/дат/часу/аудиторій.</li>
+      <li>Валідація і конфлікти в реальному часі.</li>
+    </ul>
+
+    <h3>2.5 Підготовка до сесії — <code>session-prep.html</code></h3>
+    <ul>
+      <li>Таблиця <b>Предмет | Група | Викладачі</b> для обраних курсів.</li>
+      <li>Пошук, фільтрація, копіювання, експорт в Excel.</li>
+    </ul>
+
+    <h3>2.6 Smart Day — <code>smart.html</code></h3>
+    <ul>
+      <li>Рейтинг зручності, теплокарта, what-if симулятор, live board.</li>
+    </ul>
+
+    <h3>2.7 Week Builder — <code>builder.html</code></h3>
+    <ul>
+      <li>Збір тижня, аналіз конфліктів/дублів/вікон, оптимізація, Excel.</li>
+    </ul>
+
+    <h3>2.8 Course Day — <code>course-live.html</code></h3>
+    <div class="box">
+      Автозавантаження вимкнено: спочатку оберіть фільтри, потім натисніть <b>Оновити зараз</b>.
+    </div>
+    <ul>
+      <li>Heatmap, конфлікти аудиторій, навантаження/вікна викладачів.</li>
+      <li>Порівняння з датою, тільки зміни, пресети, експорт, журнал дій.</li>
+    </ul>
+
+    <h2>3. Типові задачі</h2>
+    <ul>
+      <li><b>Розклад групи:</b> Головна → Група → фільтри → <b>+ Додати</b>.</li>
+      <li><b>Розклад викладача:</b> Головна → Викладач → фільтри → <b>+ Додати</b>.</li>
+      <li><b>Вільні аудиторії:</b> Головна → Ауд. → дата → <b>Скан</b>.</li>
+      <li><b>Завантажити DOCX сесії:</b> Session Admin → пароль → файли → парсинг → API.</li>
+      <li><b>Підготовка “предмет-група-викладачі”:</b> Session Prep → вибір курсів → сформувати.</li>
+    </ul>
+
+    <h2>4. Коли щось не так</h2>
+    <ul>
+      <li>Оновіть сторінку через <b>Ctrl+F5</b>.</li>
+      <li>Перевірте дату та активні фільтри.</li>
+      <li>Для адмін-дій перевірте пароль.</li>
+      <li>У Course Day обов'язково натискайте <b>Оновити зараз</b>.</li>
+    </ul>
+
+    <div class="muted">Повна markdown-версія: <code>USER_GUIDE.md</code></div>
+  </div>
+</body>
+</html>

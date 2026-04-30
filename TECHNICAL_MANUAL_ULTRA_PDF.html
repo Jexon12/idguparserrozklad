@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedule Viewer — Ultra Manual</title>
+  <style>
+    :root { --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --brand:#0284c7; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "Segoe UI", Arial, sans-serif; color:var(--ink); background:#fff; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 34px; }
+    h1 { margin:0; font-size: 34px; }
+    .meta { color:var(--muted); margin: 8px 0 18px; }
+    h2 { margin-top: 30px; padding-top: 12px; border-top:1px solid var(--line); font-size: 24px; }
+    h3 { margin-top: 14px; font-size: 18px; color:#1e293b; }
+    p, li { line-height: 1.5; }
+    ul, ol { margin-left: 22px; }
+    .box { border:1px solid var(--line); border-left:4px solid var(--brand); border-radius: 10px; padding:10px 12px; margin:10px 0; }
+    code { background:#f1f5f9; border-radius:6px; padding:2px 6px; font-family: Consolas, monospace; font-size: 0.95em; }
+    pre { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:10px; overflow:auto; }
+    .muted { color: var(--muted); }
+    @media print {
+      .wrap { max-width: none; padding: 10mm; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Schedule Viewer — Ultra Manual</h1>
+    <div class="meta">Максимально розширена документація · 30.04.2026</div>
+    <div class="box">PDF: натисніть <b>Ctrl+P</b> → <b>Save as PDF</b> → увімкніть <b>Background graphics</b>.</div>
+
+    <h2>1. Призначення системи</h2>
+    <p>Платформа для керування розкладом, підготовки сесій, контролю конфліктів, експорту і операційної роботи деканату.</p>
+
+    <h2>2. Карта сторінок</h2>
+    <ul>
+      <li><code>index.html</code>, <code>index2.html</code></li>
+      <li><code>session.html</code>, <code>session-admin.html</code>, <code>session-constructor.html</code>, <code>session-prep.html</code></li>
+      <li><code>smart.html</code>, <code>builder.html</code>, <code>course-live.html</code></li>
+    </ul>
+
+    <h2>3. Архітектура</h2>
+    <ul>
+      <li>Frontend: HTML + JS (Vue/vanilla).</li>
+      <li>Backend: <code>api/index.js</code> (serverless).</li>
+      <li>Storage: KV/Redis, fallback <code>db.json</code>.</li>
+      <li>Session fallback: <code>data/session-2025-26.json</code>.</li>
+    </ul>
+
+    <h2>4. API-контур</h2>
+    <h3>Критичні ендпоінти</h3>
+    <ul>
+      <li><code>GET /api/health</code></li>
+      <li><code>GET/POST /api/session</code></li>
+      <li><code>GET/POST /api/times</code></li>
+      <li><code>GET/POST /api/links</code></li>
+      <li><code>POST /api/report/start</code></li>
+      <li><code>GET /api/report/status</code></li>
+      <li><code>GET /api/report/download</code></li>
+      <li><code>GET /api/monitor</code>, <code>POST /api/monitor/log</code></li>
+      <li><code>GET /api/audit</code>, <code>GET /api/versions</code></li>
+      <li><code>GET /api/&lt;action&gt;</code> (proxy до розкладу)</li>
+    </ul>
+
+    <h3>Кеш + захист</h3>
+    <ul>
+      <li>TTL: 5 хв default, 3 хв schedule.</li>
+      <li>In-flight dedupe на backend.</li>
+      <li>Rate-limit: admin 20/min, proxy 120/min.</li>
+    </ul>
+
+    <h2>5. Операційні сценарії</h2>
+    <h3>Session Admin</h3>
+    <ol>
+      <li>Пароль → Назва сесії → Форма → DOCX.</li>
+      <li><b>Розпарсити</b> → перевірити preview.</li>
+      <li><b>Завантажити в API</b>.</li>
+    </ol>
+
+    <h3>Session Constructor</h3>
+    <ul>
+      <li>Редагування рядків вручну.</li>
+      <li>Контроль <code>залік/іспит/захист</code>.</li>
+      <li>Час тільки для іспиту.</li>
+      <li>Автодати + smart-підказки + конфлікти.</li>
+    </ul>
+
+    <h3>Course Live</h3>
+    <ul>
+      <li>Без автозавантаження: тільки кнопка <b>Оновити зараз</b>.</li>
+      <li>Compare date, only changes, heatmap, room conflicts, quality panel.</li>
+    </ul>
+
+    <h2>6. Конфлікти і правила</h2>
+    <ul>
+      <li>Група: не можна 2 іспити в один date+time.</li>
+      <li>Викладач: не можна 2 іспити в один date+time.</li>
+      <li>Аудиторія: не можна 2 іспити одночасно.</li>
+    </ul>
+
+    <h2>7. Запуск і тести</h2>
+    <pre>npm install
+npm run build:css
+npm start
+
+npm test -- --runInBand
+npm test -- --runInBand --detectOpenHandles
+npm run lint:encoding</pre>
+
+    <h2>8. Troubleshooting</h2>
+    <ul>
+      <li>Старий UI: <b>Ctrl+F5</b>.</li>
+      <li>401/403 admin: перевірити <code>ADMIN_PASSWORD</code>.</li>
+      <li>Порожні дані: перевірити фільтри/дату/натискання update.</li>
+    </ul>
+
+    <h2>9. Примітка</h2>
+    <p class="muted">Повна markdown-версія з деталями: <code>TECHNICAL_MANUAL_ULTRA.md</code></p>
+  </div>
+</body>
+</html>

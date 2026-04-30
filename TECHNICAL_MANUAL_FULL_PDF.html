@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedule Viewer — Розширений технічний посібник</title>
+  <style>
+    :root { --text:#111827; --muted:#4b5563; --line:#e5e7eb; --a:#0ea5e9; }
+    body { margin:0; font-family: "Segoe UI", Arial, sans-serif; color:var(--text); background:#fff; }
+    .page { max-width: 1080px; margin: 0 auto; padding: 28px 32px; }
+    h1 { margin:0; font-size:32px; }
+    h2 { margin-top:26px; padding-top:12px; border-top:1px solid var(--line); font-size:24px; }
+    h3 { margin-top:16px; font-size:18px; }
+    p, li { line-height:1.5; }
+    ul, ol { margin-left:20px; }
+    .meta { color:var(--muted); margin:8px 0 18px; }
+    .note { border:1px solid var(--line); border-left:4px solid var(--a); padding:10px 12px; border-radius:10px; margin:10px 0; }
+    code { background:#f3f4f6; border-radius:6px; padding:2px 5px; font-family: Consolas, monospace; }
+    pre { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; }
+    @media print {
+      .page { max-width:none; padding:10mm; }
+      a { color:inherit; text-decoration:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Schedule Viewer — Розширений технічний посібник</h1>
+    <div class="meta">Версія 1.0 · 30.04.2026</div>
+    <div class="note">Щоб отримати PDF: <b>Ctrl+P</b> → <b>Save as PDF</b> → увімкніть <b>Background graphics</b>.</div>
+
+    <h2>1. Призначення</h2>
+    <p>Система автоматизує роботу з розкладом і сесіями: перегляд, аналіз, контроль конфліктів, експорт і адміністрування даних.</p>
+
+    <h2>2. Основні сторінки</h2>
+    <ul>
+      <li><code>index.html</code> — головний desktop-інтерфейс.</li>
+      <li><code>index2.html</code> — mobile-інтерфейс.</li>
+      <li><code>session.html</code> — перегляд сесії з фільтрами.</li>
+      <li><code>session-admin.html</code> — завантаження DOCX і керування сесіями.</li>
+      <li><code>session-constructor.html</code> — ручне редагування + конфлікти.</li>
+      <li><code>session-prep.html</code> — таблиця предмет/група/викладачі.</li>
+      <li><code>builder.html</code>, <code>smart.html</code>, <code>course-live.html</code> — аналітика і оперативний контроль.</li>
+    </ul>
+
+    <h2>3. API та backend</h2>
+    <h3>Ключові маршрути</h3>
+    <ul>
+      <li><code>GET /api/health</code></li>
+      <li><code>GET /api/session</code>, <code>POST /api/session</code></li>
+      <li><code>GET/POST /api/times</code>, <code>GET/POST /api/links</code></li>
+      <li><code>POST /api/report/start</code>, <code>GET /api/report/status</code>, <code>GET /api/report/download</code></li>
+      <li><code>GET /api/monitor</code>, <code>POST /api/monitor/log</code></li>
+      <li><code>GET /api/audit</code>, <code>GET /api/versions</code></li>
+      <li><code>GET /api/&lt;action&gt;</code> — proxy до зовнішнього API розкладу.</li>
+    </ul>
+
+    <h3>Кешування і dedupe</h3>
+    <ul>
+      <li>In-memory cache + optional Redis/KV.</li>
+      <li>TTL: default 5 хв, schedule 3 хв.</li>
+      <li>Dedupe одночасних запитів (in-flight).</li>
+    </ul>
+
+    <h3>Rate limit</h3>
+    <ul>
+      <li>Admin POST: 20/хв/IP.</li>
+      <li>Proxy: 120/хв/IP.</li>
+    </ul>
+
+    <h2>4. Функції по сторінках (операційно)</h2>
+    <h3>Session Admin</h3>
+    <ol>
+      <li>Ввести пароль, назву сесії, форму навчання.</li>
+      <li>Додати DOCX.</li>
+      <li>Натиснути “Розпарсити”.</li>
+      <li>Натиснути “Завантажити в API”.</li>
+    </ol>
+
+    <h3>Session Constructor</h3>
+    <ul>
+      <li>Поля: предмет, група, викладачі, тип контролю, дата, час (іспит), аудиторія.</li>
+      <li>Real-time конфлікти: група/викладач/аудиторія.</li>
+      <li>Експорт в Excel, upload в API.</li>
+    </ul>
+
+    <h3>Course Day</h3>
+    <ul>
+      <li>Оновлення тільки вручну кнопкою <b>Оновити зараз</b>.</li>
+      <li>Heatmap, room conflicts, teacher load/windows, data quality, compare dates, presets.</li>
+    </ul>
+
+    <h2>5. Локальний запуск і тести</h2>
+    <pre>npm install
+npm run build:css
+npm start
+
+npm test -- --runInBand
+npm test -- --runInBand --detectOpenHandles
+npm run lint:encoding</pre>
+
+    <h2>6. Troubleshooting</h2>
+    <ul>
+      <li><b>Немає даних:</b> перевірити фільтри + дату + натиснути “Оновити зараз”.</li>
+      <li><b>401/403 admin:</b> перевірити <code>ADMIN_PASSWORD</code> і правильний пароль у формі.</li>
+      <li><b>Старий UI:</b> <code>Ctrl+F5</code>, перевірити кеш браузера/SW.</li>
+    </ul>
+
+    <h2>7. Повна markdown-версія</h2>
+    <p><code>TECHNICAL_MANUAL_FULL.md</code></p>
+  </div>
+</body>
+</html>
