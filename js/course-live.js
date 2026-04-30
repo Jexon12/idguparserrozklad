@@ -308,7 +308,9 @@
     els.date.value = todayIso();
     bind();
     await loadFilters();
-    await loadScheduleDay();
+    state.isDirty = true;
+    els.meta.textContent = 'Оберіть фільтри та натисніть "Оновити зараз".';
+    els.windowsMeta.textContent = 'Вікна: натисніть "Оновити зараз", потім "Знайти вікна"';
   }
 
   start().catch((e) => {
