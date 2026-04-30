@@ -247,29 +247,32 @@
       return;
     }
     const items = filterLessons();
-    const byGroup = new Map();
+    const byPair = new Map();
     items.forEach((l) => {
-      if (!byGroup.has(l.group)) byGroup.set(l.group, new Set());
-      byGroup.get(l.group).add(Number(l.pair));
+      const p = Number(l.pair);
+      if (!Number.isFinite(p) || p < 1 || p > 7) return;
+      byPair.set(p, (byPair.get(p) || 0) + 1);
     });
 
-    const allPairs = [1, 2, 3, 4, 5, 6, 7];
-    const windows = [];
-    byGroup.forEach((pairSet, group) => {
-      const arr = Array.from(pairSet).sort((a, b) => a - b);
-      if (arr.length < 2) return;
-      const min = arr[0];
-      const max = arr[arr.length - 1];
-      const missing = allPairs.filter((p) => p > min && p < max && !pairSet.has(p));
-      if (missing.length) windows.push({ group, missing });
-    });
-
-    if (!windows.length) {
-      els.windowsMeta.textContent = 'Вікна: не знайдено';
+    const activePairs = Array.from(byPair.keys()).sort((a, b) => a - b);
+    if (activePairs.length < 2) {
+      els.windowsMeta.textContent = 'Спільні вікна: недостатньо пар для аналізу';
       return;
     }
-    const preview = windows.slice(0, 8).map((w) => `${w.group}: ${w.missing.join(',')}`).join(' · ');
-    els.windowsMeta.textContent = `Вікна в групах: ${windows.length}. ${preview}${windows.length > 8 ? ' ...' : ''}`;
+
+    const minPair = activePairs[0];
+    const maxPair = activePairs[activePairs.length - 1];
+    const commonWindows = [];
+    for (let p = minPair + 1; p < maxPair; p++) {
+      if (!byPair.has(p)) commonWindows.push(p);
+    }
+
+    if (!commonWindows.length) {
+      els.windowsMeta.textContent = `Спільні вікна: немає (активні пари ${minPair}-${maxPair})`;
+      return;
+    }
+
+    els.windowsMeta.textContent = `Спільні вікна: ${commonWindows.join(', ')} пара`;
   }
 
   function triggerReload() {
