@@ -46,6 +46,35 @@
                 </select>
                 <input id="docxFiles" type="file" accept=".docx" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
             </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <select id="facultySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <select id="semesterPreset" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <option value="custom">Користувацький період</option>
+                    <option value="autumn">Осінній семестр (вересень–грудень)</option>
+                    <option value="spring">Весняний семестр (лютий–червень)</option>
+                </select>
+                <input id="startDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="endDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <div class="text-xs text-gray-500 p-2 rounded-xl bg-gray-50 dark:bg-gray-700/50">Оберіть семестр або свій період, потім курси/групи</div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="rounded-xl border dark:border-gray-700 p-3">
+                    <div class="font-bold mb-2">Курси</div>
+                    <div class="flex gap-2 mb-2">
+                        <button id="selectAllCourses" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
+                        <button id="clearCourses" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Очистити</button>
+                    </div>
+                    <div id="coursesBox" class="max-h-44 overflow-y-auto space-y-1"></div>
+                </div>
+                <div class="rounded-xl border dark:border-gray-700 p-3">
+                    <div class="font-bold mb-2">Групи</div>
+                    <div class="flex gap-2 mb-2">
+                        <button id="selectAllGroups" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
+                        <button id="clearGroups" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Очистити</button>
+                    </div>
+                    <div id="groupsBox" class="max-h-44 overflow-y-auto space-y-1"></div>
+                </div>
+            </div>
             <div class="text-xs text-gray-500">DOCX використовується як опціональний шаблон/джерело назви файлу для експорту, але сесія формується з API розкладу.</div>
 
             <div class="flex gap-2 flex-wrap">

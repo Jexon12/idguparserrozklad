@@ -10,6 +10,16 @@
         sessionTerm: document.getElementById('sessionTerm'),
         studyForm: document.getElementById('studyForm'),
         docxFiles: document.getElementById('docxFiles'),
+        facultySelect: document.getElementById('facultySelect'),
+        semesterPreset: document.getElementById('semesterPreset'),
+        startDate: document.getElementById('startDate'),
+        endDate: document.getElementById('endDate'),
+        coursesBox: document.getElementById('coursesBox'),
+        groupsBox: document.getElementById('groupsBox'),
+        selectAllCourses: document.getElementById('selectAllCourses'),
+        clearCourses: document.getElementById('clearCourses'),
+        selectAllGroups: document.getElementById('selectAllGroups'),
+        clearGroups: document.getElementById('clearGroups'),
         parseBtn: document.getElementById('parseBtn'),
         normalizeBtn: document.getElementById('normalizeBtn'),
         addRowBtn: document.getElementById('addRowBtn'),
@@ -101,6 +111,49 @@
             el.appendChild(o);
         });
     }
+    function renderCheckboxes(container, items, kind) {
+        container.innerHTML = '';
+        items.forEach((it, idx) => {
+            const key = String(it.Key || it.key || '');
+            const val = String(it.Value || it.value || '');
+            const row = document.createElement('label');
+            row.className = 'flex items-center gap-2 text-sm';
+            row.innerHTML = `<input type="checkbox" data-kind="${kind}" value="${key}" checked><span>${val}</span>`;
+            row.querySelector('input').id = `${kind}_${idx}_${key}`;
+            container.appendChild(row);
+        });
+    }
+    function getChecked(kind) {
+        return Array.from(document.querySelectorAll(`input[type="checkbox"][data-kind="${kind}"]:checked`))
+            .map((x) => x.value)
+            .filter(Boolean);
+    }
+    function setChecked(kind, flag) {
+        document.querySelectorAll(`input[type="checkbox"][data-kind="${kind}"]`).forEach((x) => { x.checked = flag; });
+    }
+    function toApiDate(iso) {
+        const [y, m, d] = String(iso || '').split('-');
+        if (!y || !m || !d) return '';
+        return `${d}.${m}.${y}`;
+    }
+    function applySemesterPreset(preset) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const toIso = (d) => d.toISOString().slice(0, 10);
+        if (preset === 'autumn') {
+            els.startDate.value = toIso(new Date(year, 8, 1));   // Sep 1
+            els.endDate.value = toIso(new Date(year, 11, 31));   // Dec 31
+            return;
+        }
+        if (preset === 'spring') {
+            els.startDate.value = toIso(new Date(year, 1, 1));   // Feb 1
+            els.endDate.value = toIso(new Date(year, 5, 30));    // Jun 30
+            return;
+        }
+        const m = now.getMonth();
+        els.startDate.value = toIso(new Date(year, m, 1));
+        els.endDate.value = toIso(new Date(year, m + 1, 0));
+    }
     function renderFilters(rows) {
         const groups = Array.from(new Set(rows.map((r) => r.group))).sort((a, b) => a.localeCompare(b, 'uk'));
         const teachers = Array.from(new Set(rows.flatMap((r) => r.teachers))).sort((a, b) => a.localeCompare(b, 'uk'));
@@ -187,37 +240,36 @@
         showError('');
         setStatus('Завантаження фільтрів...');
         setProgress(0, 1, 'Підготовка...');
-        const base = await fetchApi('GetStudentScheduleFiltersData');
-        const faculties = Array.isArray(base?.faculties) ? base.faculties : [];
-        const forms = Array.isArray(base?.educForms) ? base.educForms : [];
-        const courses = Array.isArray(base?.courses) ? base.courses : [];
-        if (!faculties.length || !forms.length || !courses.length) throw new Error('Не вдалося отримати фільтри');
+        const selectedFaculty = clean(els.facultySelect.value);
+        const selectedCourseKeys = getChecked('course');
+        const selectedGroupKeys = getChecked('group');
+        const startDate = toApiDate(els.startDate.value);
+        const endDate = toApiDate(els.endDate.value);
+        if (!selectedFaculty) throw new Error('Оберіть факультет');
+        if (!selectedCourseKeys.length) throw new Error('Оберіть хоча б один курс');
+        if (!startDate || !endDate) throw new Error('Оберіть період дат');
 
-        // take user chosen form from select text if possible
+        const base = await fetchApi('GetStudentScheduleFiltersData');
+        const forms = Array.isArray(base?.educForms) ? base.educForms : [];
+        if (!forms.length) throw new Error('Не вдалося отримати форми навчання');
         const selectedFormText = clean(els.studyForm.value);
         const selectedForm = forms.find((x) => clean(x.Value).toLowerCase() === selectedFormText.toLowerCase()) || forms[0];
-        const faculty = faculties[0];
 
         const groups = [];
-        for (let i = 0; i < courses.length; i++) {
-            setProgress(i, courses.length, `Групи: ${i}/${courses.length}`);
-            const res = await fetchApi('GetStudyGroups', { aFacultyID: faculty.Key, aEducationForm: selectedForm.Key, aCourse: courses[i].Key });
+        for (let i = 0; i < selectedCourseKeys.length; i++) {
+            setProgress(i, selectedCourseKeys.length, `Групи: ${i}/${selectedCourseKeys.length}`);
+            const res = await fetchApi('GetStudyGroups', { aFacultyID: selectedFaculty, aEducationForm: selectedForm.Key, aCourse: selectedCourseKeys[i] });
             (res?.studyGroups || []).forEach((g) => groups.push({ key: g.Key, value: clean(g.Value) }));
         }
-        state.groups = Array.from(new Map(groups.map((x) => [x.key, x])).values());
+        state.groups = Array.from(new Map(groups.map((x) => [String(x.key), x])).values())
+            .filter((g) => !selectedGroupKeys.length || selectedGroupKeys.includes(String(g.key)));
         if (!state.groups.length) throw new Error('Не знайдено груп');
-
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const sDate = `01.${m}.${y}`;
-        const eDate = `28.${m}.${y}`;
 
         const rawRows = [];
         for (let i = 0; i < state.groups.length; i++) {
             const g = state.groups[i];
             setProgress(i + 1, state.groups.length, `Розклад: ${i + 1}/${state.groups.length}`);
-            const lessons = await fetchApi('GetScheduleDataX', { aStudyGroupID: g.key, aStartDate: sDate, aEndDate: eDate, aStudyTypeID: '' });
+            const lessons = await fetchApi('GetScheduleDataX', { aStudyGroupID: g.key, aStartDate: startDate, aEndDate: endDate, aStudyTypeID: '' });
             (Array.isArray(lessons) ? lessons : []).forEach((l) => {
                 rawRows.push({
                     discipline: normalizeDiscipline(l.discipline),
@@ -334,8 +386,46 @@
         applyFilters();
     });
 
+    async function initControls() {
+        applySemesterPreset(clean(els.semesterPreset.value) || 'custom');
+
+        const base = await fetchApi('GetStudentScheduleFiltersData');
+        state.faculties = Array.isArray(base?.faculties) ? base.faculties : [];
+        state.courses = Array.isArray(base?.courses) ? base.courses : [];
+        renderSelect(els.facultySelect, state.faculties, 'Оберіть факультет');
+        renderCheckboxes(els.coursesBox, state.courses, 'course');
+
+        async function refreshGroups() {
+            const fac = clean(els.facultySelect.value);
+            if (!fac) { renderCheckboxes(els.groupsBox, [], 'group'); return; }
+            const base2 = await fetchApi('GetStudentScheduleFiltersData');
+            const forms = Array.isArray(base2?.educForms) ? base2.educForms : [];
+            const selectedFormText = clean(els.studyForm.value);
+            const selectedForm = forms.find((x) => clean(x.Value).toLowerCase() === selectedFormText.toLowerCase()) || forms[0];
+            const selectedCourses = getChecked('course');
+            const arr = [];
+            for (let i = 0; i < selectedCourses.length; i++) {
+                const res = await fetchApi('GetStudyGroups', { aFacultyID: fac, aEducationForm: selectedForm?.Key || '', aCourse: selectedCourses[i] });
+                (res?.studyGroups || []).forEach((g) => arr.push({ key: g.Key, value: clean(g.Value) }));
+            }
+            const unique = Array.from(new Map(arr.map((x) => [String(x.key), x])).values())
+                .sort((a, b) => a.value.localeCompare(b.value, 'uk'));
+            renderCheckboxes(els.groupsBox, unique, 'group');
+        }
+
+        els.facultySelect.addEventListener('change', () => refreshGroups().catch((e) => showError(e.message || String(e))));
+        els.studyForm.addEventListener('change', () => refreshGroups().catch((e) => showError(e.message || String(e))));
+        els.semesterPreset.addEventListener('change', () => applySemesterPreset(clean(els.semesterPreset.value)));
+        els.coursesBox.addEventListener('change', () => refreshGroups().catch((e) => showError(e.message || String(e))));
+        els.selectAllCourses.addEventListener('click', () => { setChecked('course', true); refreshGroups(); });
+        els.clearCourses.addEventListener('click', () => { setChecked('course', false); refreshGroups(); });
+        els.selectAllGroups.addEventListener('click', () => setChecked('group', true));
+        els.clearGroups.addEventListener('click', () => setChecked('group', false));
+        await refreshGroups();
+    }
+
     renderSelect(els.groupFilter, [], 'Усі групи');
     renderSelect(els.teacherFilter, [], 'Усі викладачі');
     setProgress(0, 1, 'Готово');
+    initControls().catch((e) => showError(e.message || String(e)));
 })();
-
