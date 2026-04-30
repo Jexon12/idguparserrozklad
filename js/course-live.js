@@ -1,6 +1,11 @@
 ﻿(function () {
   const VUZ_ID = 11927;
-  const state = { faculties: [], forms: [], courses: [], groups: [], lessons: [] };
+  const state = {
+    faculties: [], forms: [], courses: [], groups: [], lessons: [],
+    isDirty: false,
+    loadedSelection: { courses: [] }
+  };
+
   const els = {
     date: document.getElementById('date'),
     refreshBtn: document.getElementById('refreshBtn'),
@@ -48,10 +53,7 @@
   }
 
   const checked = (name) => Array.from(document.querySelectorAll(`input[data-name="${name}"]:checked`)).map((x) => x.value);
-
-  function setChecks(name, value) {
-    document.querySelectorAll(`input[data-name="${name}"]`).forEach((x) => { x.checked = value; });
-  }
+  const setChecks = (name, value) => document.querySelectorAll(`input[data-name="${name}"]`).forEach((x) => { x.checked = value; });
 
   async function fetchApi(action, params = {}) {
     const url = new URL(`/api/${action}`, window.location.origin);
@@ -74,8 +76,7 @@
   }
 
   function nowInSlot(dateIso, start, end) {
-    if (!start || !end) return false;
-    if (dateIso !== todayIso()) return false;
+    if (!start || !end || dateIso !== todayIso()) return false;
     const now = new Date();
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
@@ -111,7 +112,9 @@
         }
       }
     }
+
     state.groups = Array.from(new Map(groups.map((g) => [String(g.Key), g])).values());
+    state.loadedSelection.courses = courseIds.slice();
   }
 
   async function loadScheduleDay() {
@@ -138,14 +141,13 @@
             type: clean(l.study_type),
             ...parseTimeSlot(l)
           }));
-        } catch (e) {
-          return [];
-        }
+        } catch (e) { return []; }
       }));
       results.forEach((arr) => lessons.push(...arr));
     }
 
     state.lessons = lessons;
+    state.isDirty = false;
     render();
   }
 
@@ -156,15 +158,13 @@
     const pairFilter = clean(els.pairFilter.value);
     const dateIso = els.date.value || todayIso();
 
-    return state.lessons
-      .filter((l) => {
-        if (onlyNow && !nowInSlot(dateIso, l.start, l.end)) return false;
-        if (onlyOffline && /online|дист|zoom|meet|teams/i.test(`${l.type} ${l.room}`)) return false;
-        if (pairFilter && String(l.pair) !== pairFilter) return false;
-        if (q && !`${l.group} ${l.discipline} ${l.teacher} ${l.room}`.toLowerCase().includes(q)) return false;
-        return true;
-      })
-      .sort((a, b) => (a.pair - b.pair) || (a.start || '').localeCompare(b.start || '') || a.group.localeCompare(b.group, 'uk'));
+    return state.lessons.filter((l) => {
+      if (onlyNow && !nowInSlot(dateIso, l.start, l.end)) return false;
+      if (onlyOffline && /online|дист|zoom|meet|teams/i.test(`${l.type} ${l.room}`)) return false;
+      if (pairFilter && String(l.pair) !== pairFilter) return false;
+      if (q && !`${l.group} ${l.discipline} ${l.teacher} ${l.room}`.toLowerCase().includes(q)) return false;
+      return true;
+    }).sort((a, b) => (a.pair - b.pair) || (a.start || '').localeCompare(b.start || '') || a.group.localeCompare(b.group, 'uk'));
   }
 
   function renderPairStats(items) {
@@ -183,7 +183,6 @@
       els.cardsGrouped.innerHTML = '<div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 text-gray-500">Немає пар за вибраними фільтрами</div>';
       return;
     }
-
     const byPair = new Map();
     items.forEach((l) => {
       const key = `${l.pair} пара`;
@@ -191,32 +190,21 @@
       byPair.get(key).push(l);
     });
 
-    const container = document.createDocumentFragment();
-    Array.from(byPair.entries())
-      .sort((a, b) => Number(a[0]) - Number(b[0]))
-      .forEach(([pair, list]) => {
-        const sec = document.createElement('section');
-        sec.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow p-3';
-        sec.innerHTML = `<div class="flex items-center justify-between mb-2"><div class="font-bold text-sky-700 dark:text-sky-300">${pair}</div><div class="text-xs text-gray-500">${list.length} записів</div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-slot></div>`;
-        const slot = sec.querySelector('[data-slot]');
-        list.forEach((l) => {
-          const card = document.createElement('article');
-          card.className = 'rounded-xl border dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/30';
-          card.innerHTML = `
-            <div class="flex items-center justify-between gap-2">
-              <div class="text-sm font-black text-gray-900 dark:text-gray-100">${l.group}</div>
-              <span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">${l.label}</span>
-            </div>
-            <div class="font-bold text-sm mt-1">${l.discipline || '—'}</div>
-            <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">👨‍🏫 ${l.teacher || '—'}</div>
-            <div class="text-xs text-gray-500 mt-1">🏫 ${l.room || '—'}</div>
-          `;
-          slot.appendChild(card);
-        });
-        container.appendChild(sec);
+    const frag = document.createDocumentFragment();
+    Array.from(byPair.entries()).sort((a, b) => Number(a[0]) - Number(b[0])).forEach(([pair, list]) => {
+      const sec = document.createElement('section');
+      sec.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow p-3';
+      sec.innerHTML = `<div class="flex items-center justify-between mb-2"><div class="font-bold text-sky-700 dark:text-sky-300">${pair}</div><div class="text-xs text-gray-500">${list.length} записів</div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-slot></div>`;
+      const slot = sec.querySelector('[data-slot]');
+      list.forEach((l) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-xl border dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/30';
+        card.innerHTML = `<div class="flex items-center justify-between gap-2"><div class="text-sm font-black text-gray-900 dark:text-gray-100">${l.group}</div><span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">${l.label}</span></div><div class="font-bold text-sm mt-1">${l.discipline || '—'}</div><div class="text-xs text-gray-600 dark:text-gray-300 mt-1">👨‍🏫 ${l.teacher || '—'}</div><div class="text-xs text-gray-500 mt-1">🏫 ${l.room || '—'}</div>`;
+        slot.appendChild(card);
       });
-
-    els.cardsGrouped.appendChild(container);
+      frag.appendChild(sec);
+    });
+    els.cardsGrouped.appendChild(frag);
   }
 
   function renderTable(items) {
@@ -248,16 +236,23 @@
       renderTable(items);
     }
     const pairInfo = clean(els.pairFilter.value) ? ` · фільтр: ${els.pairFilter.value} пара` : '';
-    els.meta.textContent = `Груп: ${state.groups.length} · записів: ${items.length}${pairInfo}`;
+    const coursesLoaded = state.loadedSelection.courses.length ? state.loadedSelection.courses.join(',') : '—';
+    const dirtyInfo = state.isDirty ? ' · є незастосовані зміни' : '';
+    els.meta.textContent = `Груп: ${state.groups.length} · записів: ${items.length}${pairInfo} · завантажені курси: ${coursesLoaded}${dirtyInfo}`;
   }
 
   function findWindows() {
+    if (state.isDirty) {
+      els.windowsMeta.textContent = 'Спочатку натисніть "Оновити зараз", щоб аналізувати нові фільтри.';
+      return;
+    }
     const items = filterLessons();
     const byGroup = new Map();
     items.forEach((l) => {
       if (!byGroup.has(l.group)) byGroup.set(l.group, new Set());
       byGroup.get(l.group).add(Number(l.pair));
     });
+
     const allPairs = [1, 2, 3, 4, 5, 6, 7];
     const windows = [];
     byGroup.forEach((pairSet, group) => {
@@ -268,6 +263,7 @@
       const missing = allPairs.filter((p) => p > min && p < max && !pairSet.has(p));
       if (missing.length) windows.push({ group, missing });
     });
+
     if (!windows.length) {
       els.windowsMeta.textContent = 'Вікна: не знайдено';
       return;
@@ -282,6 +278,11 @@
     });
   }
 
+  function markDirty(msg) {
+    state.isDirty = true;
+    els.meta.textContent = `${msg} Натисніть "Оновити зараз".`;
+  }
+
   function bind() {
     els.refreshBtn.addEventListener('click', triggerReload);
     els.viewMode.addEventListener('change', render);
@@ -289,21 +290,18 @@
     els.search.addEventListener('input', render);
     els.onlyNow.addEventListener('change', render);
     els.onlyOffline.addEventListener('change', render);
-    els.date.addEventListener('change', () => {
-      els.meta.textContent = 'Дата змінена. Натисніть "Оновити зараз".';
-    });
 
-    [els.facultiesBox, els.formsBox, els.coursesBox].forEach((box) => box.addEventListener('change', () => {
-      els.meta.textContent = 'Фільтри змінені. Натисніть "Оновити зараз".';
-    }));
+    els.date.addEventListener('change', () => markDirty('Дата змінена.'));
+    [els.facultiesBox, els.formsBox, els.coursesBox].forEach((box) => box.addEventListener('change', () => markDirty('Фільтри змінені.')));
+
+    els.allFacultyBtn.addEventListener('click', () => { setChecks('faculty', true); markDirty('Факультети вибрані.'); });
+    els.noneFacultyBtn.addEventListener('click', () => { setChecks('faculty', false); markDirty('Факультети очищені.'); });
+    els.allFormBtn.addEventListener('click', () => { setChecks('form', true); markDirty('Форми вибрані.'); });
+    els.noneFormBtn.addEventListener('click', () => { setChecks('form', false); markDirty('Форми очищені.'); });
+    els.allCourseBtn.addEventListener('click', () => { setChecks('course', true); markDirty('Курси вибрані.'); });
+    els.noneCourseBtn.addEventListener('click', () => { setChecks('course', false); markDirty('Курси очищені.'); });
+
     els.findWindowsBtn.addEventListener('click', findWindows);
-
-    els.allFacultyBtn.addEventListener('click', () => { setChecks('faculty', true); els.meta.textContent = 'Факультети вибрані. Натисніть "Оновити зараз".'; });
-    els.noneFacultyBtn.addEventListener('click', () => { setChecks('faculty', false); els.meta.textContent = 'Факультети очищені. Натисніть "Оновити зараз".'; });
-    els.allFormBtn.addEventListener('click', () => { setChecks('form', true); els.meta.textContent = 'Форми вибрані. Натисніть "Оновити зараз".'; });
-    els.noneFormBtn.addEventListener('click', () => { setChecks('form', false); els.meta.textContent = 'Форми очищені. Натисніть "Оновити зараз".'; });
-    els.allCourseBtn.addEventListener('click', () => { setChecks('course', true); els.meta.textContent = 'Курси вибрані. Натисніть "Оновити зараз".'; });
-    els.noneCourseBtn.addEventListener('click', () => { setChecks('course', false); els.meta.textContent = 'Курси очищені. Натисніть "Оновити зараз".'; });
   }
 
   async function start() {
