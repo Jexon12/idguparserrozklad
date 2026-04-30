@@ -43,6 +43,20 @@
         </select>
         <input id="search" type="text" placeholder="Пошук група/викладач/аудиторія" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
       </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+        <select id="pairFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+          <option value="">Усі пари</option>
+          <option value="1">1 пара</option>
+          <option value="2">2 пара</option>
+          <option value="3">3 пара</option>
+          <option value="4">4 пара</option>
+          <option value="5">5 пара</option>
+          <option value="6">6 пара</option>
+          <option value="7">7 пара</option>
+        </select>
+        <button id="findWindowsBtn" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Знайти вікна</button>
+        <div id="windowsMeta" class="md:col-span-2 text-sm text-gray-500 self-center">Вікна: —</div>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="rounded-xl border dark:border-gray-700 p-3">
@@ -103,6 +117,6 @@
     </section>
   </div>
 
-  <script src="js/course-live.js?v=20260430-2"></script>
+  <script src="js/course-live.js?v=20260430-4"></script>
 </body>
 </html>

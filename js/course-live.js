@@ -5,6 +5,9 @@
     date: document.getElementById('date'),
     refreshBtn: document.getElementById('refreshBtn'),
     viewMode: document.getElementById('viewMode'),
+    pairFilter: document.getElementById('pairFilter'),
+    findWindowsBtn: document.getElementById('findWindowsBtn'),
+    windowsMeta: document.getElementById('windowsMeta'),
     search: document.getElementById('search'),
     facultiesBox: document.getElementById('facultiesBox'),
     formsBox: document.getElementById('formsBox'),
@@ -150,12 +153,14 @@
     const q = clean(els.search.value).toLowerCase();
     const onlyNow = !!els.onlyNow.checked;
     const onlyOffline = !!els.onlyOffline.checked;
+    const pairFilter = clean(els.pairFilter.value);
     const dateIso = els.date.value || todayIso();
 
     return state.lessons
       .filter((l) => {
         if (onlyNow && !nowInSlot(dateIso, l.start, l.end)) return false;
         if (onlyOffline && /online|дист|zoom|meet|teams/i.test(`${l.type} ${l.room}`)) return false;
+        if (pairFilter && String(l.pair) !== pairFilter) return false;
         if (q && !`${l.group} ${l.discipline} ${l.teacher} ${l.room}`.toLowerCase().includes(q)) return false;
         return true;
       })
@@ -242,7 +247,33 @@
       els.tableWrap.classList.remove('hidden');
       renderTable(items);
     }
-    els.meta.textContent = `Груп: ${state.groups.length} · записів: ${items.length}`;
+    const pairInfo = clean(els.pairFilter.value) ? ` · фільтр: ${els.pairFilter.value} пара` : '';
+    els.meta.textContent = `Груп: ${state.groups.length} · записів: ${items.length}${pairInfo}`;
+  }
+
+  function findWindows() {
+    const items = filterLessons();
+    const byGroup = new Map();
+    items.forEach((l) => {
+      if (!byGroup.has(l.group)) byGroup.set(l.group, new Set());
+      byGroup.get(l.group).add(Number(l.pair));
+    });
+    const allPairs = [1, 2, 3, 4, 5, 6, 7];
+    const windows = [];
+    byGroup.forEach((pairSet, group) => {
+      const arr = Array.from(pairSet).sort((a, b) => a - b);
+      if (arr.length < 2) return;
+      const min = arr[0];
+      const max = arr[arr.length - 1];
+      const missing = allPairs.filter((p) => p > min && p < max && !pairSet.has(p));
+      if (missing.length) windows.push({ group, missing });
+    });
+    if (!windows.length) {
+      els.windowsMeta.textContent = 'Вікна: не знайдено';
+      return;
+    }
+    const preview = windows.slice(0, 8).map((w) => `${w.group}: ${w.missing.join(',')}`).join(' · ');
+    els.windowsMeta.textContent = `Вікна в групах: ${windows.length}. ${preview}${windows.length > 8 ? ' ...' : ''}`;
   }
 
   function triggerReload() {
@@ -254,19 +285,25 @@
   function bind() {
     els.refreshBtn.addEventListener('click', triggerReload);
     els.viewMode.addEventListener('change', render);
+    els.pairFilter.addEventListener('change', render);
     els.search.addEventListener('input', render);
     els.onlyNow.addEventListener('change', render);
     els.onlyOffline.addEventListener('change', render);
-    els.date.addEventListener('change', triggerReload);
+    els.date.addEventListener('change', () => {
+      els.meta.textContent = 'Дата змінена. Натисніть "Оновити зараз".';
+    });
 
-    [els.facultiesBox, els.formsBox, els.coursesBox].forEach((box) => box.addEventListener('change', triggerReload));
+    [els.facultiesBox, els.formsBox, els.coursesBox].forEach((box) => box.addEventListener('change', () => {
+      els.meta.textContent = 'Фільтри змінені. Натисніть "Оновити зараз".';
+    }));
+    els.findWindowsBtn.addEventListener('click', findWindows);
 
-    els.allFacultyBtn.addEventListener('click', () => { setChecks('faculty', true); triggerReload(); });
-    els.noneFacultyBtn.addEventListener('click', () => { setChecks('faculty', false); triggerReload(); });
-    els.allFormBtn.addEventListener('click', () => { setChecks('form', true); triggerReload(); });
-    els.noneFormBtn.addEventListener('click', () => { setChecks('form', false); triggerReload(); });
-    els.allCourseBtn.addEventListener('click', () => { setChecks('course', true); triggerReload(); });
-    els.noneCourseBtn.addEventListener('click', () => { setChecks('course', false); triggerReload(); });
+    els.allFacultyBtn.addEventListener('click', () => { setChecks('faculty', true); els.meta.textContent = 'Факультети вибрані. Натисніть "Оновити зараз".'; });
+    els.noneFacultyBtn.addEventListener('click', () => { setChecks('faculty', false); els.meta.textContent = 'Факультети очищені. Натисніть "Оновити зараз".'; });
+    els.allFormBtn.addEventListener('click', () => { setChecks('form', true); els.meta.textContent = 'Форми вибрані. Натисніть "Оновити зараз".'; });
+    els.noneFormBtn.addEventListener('click', () => { setChecks('form', false); els.meta.textContent = 'Форми очищені. Натисніть "Оновити зараз".'; });
+    els.allCourseBtn.addEventListener('click', () => { setChecks('course', true); els.meta.textContent = 'Курси вибрані. Натисніть "Оновити зараз".'; });
+    els.noneCourseBtn.addEventListener('click', () => { setChecks('course', false); els.meta.textContent = 'Курси очищені. Натисніть "Оновити зараз".'; });
   }
 
   async function start() {
