@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
   <link rel="stylesheet" href="css/styles.css?v=20260410-1">
   <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
   <div class="max-w-7xl mx-auto p-3 md:p-6 space-y-4">
@@ -57,6 +58,16 @@
         <button id="findWindowsBtn" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Знайти вікна</button>
         <div id="windowsMeta" class="text-sm text-gray-500 self-center">Вікна: —</div>
       </div>
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+        <select id="presetSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+          <option value="">Пресет: —</option>
+        </select>
+        <button id="savePresetBtn" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold">Зберегти пресет</button>
+        <button id="deletePresetBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold">Видалити пресет</button>
+        <input id="compareDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" title="Дата для порівняння">
+        <button id="compareBtn" class="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold">Порівняти з датою</button>
+        <button id="exportBtn" class="px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold">Експорт поточного</button>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="rounded-xl border dark:border-gray-700 p-3">
@@ -94,9 +105,53 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
         <label class="inline-flex items-center gap-2"><input id="onlyNow" type="checkbox"> <span class="text-sm">Тільки з поточною парою</span></label>
         <label class="inline-flex items-center gap-2"><input id="onlyOffline" type="checkbox"> <span class="text-sm">Тільки офлайн</span></label>
+        <label class="inline-flex items-center gap-2"><input id="onlyChanges" type="checkbox"> <span class="text-sm">Тільки зміни (порівняно з датою)</span></label>
         <div id="meta" class="text-sm text-gray-500">Готово</div>
       </div>
       <div id="pairStats" class="flex flex-wrap gap-2"></div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+        <h3 class="font-black mb-2">Heatmap (день × пара)</h3>
+        <div id="heatmap" class="space-y-1"></div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+        <h3 class="font-black mb-2">Конфлікти аудиторій</h3>
+        <div id="roomConflicts" class="text-sm text-gray-600">—</div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+        <h3 class="font-black mb-2">Навантаження викладачів</h3>
+        <div id="teacherLoad" class="text-sm text-gray-600">—</div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+        <h3 class="font-black mb-2">Окна викладачів</h3>
+        <div id="teacherWindows" class="text-sm text-gray-600">—</div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+        <h3 class="font-black mb-2">Панель якості даних</h3>
+        <div id="qualityPanel" class="text-sm text-gray-600">—</div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+        <h3 class="font-black mb-2">Live Board (деканат)</h3>
+        <div id="liveBoard" class="text-sm text-gray-600">—</div>
+      </div>
+    </section>
+
+    <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+      <h3 class="font-black mb-2">Переходи між корпусами</h3>
+      <div id="campusTransitions" class="text-sm text-gray-600">—</div>
+    </section>
+
+    <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+      <h3 class="font-black mb-2">Тільки зміни / порівняння</h3>
+      <div id="changesPanel" class="text-sm text-gray-600">—</div>
+      <div id="suggestionsPanel" class="text-sm text-gray-600 mt-2">—</div>
+    </section>
+
+    <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+      <h3 class="font-black mb-2">Журнал дій</h3>
+      <div id="journalPanel" class="text-sm text-gray-600">—</div>
     </section>
 
     <section id="cardsGrouped" class="space-y-4"></section>
@@ -117,6 +172,6 @@
     </section>
   </div>
 
-  <script src="js/course-live.js?v=20260430-8"></script>
+  <script src="js/course-live.js?v=20260430-9"></script>
 </body>
 </html>
