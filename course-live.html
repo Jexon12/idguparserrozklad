@@ -46,15 +46,33 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="rounded-xl border dark:border-gray-700 p-3">
-          <div class="font-bold mb-2">Факультети</div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-bold">Факультети</div>
+            <div class="flex gap-1">
+              <button id="allFacultyBtn" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
+              <button id="noneFacultyBtn" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">0</button>
+            </div>
+          </div>
           <div class="max-h-44 overflow-y-auto space-y-1" id="facultiesBox"></div>
         </div>
         <div class="rounded-xl border dark:border-gray-700 p-3">
-          <div class="font-bold mb-2">Форми навчання</div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-bold">Форми навчання</div>
+            <div class="flex gap-1">
+              <button id="allFormBtn" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
+              <button id="noneFormBtn" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">0</button>
+            </div>
+          </div>
           <div class="max-h-44 overflow-y-auto space-y-1" id="formsBox"></div>
         </div>
         <div class="rounded-xl border dark:border-gray-700 p-3">
-          <div class="font-bold mb-2">Курси</div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-bold">Курси</div>
+            <div class="flex gap-1">
+              <button id="allCourseBtn" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">Усі</button>
+              <button id="noneCourseBtn" class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700">0</button>
+            </div>
+          </div>
           <div class="max-h-44 overflow-y-auto space-y-1" id="coursesBox"></div>
         </div>
       </div>
@@ -64,9 +82,10 @@
         <label class="inline-flex items-center gap-2"><input id="onlyOffline" type="checkbox"> <span class="text-sm">Тільки офлайн</span></label>
         <div id="meta" class="text-sm text-gray-500">Готово</div>
       </div>
+      <div id="pairStats" class="flex flex-wrap gap-2"></div>
     </section>
 
-    <section id="cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></section>
+    <section id="cardsGrouped" class="space-y-4"></section>
 
     <section id="tableWrap" class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-x-auto hidden">
       <table class="min-w-full text-sm">
@@ -84,6 +103,6 @@
     </section>
   </div>
 
-  <script src="js/course-live.js?v=20260430-1"></script>
+  <script src="js/course-live.js?v=20260430-2"></script>
 </body>
 </html>
