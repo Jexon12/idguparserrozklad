@@ -330,6 +330,7 @@
     }
 
     async function uploadToApi() {
+        showError('');
         syncFromGrid();
         mergeFilteredBack();
         applyFilters();
@@ -374,7 +375,14 @@
         const txt = await res.text();
         let json = null; try { json = txt ? JSON.parse(txt) : null; } catch (e) {}
         if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
-        setStatus(`Успішно: додано ${json.added || 0}, всього ${json.count || 0} (сесія: ${json.term || ''})`);
+        showError('');
+        const added = Number(json.added || 0);
+        const total = Number(json.count || 0);
+        if (added === 0) {
+            setStatus(`Нових записів не додано (ймовірно дублікати). Всього у сесії: ${total} (${json.term || ''})`);
+        } else {
+            setStatus(`Успішно: додано ${added}, всього ${total} (сесія: ${json.term || ''})`);
+        }
     }
 
     function normalizeAction() {
