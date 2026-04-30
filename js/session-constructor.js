@@ -315,7 +315,11 @@
         renderFilters(state.rows);
         applyFilters();
         if (!state.rows.length) {
-            setStatus('Записи не знайдено навіть після розширеного пошуку. Спробуйте інші курси/період.', true);
+            setStatus(
+                `Записи не знайдено. Груп: ${state.groups.length}, період: ${startDate} - ${endDate}. ` +
+                'Спробуйте інші курси/період або додайте рядки вручну.',
+                true
+            );
         } else {
             setStatus(`Сформовано ${state.rows.length} записів на базі розкладу`);
         }
