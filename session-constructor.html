@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Конструктор сесії: DOCX шаблон + ручне редагування предметів і викладачів">
+    <meta name="description" content="Конструктор сесії: формування на базі розкладу + ручні правки">
     <title>Session Constructor</title>
     <script>
         window.__loadTailwindFallback = function () {
@@ -14,7 +14,6 @@
             document.head.appendChild(s);
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="css/styles.css?v=20260410-1">
@@ -26,9 +25,10 @@
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                     <h1 class="text-2xl md:text-3xl font-black text-violet-700 dark:text-violet-300">Session Constructor</h1>
-                    <p class="text-xs text-gray-500 mt-1">DOCX шаблон + ручні правки викладачів/предметів</p>
+                    <p class="text-xs text-gray-500 mt-1">База: як session-prep (з розкладу) + ручне редагування</p>
                 </div>
                 <div class="flex gap-2">
+                    <a href="/session-prep.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Session Prep</a>
                     <a href="/session-admin.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Session Admin</a>
                     <a href="/session.html" class="px-3 py-2 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-bold">Session Table</a>
                 </div>
@@ -44,12 +44,13 @@
                     <option value="денна форма навчання">Денна форма навчання</option>
                     <option value="заочна форма навчання">Заочна форма навчання</option>
                 </select>
-                <input id="docxFiles" type="file" accept=".docx" multiple class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="docxFiles" type="file" accept=".docx" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
             </div>
+            <div class="text-xs text-gray-500">DOCX використовується як опціональний шаблон/джерело назви файлу для експорту, але сесія формується з API розкладу.</div>
 
             <div class="flex gap-2 flex-wrap">
-                <button id="parseBtn" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">1) Розпарсити DOCX</button>
-                <button id="normalizeBtn" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">2) Нормалізувати/прибрати дублікати</button>
+                <button id="parseBtn" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">1) Сформувати з розкладу</button>
+                <button id="normalizeBtn" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">2) Нормалізувати</button>
                 <button id="addRowBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">+ Додати свій предмет</button>
                 <button id="uploadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">3) Завантажити в API</button>
                 <button id="excelBtn" class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">Експорт Excel</button>
@@ -66,7 +67,7 @@
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                 <div id="progressBar" class="h-full bg-violet-500 transition-all duration-200" style="width:0%"></div>
             </div>
-            <div id="progressText" class="text-xs text-gray-500">Очікування файлів...</div>
+            <div id="progressText" class="text-xs text-gray-500">Готово</div>
             <div id="status" class="text-sm text-gray-600 dark:text-gray-300"></div>
             <div id="errorBox" class="hidden p-2 rounded bg-red-100 text-red-700 text-sm"></div>
         </section>
@@ -89,7 +90,6 @@
             </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260430-1"></script>
+    <script src="js/session-constructor.js?v=20260430-2"></script>
 </body>
 </html>
-
