@@ -145,20 +145,25 @@
     function applySemesterPreset(preset) {
         const now = new Date();
         const year = now.getFullYear();
-        const toIso = (d) => d.toISOString().slice(0, 10);
+        const toIsoLocal = (d) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
         if (preset === 'autumn') {
-            els.startDate.value = toIso(new Date(year, 8, 1));   // Sep 1
-            els.endDate.value = toIso(new Date(year, 11, 31));   // Dec 31
+            els.startDate.value = toIsoLocal(new Date(year, 8, 1));   // Sep 1
+            els.endDate.value = toIsoLocal(new Date(year, 11, 31));   // Dec 31
             return;
         }
         if (preset === 'spring') {
-            els.startDate.value = toIso(new Date(year, 1, 1));   // Feb 1
-            els.endDate.value = toIso(new Date(year, 5, 30));    // Jun 30
+            els.startDate.value = toIsoLocal(new Date(year, 1, 1));   // Feb 1
+            els.endDate.value = toIsoLocal(new Date(year, 5, 30));    // Jun 30
             return;
         }
         const m = now.getMonth();
-        els.startDate.value = toIso(new Date(year, m, 1));
-        els.endDate.value = toIso(new Date(year, m + 1, 0));
+        els.startDate.value = toIsoLocal(new Date(year, m, 1));
+        els.endDate.value = toIsoLocal(new Date(year, m + 1, 0));
     }
     function renderFilters(rows) {
         const groups = Array.from(new Set(rows.map((r) => r.group))).sort((a, b) => a.localeCompare(b, 'uk'));
@@ -272,25 +277,48 @@
             .filter((g) => !selectedGroupKeys.length || selectedGroupKeys.includes(String(g.key)));
         if (!state.groups.length) throw new Error('Не знайдено груп');
 
-        const rawRows = [];
-        for (let i = 0; i < state.groups.length; i++) {
-            const g = state.groups[i];
-            setProgress(i + 1, state.groups.length, `Розклад: ${i + 1}/${state.groups.length}`);
-            const lessons = await fetchApi('GetScheduleDataX', { aStudyGroupID: g.key, aStartDate: startDate, aEndDate: endDate, aStudyTypeID: '' });
-            (Array.isArray(lessons) ? lessons : []).forEach((l) => {
-                rawRows.push({
-                    discipline: normalizeDiscipline(l.discipline),
-                    group: g.value,
-                    teachers: splitTeachers(l.employee_short || l.employee || ''),
-                    controlType: clean(l.study_type || '')
+        let rawRows = [];
+        async function collectRows(startDateLocal, endDateLocal) {
+            const rows = [];
+            for (let i = 0; i < state.groups.length; i++) {
+                const g = state.groups[i];
+                setProgress(i + 1, state.groups.length, `Розклад: ${i + 1}/${state.groups.length}`);
+                const lessons = await fetchApi('GetScheduleDataX', { aStudyGroupID: g.key, aStartDate: startDateLocal, aEndDate: endDateLocal, aStudyTypeID: '' });
+                (Array.isArray(lessons) ? lessons : []).forEach((l) => {
+                    rows.push({
+                        discipline: normalizeDiscipline(l.discipline),
+                        group: g.value,
+                        teachers: splitTeachers(l.employee_short || l.employee || ''),
+                        controlType: clean(l.study_type || '')
+                    });
                 });
-            });
+            }
+            return rows;
+        }
+        rawRows = await collectRows(startDate, endDate);
+
+        // Fallback: if selected period has no rows, try wider academic window.
+        if (!rawRows.length) {
+            setStatus('У вибраному періоді порожньо, пробую ширший діапазон...');
+            const preset = clean(els.semesterPreset.value);
+            const year = new Date().getFullYear();
+            if (preset === 'spring') {
+                rawRows = await collectRows(`01.09.${year - 1}`, `30.06.${year}`);
+            } else if (preset === 'autumn') {
+                rawRows = await collectRows(`01.09.${year}`, `31.01.${year + 1}`);
+            } else {
+                rawRows = await collectRows(`01.09.${year - 1}`, `30.06.${year}`);
+            }
         }
 
         state.rows = dedupeRows(rawRows).filter((r) => r.discipline && r.group);
         renderFilters(state.rows);
         applyFilters();
-        setStatus(`Сформовано ${state.rows.length} записів на базі розкладу`);
+        if (!state.rows.length) {
+            setStatus('Записи не знайдено навіть після розширеного пошуку. Спробуйте інші курси/період.', true);
+        } else {
+            setStatus(`Сформовано ${state.rows.length} записів на базі розкладу`);
+        }
     }
 
     function addCustomRow() {
@@ -308,7 +336,9 @@
         if (!state.filteredRows.length) {
             setStatus('Немає записів у таблиці. Запускаю автозбір з розкладу...');
             await buildFromSchedule();
-            if (!state.filteredRows.length) throw new Error('Немає записів для завантаження');
+            if (!state.filteredRows.length) {
+                throw new Error('Немає записів для завантаження. Змініть період/курси або додайте рядки вручну кнопкою "+ Додати свій предмет".');
+            }
         }
         const password = clean(els.adminPassword.value);
         if (!password) throw new Error('Введіть ADMIN_PASSWORD');
