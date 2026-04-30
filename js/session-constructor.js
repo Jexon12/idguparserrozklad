@@ -3,18 +3,26 @@
   const API_SESSION = '/api/session';
   const VUZ_ID = 11927;
   const CONTROL_OPTIONS = ['залік', 'іспит', 'захист'];
+  const DRAFT_KEY = 'session_constructor_draft_v1';
 
   const els = {
     adminPassword: document.getElementById('adminPassword'),
     adminActor: document.getElementById('adminActor'),
     sessionTermSelect: document.getElementById('sessionTermSelect'),
     sessionTerm: document.getElementById('sessionTerm'),
+    modeBasicBtn: document.getElementById('modeBasicBtn'),
+    modeProBtn: document.getElementById('modeProBtn'),
     studyForm: document.getElementById('studyForm'),
     docxFiles: document.getElementById('docxFiles'),
     facultySelect: document.getElementById('facultySelect'),
     semesterPreset: document.getElementById('semesterPreset'),
     startDate: document.getElementById('startDate'),
     endDate: document.getElementById('endDate'),
+    presetWinterBtn: document.getElementById('presetWinterBtn'),
+    presetSummerBtn: document.getElementById('presetSummerBtn'),
+    presetThisMonthBtn: document.getElementById('presetThisMonthBtn'),
+    presetNext7Btn: document.getElementById('presetNext7Btn'),
+    draftInfo: document.getElementById('draftInfo'),
     coursesBox: document.getElementById('coursesBox'),
     groupsBox: document.getElementById('groupsBox'),
     selectAllCourses: document.getElementById('selectAllCourses'),
@@ -45,7 +53,14 @@
     progressText: document.getElementById('progressText'),
     status: document.getElementById('status'),
     errorBox: document.getElementById('errorBox'),
-    tableBody: document.getElementById('tableBody')
+    tableBody: document.getElementById('tableBody'),
+    selectAllRows: document.getElementById('selectAllRows'),
+    bulkControlType: document.getElementById('bulkControlType'),
+    bulkDate: document.getElementById('bulkDate'),
+    bulkTime: document.getElementById('bulkTime'),
+    bulkRoom: document.getElementById('bulkRoom'),
+    applyBulkBtn: document.getElementById('applyBulkBtn'),
+    proPanel: document.getElementById('proPanel')
   };
 
   const state = {
@@ -54,12 +69,18 @@
     groups: [],
     rows: [],
     filteredRows: [],
-    conflictIndices: new Set()
+    conflictIndices: new Set(),
+    selectedRowKeys: new Set(),
+    mode: 'basic',
+    quality: { missingDate: 0, missingTime: 0, missingRoom: 0, missingTeacher: 0, teacherAliases: 0, duplicateRows: 0 },
+    renderLimit: 200
   };
+  let conflictsWorker = null;
 
   const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
   const splitTeachers = (v) => Array.from(new Set(clean(v).replace(/\s*(,|\/|\|)\s*/g, '; ').replace(/\s+та\s+/giu, '; ').split(';').map(clean).filter(Boolean)));
+  const rowKey = (r) => `${clean(r.discipline)}__${clean(r.group)}`;
 
   function showError(msg) {
     if (!msg) {
@@ -211,10 +232,14 @@
 
   function renderTable(rows) {
     els.tableBody.innerHTML = '';
-    rows.forEach((r, i) => {
+    const visibleRows = rows.slice(0, state.renderLimit);
+    visibleRows.forEach((r, i) => {
       const tr = document.createElement('tr');
       const currentControl = CONTROL_OPTIONS.includes(clean(r.controlType).toLowerCase()) ? clean(r.controlType).toLowerCase() : 'залік';
+      const key = rowKey(r);
+      const checked = state.selectedRowKeys.has(key) ? 'checked' : '';
       tr.innerHTML = `
+        <td class="px-2 py-2"><input type="checkbox" data-act="select-row" data-i="${i}" ${checked}></td>
         <td class="px-2 py-2">${i + 1}</td>
         <td class="px-2 py-2"><input data-f="discipline" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><input data-f="group" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
@@ -229,8 +254,39 @@
       els.tableBody.appendChild(tr);
     });
     els.countLabel.textContent = String(rows.length);
+    if (els.renderInfo) {
+      if (rows.length > state.renderLimit) els.renderInfo.textContent = `Показано ${state.renderLimit} з ${rows.length} (для швидкості)`;
+      else els.renderInfo.textContent = `Показано всі ${rows.length}`;
+    }
     els.uploadBtn.disabled = false;
     els.uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+  }
+  function renderQualityPanel() {
+    if (!els.qualityPanel) return;
+    const q = state.quality || {};
+    const items = [
+      ['Missing date', q.missingDate || 0],
+      ['Missing time (exam)', q.missingTime || 0],
+      ['Missing room (exam)', q.missingRoom || 0],
+      ['Missing teacher', q.missingTeacher || 0],
+      ['Teacher aliases', q.teacherAliases || 0],
+      ['Duplicates', q.duplicateRows || 0]
+    ];
+    els.qualityPanel.innerHTML = items.map(([k, v]) => `<button data-q="${k}" class="text-left px-2 py-1 rounded bg-white dark:bg-gray-700 border dark:border-gray-600"><div class="text-[11px] text-gray-500">${k}</div><div class="font-bold">${v}</div></button>`).join('');
+  }
+  function setMode(mode) {
+    state.mode = mode === 'pro' ? 'pro' : 'basic';
+    const isPro = state.mode === 'pro';
+    if (els.proPanel) els.proPanel.classList.toggle('hidden', !isPro);
+    if (els.modeBasicBtn) {
+      els.modeBasicBtn.classList.toggle('bg-violet-600', !isPro);
+      els.modeBasicBtn.classList.toggle('text-white', !isPro);
+    }
+    if (els.modeProBtn) {
+      els.modeProBtn.classList.toggle('bg-violet-600', isPro);
+      els.modeProBtn.classList.toggle('text-white', isPro);
+    }
+    saveDraftDebounced();
   }
 
   function applyFilters() {
@@ -265,6 +321,10 @@
       if (tm) r.time = clean(tm.value);
       if (rm) r.room = clean(rm.value);
       if (r.controlType !== 'іспит') r.time = '';
+      const rowChecked = document.querySelector(`input[data-act="select-row"][data-i="${i}"]`);
+      const key = rowKey(r);
+      if (rowChecked?.checked) state.selectedRowKeys.add(key);
+      else state.selectedRowKeys.delete(key);
     });
     state.filteredRows = list;
   }
@@ -273,6 +333,33 @@
     const old = new Set(state.filteredRows.map((r) => `${r.discipline}__${r.group}`));
     const rest = state.rows.filter((r) => !old.has(`${r.discipline}__${r.group}`));
     state.rows = dedupeRows(rest.concat(state.filteredRows));
+  }
+  function applyDatePreset(preset) {
+    const now = new Date();
+    const year = now.getFullYear();
+    if (preset === 'winter') {
+      els.zalikStartDate.value = `${year}-12-10`;
+      els.zalikEndDate.value = `${year}-12-24`;
+      els.examStartDate.value = `${year + 1}-01-10`;
+      els.examEndDate.value = `${year + 1}-01-31`;
+    } else if (preset === 'summer') {
+      els.zalikStartDate.value = `${year}-05-20`;
+      els.zalikEndDate.value = `${year}-06-10`;
+      els.examStartDate.value = `${year}-06-11`;
+      els.examEndDate.value = `${year}-06-30`;
+    } else if (preset === 'month') {
+      const s = new Date(year, now.getMonth(), 1);
+      const e = new Date(year, now.getMonth() + 1, 0);
+      els.startDate.value = isoLocal(s);
+      els.endDate.value = isoLocal(e);
+    } else if (preset === 'next7') {
+      const s = new Date();
+      const e = new Date();
+      e.setDate(e.getDate() + 7);
+      els.startDate.value = isoLocal(s);
+      els.endDate.value = isoLocal(e);
+    }
+    saveDraftDebounced();
   }
 
   function datesBetween(startIso, endIso) {
@@ -307,62 +394,19 @@
   }
 
   function detectConflicts(withStatus = true) {
-    state.conflictIndices = new Set();
-    const byGroupSlot = new Map();
-    const byTeacherSlot = new Map();
-    const byRoomSlot = new Map();
-    const byGroupExamDay = new Map();
-    state.filteredRows.forEach((r, idx) => {
-      const date = clean(r.date);
-      const time = clean(r.time);
-      const room = clean(r.room).replace(/\s+/g, '').toLowerCase();
-      const isExam = clean(r.controlType).toLowerCase() === 'іспит';
-      if (!date) return;
-
-      if (isExam && time) {
-        const gk = `${clean(r.group).toLowerCase()}__${date}__${time}`;
-        if (!byGroupSlot.has(gk)) byGroupSlot.set(gk, []);
-        byGroupSlot.get(gk).push(idx);
-        (r.teachers || []).forEach((t) => {
-          const tk = `${clean(t).toLowerCase()}__${date}__${time}`;
-          if (!byTeacherSlot.has(tk)) byTeacherSlot.set(tk, []);
-          byTeacherSlot.get(tk).push(idx);
-        });
-        if (room) {
-          const rk = `${room}__${date}__${time}`;
-          if (!byRoomSlot.has(rk)) byRoomSlot.set(rk, []);
-          byRoomSlot.get(rk).push(idx);
-        }
-      }
-
-      if (isExam) {
-        const key = clean(r.group).toLowerCase();
-        if (!byGroupExamDay.has(key)) byGroupExamDay.set(key, []);
-        byGroupExamDay.get(key).push({ idx, date });
-      }
-    });
-
-    byGroupSlot.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
-    byTeacherSlot.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
-    byRoomSlot.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
-
-    // Optional hard rule: for one group, exams should have >= 1 free day between them.
-    byGroupExamDay.forEach((arr) => {
-      const parsed = arr.map((x) => ({ ...x, ts: new Date(`${x.date}T00:00:00`).getTime() })).filter((x) => !Number.isNaN(x.ts)).sort((a, b) => a.ts - b.ts);
-      for (let i = 1; i < parsed.length; i++) {
-        const daysDiff = Math.round((parsed[i].ts - parsed[i - 1].ts) / (24 * 3600 * 1000));
-        if (daysDiff <= 1) {
-          state.conflictIndices.add(parsed[i - 1].idx);
-          state.conflictIndices.add(parsed[i].idx);
-        }
-      }
-    });
-
-    if (els.conflictSummary) els.conflictSummary.textContent = `Конфліктів: ${state.conflictIndices.size}`;
-    if (withStatus) {
-      if (state.conflictIndices.size) setStatus(`Знайдено конфлікти: ${state.conflictIndices.size}`, true);
-      else setStatus('Конфліктів не знайдено');
+    if (!conflictsWorker) {
+      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js');
+      conflictsWorker.onmessage = (evt) => {
+        const data = evt.data || {};
+        state.conflictIndices = new Set(data.conflictIndices || []);
+        state.quality = data.quality || state.quality;
+        if (els.conflictSummary) els.conflictSummary.textContent = `Конфліктів: ${state.conflictIndices.size}`;
+        renderQualityPanel();
+        renderTable(state.filteredRows);
+      };
     }
+    conflictsWorker.postMessage({ rows: state.filteredRows, mode: clean(els.conflictMode?.value || 'soft') });
+    if (withStatus) setStatus('Перевірка конфліктів виконана');
   }
 
   function collectConflictIndices(rows) {
@@ -440,6 +484,91 @@
       return;
     }
     els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Рекомендації:</div><ul class="list-disc pl-5">${suggestions.slice(0, 20).map((s) => `<li>${s.text}</li>`).join('')}</ul>`;
+  }
+  function applyBulkToSelected() {
+    syncFromGrid();
+    const ctl = clean(els.bulkControlType.value);
+    const date = clean(els.bulkDate.value);
+    const time = clean(els.bulkTime.value);
+    const room = clean(els.bulkRoom.value);
+    if (!state.selectedRowKeys.size) return showError('Оберіть рядки для пакетної дії');
+    state.filteredRows.forEach((r) => {
+      if (!state.selectedRowKeys.has(rowKey(r))) return;
+      if (ctl) r.controlType = ctl;
+      if (date) r.date = date;
+      if (room) r.room = room;
+      if (time && clean(r.controlType) === 'іспит') r.time = time;
+      if (clean(r.controlType) !== 'іспит') r.time = '';
+    });
+    mergeFilteredBack();
+    applyFilters();
+    saveDraftDebounced();
+  }
+  function validateYearRanges() {
+    const bad = [els.zalikStartDate.value, els.zalikEndDate.value, els.examStartDate.value, els.examEndDate.value, els.startDate.value, els.endDate.value]
+      .filter(Boolean)
+      .some((x) => {
+        const y = Number(String(x).slice(0, 4));
+        return y < 2025 || y > 2027;
+      });
+    if (bad) setStatus('Увага: перевірте роки в датах (очікувано 2025–2027)', true);
+  }
+  function getDraftPayload() {
+    return {
+      ts: new Date().toISOString(),
+      mode: state.mode,
+      fields: {
+        sessionTerm: els.sessionTerm.value,
+        sessionTermSelect: els.sessionTermSelect?.value || '',
+        studyForm: els.studyForm.value,
+        facultySelect: els.facultySelect.value,
+        semesterPreset: els.semesterPreset.value,
+        startDate: els.startDate.value,
+        endDate: els.endDate.value,
+        zalikStartDate: els.zalikStartDate.value,
+        zalikEndDate: els.zalikEndDate.value,
+        examStartDate: els.examStartDate.value,
+        examEndDate: els.examEndDate.value
+      },
+      rows: state.rows
+    };
+  }
+  function saveDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(getDraftPayload()));
+      if (els.draftInfo) els.draftInfo.textContent = `Чернетка збережена: ${new Date().toLocaleTimeString('uk-UA')}`;
+    } catch (e) {}
+  }
+  let saveDraftTimer = null;
+  function saveDraftDebounced() {
+    clearTimeout(saveDraftTimer);
+    saveDraftTimer = setTimeout(saveDraft, 250);
+  }
+  function restoreDraft() {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      const f = draft.fields || {};
+      if (typeof f.sessionTerm === 'string') els.sessionTerm.value = f.sessionTerm;
+      if (els.sessionTermSelect && typeof f.sessionTermSelect === 'string') els.sessionTermSelect.value = f.sessionTermSelect;
+      if (typeof f.studyForm === 'string') els.studyForm.value = f.studyForm;
+      if (typeof f.facultySelect === 'string') els.facultySelect.value = f.facultySelect;
+      if (typeof f.semesterPreset === 'string') els.semesterPreset.value = f.semesterPreset;
+      if (typeof f.startDate === 'string') els.startDate.value = f.startDate;
+      if (typeof f.endDate === 'string') els.endDate.value = f.endDate;
+      if (typeof f.zalikStartDate === 'string') els.zalikStartDate.value = f.zalikStartDate;
+      if (typeof f.zalikEndDate === 'string') els.zalikEndDate.value = f.zalikEndDate;
+      if (typeof f.examStartDate === 'string') els.examStartDate.value = f.examStartDate;
+      if (typeof f.examEndDate === 'string') els.examEndDate.value = f.examEndDate;
+      if (Array.isArray(draft.rows) && draft.rows.length) {
+        state.rows = draft.rows.map((r) => ({ ...r, teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') }));
+        renderFilters(state.rows);
+        applyFilters();
+      }
+      setMode(draft.mode || 'basic');
+      if (els.draftInfo) els.draftInfo.textContent = `Чернетку відновлено (${new Date(draft.ts || Date.now()).toLocaleString('uk-UA')})`;
+    } catch (e) {}
   }
 
   async function buildFromSchedule() {
@@ -557,6 +686,34 @@
     if (added === 0) setStatus(`Нових записів не додано (дублікати). Всього: ${total} (${json.term || ''})`);
     else setStatus(`Успішно: додано ${added}, всього ${total} (${json.term || ''})`);
   }
+  async function validateOnly() {
+    syncFromGrid();
+    mergeFilteredBack();
+    applyFilters();
+    const payload = {
+      action: 'validateOnly',
+      data: {
+        term: resolveSessionTerm(),
+        studyForm: clean(els.studyForm.value),
+        items: state.filteredRows.map((r) => ({
+          groupHeading: r.group,
+          groups: [r.group],
+          controlType: r.controlType || 'залік',
+          discipline: r.discipline,
+          teacher: r.teachers.join('; '),
+          date: r.date || '',
+          time: r.controlType === 'іспит' ? (r.time || '') : '',
+          room: r.room || ''
+        }))
+      }
+    };
+    const res = await fetch(API_SESSION, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const raw = await res.text();
+    let json = null; try { json = raw ? JSON.parse(raw) : null; } catch (e) {}
+    if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
+    const q = json.quality || {};
+    setStatus(`Validate: conflicts=${json.conflictsCount || 0}, missing date=${q.missingDate || 0}, missing room=${q.missingRoom || 0}`);
+  }
 
   function exportExcel() {
     syncFromGrid();
@@ -651,6 +808,8 @@
   els.autoPlanBtn.addEventListener('click', autoPlanDates);
   els.conflictsBtn.addEventListener('click', () => { syncFromGrid(); detectConflicts(true); renderTable(state.filteredRows); });
   els.suggestionsBtn.addEventListener('click', buildSuggestions);
+  els.validateOnlyBtn?.addEventListener('click', () => validateOnly().catch((e) => showError(e.message || String(e))));
+  els.applyBulkBtn.addEventListener('click', applyBulkToSelected);
   els.searchInput.addEventListener('input', applyFilters);
   els.groupFilter.addEventListener('change', applyFilters);
   els.teacherFilter.addEventListener('change', applyFilters);
@@ -665,9 +824,16 @@
     mergeFilteredBack();
     renderFilters(state.rows);
     applyFilters();
+    saveDraftDebounced();
   });
 
   els.tableBody.addEventListener('change', (e) => {
+    const rowCb = e.target.closest('input[data-act="select-row"]');
+    if (rowCb) {
+      syncFromGrid();
+      saveDraftDebounced();
+      return;
+    }
     const sel = e.target.closest('select[data-f="controlType"]');
     if (!sel) return;
     const i = sel.dataset.i;
@@ -678,7 +844,7 @@
     if (!isExam) tm.value = '';
     syncFromGrid();
     detectConflicts(false);
-    renderTable(state.filteredRows);
+    saveDraftDebounced();
   });
 
   let liveTimer = null;
@@ -687,15 +853,60 @@
     liveTimer = setTimeout(() => {
       syncFromGrid();
       detectConflicts(false);
-      renderTable(state.filteredRows);
+      saveDraftDebounced();
     }, 120);
   };
   els.tableBody.addEventListener('input', triggerLiveChecks);
+  els.selectAllRows?.addEventListener('change', () => {
+    const checked = !!els.selectAllRows.checked;
+    state.filteredRows.forEach((r) => {
+      const key = rowKey(r);
+      if (checked) state.selectedRowKeys.add(key);
+      else state.selectedRowKeys.delete(key);
+    });
+    renderTable(state.filteredRows);
+    saveDraftDebounced();
+  });
+  els.modeBasicBtn?.addEventListener('click', () => setMode('basic'));
+  els.modeProBtn?.addEventListener('click', () => setMode('pro'));
+  els.presetWinterBtn?.addEventListener('click', () => applyDatePreset('winter'));
+  els.presetSummerBtn?.addEventListener('click', () => applyDatePreset('summer'));
+  els.presetThisMonthBtn?.addEventListener('click', () => applyDatePreset('month'));
+  els.presetNext7Btn?.addEventListener('click', () => applyDatePreset('next7'));
+  els.conflictMode?.addEventListener('change', () => { detectConflicts(false); saveDraftDebounced(); });
+  [els.sessionTerm, els.sessionTermSelect, els.studyForm, els.startDate, els.endDate, els.zalikStartDate, els.zalikEndDate, els.examStartDate, els.examEndDate].forEach((el) => {
+    el?.addEventListener('change', () => { validateYearRanges(); saveDraftDebounced(); });
+  });
+  els.clearDraftBtn?.addEventListener('click', () => {
+    localStorage.removeItem(DRAFT_KEY);
+    if (els.draftInfo) els.draftInfo.textContent = 'Чернетку очищено';
+  });
+  els.qualityPanel?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-q]');
+    if (!btn) return;
+    const key = btn.dataset.q;
+    if (key === 'Missing date') {
+      state.filteredRows = state.rows.filter((r) => !clean(r.date));
+    } else if (key === 'Missing time (exam)') {
+      state.filteredRows = state.rows.filter((r) => clean(r.controlType) === 'іспит' && !clean(r.time));
+    } else if (key === 'Missing room (exam)') {
+      state.filteredRows = state.rows.filter((r) => clean(r.controlType) === 'іспит' && !clean(r.room));
+    } else if (key === 'Missing teacher') {
+      state.filteredRows = state.rows.filter((r) => !(r.teachers || []).length);
+    } else {
+      applyFilters();
+      return;
+    }
+    detectConflicts(false);
+  });
 
   renderSelect(els.groupFilter, [], 'Усі групи');
   renderSelect(els.teacherFilter, [], 'Усі викладачі');
   if (els.conflictSummary) els.conflictSummary.textContent = 'Конфліктів: 0';
   setProgress(0, 1, 'Готово');
+  setMode('basic');
   loadSessionTerms();
-  initControls().catch((e) => showError(e.message || String(e)));
+  initControls()
+    .then(() => restoreDraft())
+    .catch((e) => showError(e.message || String(e)));
 })();

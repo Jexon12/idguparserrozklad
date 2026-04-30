@@ -687,6 +687,16 @@ const apiHandler = async (req, res) => {
                 const { password, data } = payload;
                 const action = payload.action || '';
                 const actor = String(payload.actor || 'unknown').replace(/\s+/g, ' ').trim();
+                if (action === 'validateOnly') {
+                    if (!data || !Array.isArray(data.items)) {
+                        res.status(400).json({ error: 'Invalid session payload (items[])' });
+                        return;
+                    }
+                    const normalized = data.items.map(normalizeSessionItem);
+                    const stats = computeValidationStats(normalized);
+                    res.status(200).json(stats);
+                    return;
+                }
                 if (password !== ADMIN_PASSWORD) {
                     await appendAuditEvent(req, 'admin_auth_failed', 'session', { reason: 'wrong_password' });
                     res.status(403).json({ error: 'Wrong password' });
@@ -719,7 +729,7 @@ const apiHandler = async (req, res) => {
                 }
                 const term = data.term || 'Session';
                 const studyForm = data.studyForm || '';
-                const incomingItems = (data.items || []).map((item) => ({
+                const incomingItems = (data.items || []).map((item) => normalizeSessionItem({
                     ...item,
                     term: item.term || term,
                     studyForm: item.studyForm || studyForm
@@ -1855,6 +1865,80 @@ const normalizeSessionTerm = (value) => String(value || '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+const normalizeSessionItem = (item) => {
+    const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+    const teachers = clean(item.teacher || '')
+        .replace(/\s*(,|\/|\|)\s*/g, '; ')
+        .replace(/\s+та\s+/giu, '; ')
+        .split(';')
+        .map((t) => clean(t))
+        .filter(Boolean);
+    return {
+        ...item,
+        term: clean(item.term || ''),
+        studyForm: clean(item.studyForm || ''),
+        groupHeading: clean(item.groupHeading || ''),
+        groups: Array.isArray(item.groups) ? item.groups.map((g) => clean(g).toLowerCase()).filter(Boolean) : [],
+        controlType: clean(item.controlType || 'залік').toLowerCase(),
+        discipline: clean(item.discipline || ''),
+        teacher: teachers.join('; '),
+        date: clean(item.date || ''),
+        time: clean(item.time || ''),
+        room: clean(item.room || '')
+    };
+};
+
+const computeValidationStats = (items) => {
+    const quality = { missingDate: 0, missingTime: 0, missingRoom: 0, missingTeacher: 0, duplicateRows: 0, teacherAliases: 0 };
+    const byGroupSlot = new Map();
+    const byTeacherSlot = new Map();
+    const byRoomSlot = new Map();
+    const aliasMap = new Map();
+    const dupMap = new Map();
+    const conflictRows = new Set();
+    const teacherNorm = (t) => String(t || '').toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+
+    items.forEach((it, idx) => {
+        const isExam = it.controlType === 'іспит';
+        if (!it.date) quality.missingDate++;
+        if (isExam && !it.time) quality.missingTime++;
+        if (isExam && !it.room) quality.missingRoom++;
+        if (!it.teacher) quality.missingTeacher++;
+
+        const dkey = `${it.discipline}__${(it.groups || []).join(',')}__${it.controlType}`;
+        dupMap.set(dkey, (dupMap.get(dkey) || 0) + 1);
+
+        it.teacher.split(';').map((t) => t.trim()).filter(Boolean).forEach((t) => {
+            const tn = teacherNorm(t);
+            if (!aliasMap.has(tn)) aliasMap.set(tn, new Set());
+            aliasMap.get(tn).add(t);
+        });
+
+        if (!isExam || !it.date || !it.time) return;
+        (it.groups || []).forEach((g) => {
+            const k = `${g}__${it.date}__${it.time}`;
+            if (!byGroupSlot.has(k)) byGroupSlot.set(k, []);
+            byGroupSlot.get(k).push(idx);
+        });
+        it.teacher.split(';').map((t) => teacherNorm(t)).filter(Boolean).forEach((t) => {
+            const k = `${t}__${it.date}__${it.time}`;
+            if (!byTeacherSlot.has(k)) byTeacherSlot.set(k, []);
+            byTeacherSlot.get(k).push(idx);
+        });
+        if (it.room) {
+            const k = `${it.room.toLowerCase().replace(/\s+/g, '')}__${it.date}__${it.time}`;
+            if (!byRoomSlot.has(k)) byRoomSlot.set(k, []);
+            byRoomSlot.get(k).push(idx);
+        }
+    });
+
+    dupMap.forEach((n) => { if (n > 1) quality.duplicateRows += (n - 1); });
+    aliasMap.forEach((set) => { if (set.size > 1) quality.teacherAliases += (set.size - 1); });
+    [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((m) => m.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => conflictRows.add(i)); }));
+
+    return { conflictsCount: conflictRows.size, quality };
+};
 
 module.exports = apiHandler;
 

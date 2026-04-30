@@ -27,7 +27,11 @@
                     <h1 class="text-2xl md:text-3xl font-black text-violet-700 dark:text-violet-300">Session Constructor</h1>
                     <p class="text-xs text-gray-500 mt-1">База: як session-prep (з розкладу) + ручне редагування</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center flex-wrap">
+                    <div class="inline-flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+                        <button id="modeBasicBtn" class="px-3 py-2 text-xs font-bold bg-violet-600 text-white">Basic</button>
+                        <button id="modeProBtn" class="px-3 py-2 text-xs font-bold bg-white dark:bg-gray-700">Pro</button>
+                    </div>
                     <a href="/session-prep.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Session Prep</a>
                     <a href="/session-admin.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Session Admin</a>
                     <a href="/session.html" class="px-3 py-2 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-bold">Session Table</a>
@@ -58,6 +62,12 @@
                 <input id="endDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <div class="text-xs text-gray-500 p-2 rounded-xl bg-gray-50 dark:bg-gray-700/50">Оберіть семестр або свій період, потім курси/групи</div>
             </div>
+            <div class="flex gap-2 flex-wrap">
+                <button id="presetWinterBtn" class="px-3 py-1.5 rounded-lg text-xs bg-gray-100 dark:bg-gray-700">Зимова сесія</button>
+                <button id="presetSummerBtn" class="px-3 py-1.5 rounded-lg text-xs bg-gray-100 dark:bg-gray-700">Літня сесія</button>
+                <button id="presetThisMonthBtn" class="px-3 py-1.5 rounded-lg text-xs bg-gray-100 dark:bg-gray-700">Цей місяць</button>
+                <button id="presetNext7Btn" class="px-3 py-1.5 rounded-lg text-xs bg-gray-100 dark:bg-gray-700">Наступні 7 днів</button>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div class="rounded-xl border dark:border-gray-700 p-3">
                     <div class="font-bold mb-2">Курси</div>
@@ -77,6 +87,7 @@
                 </div>
             </div>
             <div class="text-xs text-gray-500">DOCX використовується як опціональний шаблон/джерело назви файлу для експорту, але сесія формується з API розкладу.</div>
+            <div id="draftInfo" class="text-xs text-emerald-700 dark:text-emerald-300"></div>
 
             <div class="flex gap-2 flex-wrap">
                 <button id="parseBtn" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">1) Сформувати з розкладу</button>
@@ -94,6 +105,7 @@
                 <select id="teacherFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
                 <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm">Записів: <span id="countLabel" class="font-bold">0</span></div>
             </div>
+            <div id="proPanel" class="space-y-2">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <input id="zalikStartDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Початок заліків">
                 <input id="zalikEndDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Кінець заліків">
@@ -104,9 +116,16 @@
                 <button id="autoPlanBtn" class="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm">Автодати (залік/іспит)</button>
                 <button id="conflictsBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm">Перевірити конфлікти</button>
                 <button id="suggestionsBtn" class="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">Smart-підказки</button>
+                <select id="conflictMode" class="px-3 py-2 rounded-xl bg-white dark:bg-gray-700 border dark:border-gray-600 text-sm font-bold">
+                    <option value="soft">Soft conflicts</option>
+                    <option value="strict">Strict conflicts</option>
+                </select>
+                <button id="validateOnlyBtn" class="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-sm">Validate only</button>
                 <div id="conflictSummary" class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm">Конфліктів: 0</div>
             </div>
             <div id="suggestionsBox" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-sm"></div>
+            <div id="qualityPanel" class="p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 text-sm grid grid-cols-2 md:grid-cols-6 gap-2"></div>
+            </div>
 
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                 <div id="progressBar" class="h-full bg-violet-500 transition-all duration-200" style="width:0%"></div>
@@ -121,6 +140,7 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-gray-50 dark:bg-gray-700">
                         <tr>
+                            <th class="px-2 py-2 text-left"><input type="checkbox" id="selectAllRows"></th>
                             <th class="px-2 py-2 text-left">№</th>
                             <th class="px-2 py-2 text-left">Предмет</th>
                             <th class="px-2 py-2 text-left">Група</th>
@@ -135,9 +155,28 @@
                     <tbody id="tableBody"></tbody>
                 </table>
             </div>
+            <div class="p-3 border-t border-gray-200 dark:border-gray-700">
+                <div class="text-xs text-gray-500 mb-2">Пакетні дії для вибраних рядків</div>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                    <select id="bulkControlType" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <option value="">Форма контролю (не змінювати)</option>
+                        <option value="залік">залік</option>
+                        <option value="іспит">іспит</option>
+                        <option value="захист">захист</option>
+                    </select>
+                    <input id="bulkDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <input id="bulkTime" type="time" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <input id="bulkRoom" type="text" placeholder="Аудиторія" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                    <button id="applyBulkBtn" class="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">Застосувати до вибраних</button>
+                </div>
+                <div class="flex gap-2 mt-2">
+                    <button id="clearDraftBtn" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-xs font-bold">Очистити чернетку</button>
+                    <div id="renderInfo" class="text-xs text-gray-500 self-center"></div>
+                </div>
+            </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260430-11"></script>
+    <script src="js/session-constructor.js?v=20260430-14"></script>
 </body>
 </html>
 
