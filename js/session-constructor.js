@@ -36,6 +36,8 @@
     examEndDate: document.getElementById('examEndDate'),
     autoPlanBtn: document.getElementById('autoPlanBtn'),
     conflictsBtn: document.getElementById('conflictsBtn'),
+    suggestionsBtn: document.getElementById('suggestionsBtn'),
+    suggestionsBox: document.getElementById('suggestionsBox'),
     conflictSummary: document.getElementById('conflictSummary'),
     countLabel: document.getElementById('countLabel'),
     progressBar: document.getElementById('progressBar'),
@@ -151,10 +153,11 @@
       const g = clean(r.group);
       if (!d || !g) return;
       const key = `${d}__${g}`;
-      if (!map.has(key)) map.set(key, { discipline: d, group: g, teachers: new Set(), controlType: clean(r.controlType || 'залік'), date: clean(r.date || ''), time: clean(r.time || '') });
+      if (!map.has(key)) map.set(key, { discipline: d, group: g, teachers: new Set(), controlType: clean(r.controlType || 'залік'), date: clean(r.date || ''), time: clean(r.time || ''), room: clean(r.room || '') });
       splitTeachers((r.teachers || []).join('; ')).forEach((t) => map.get(key).teachers.add(t));
       if (!map.get(key).date && r.date) map.get(key).date = clean(r.date);
       if (!map.get(key).time && r.time) map.get(key).time = clean(r.time);
+      if (!map.get(key).room && r.room) map.get(key).room = clean(r.room);
     });
     return Array.from(map.values()).map((x) => ({
       discipline: x.discipline,
@@ -162,7 +165,8 @@
       teachers: Array.from(x.teachers).sort((a, b) => a.localeCompare(b, 'uk')),
       controlType: CONTROL_OPTIONS.includes(x.controlType) ? x.controlType : 'залік',
       date: x.date || '',
-      time: x.time || ''
+      time: x.time || '',
+      room: x.room || ''
     }));
   }
 
@@ -188,6 +192,7 @@
         <td class="px-2 py-2"><select data-f="controlType" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
         <td class="px-2 py-2"><input data-f="date" data-i="${i}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><input data-f="time" data-i="${i}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700 ${currentControl === 'іспит' ? '' : 'hidden'}" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="room" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.room || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><button data-act="del" data-i="${i}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
       if (state.conflictIndices.has(i)) tr.classList.add('bg-red-50', 'dark:bg-red-900/20');
@@ -221,12 +226,14 @@
       const c = document.querySelector(`select[data-f="controlType"][data-i="${i}"]`);
       const dt = document.querySelector(`input[data-f="date"][data-i="${i}"]`);
       const tm = document.querySelector(`input[data-f="time"][data-i="${i}"]`);
+      const rm = document.querySelector(`input[data-f="room"][data-i="${i}"]`);
       if (d) r.discipline = normalizeDiscipline(d.value);
       if (g) r.group = clean(g.value);
       if (t) r.teachers = splitTeachers(t.value);
       if (c) r.controlType = clean(c.value || 'залік');
       if (dt) r.date = clean(dt.value);
       if (tm) r.time = clean(tm.value);
+      if (rm) r.room = clean(rm.value);
       if (r.controlType !== 'іспит') r.time = '';
     });
     state.filteredRows = list;
@@ -271,27 +278,138 @@
 
   function detectConflicts(withStatus = true) {
     state.conflictIndices = new Set();
-    const byGroupDate = new Map();
-    const byTeacherDate = new Map();
+    const byGroupSlot = new Map();
+    const byTeacherSlot = new Map();
+    const byRoomSlot = new Map();
+    const byGroupExamDay = new Map();
     state.filteredRows.forEach((r, idx) => {
       const date = clean(r.date);
+      const time = clean(r.time);
+      const room = clean(r.room).replace(/\s+/g, '').toLowerCase();
+      const isExam = clean(r.controlType).toLowerCase() === 'іспит';
       if (!date) return;
-      const gk = `${r.group}__${date}`;
-      if (!byGroupDate.has(gk)) byGroupDate.set(gk, []);
-      byGroupDate.get(gk).push(idx);
-      (r.teachers || []).forEach((t) => {
-        const tk = `${t}__${date}`;
-        if (!byTeacherDate.has(tk)) byTeacherDate.set(tk, []);
-        byTeacherDate.get(tk).push(idx);
-      });
+
+      if (isExam && time) {
+        const gk = `${clean(r.group).toLowerCase()}__${date}__${time}`;
+        if (!byGroupSlot.has(gk)) byGroupSlot.set(gk, []);
+        byGroupSlot.get(gk).push(idx);
+        (r.teachers || []).forEach((t) => {
+          const tk = `${clean(t).toLowerCase()}__${date}__${time}`;
+          if (!byTeacherSlot.has(tk)) byTeacherSlot.set(tk, []);
+          byTeacherSlot.get(tk).push(idx);
+        });
+        if (room) {
+          const rk = `${room}__${date}__${time}`;
+          if (!byRoomSlot.has(rk)) byRoomSlot.set(rk, []);
+          byRoomSlot.get(rk).push(idx);
+        }
+      }
+
+      if (isExam) {
+        const key = clean(r.group).toLowerCase();
+        if (!byGroupExamDay.has(key)) byGroupExamDay.set(key, []);
+        byGroupExamDay.get(key).push({ idx, date });
+      }
     });
-    byGroupDate.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
-    byTeacherDate.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
+
+    byGroupSlot.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
+    byTeacherSlot.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
+    byRoomSlot.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => state.conflictIndices.add(i)); });
+
+    // Optional hard rule: for one group, exams should have >= 1 free day between them.
+    byGroupExamDay.forEach((arr) => {
+      const parsed = arr.map((x) => ({ ...x, ts: new Date(`${x.date}T00:00:00`).getTime() })).filter((x) => !Number.isNaN(x.ts)).sort((a, b) => a.ts - b.ts);
+      for (let i = 1; i < parsed.length; i++) {
+        const daysDiff = Math.round((parsed[i].ts - parsed[i - 1].ts) / (24 * 3600 * 1000));
+        if (daysDiff <= 1) {
+          state.conflictIndices.add(parsed[i - 1].idx);
+          state.conflictIndices.add(parsed[i].idx);
+        }
+      }
+    });
+
     if (els.conflictSummary) els.conflictSummary.textContent = `Конфліктів: ${state.conflictIndices.size}`;
     if (withStatus) {
       if (state.conflictIndices.size) setStatus(`Знайдено конфлікти: ${state.conflictIndices.size}`, true);
       else setStatus('Конфліктів не знайдено');
     }
+  }
+
+  function collectConflictIndices(rows) {
+    const out = new Set();
+    const byGroupSlot = new Map();
+    const byTeacherSlot = new Map();
+    const byRoomSlot = new Map();
+    rows.forEach((r, idx) => {
+      const date = clean(r.date);
+      const time = clean(r.time);
+      const isExam = clean(r.controlType).toLowerCase() === 'іспит';
+      if (!isExam || !date || !time) return;
+      const gk = `${clean(r.group).toLowerCase()}__${date}__${time}`;
+      if (!byGroupSlot.has(gk)) byGroupSlot.set(gk, []);
+      byGroupSlot.get(gk).push(idx);
+      (r.teachers || []).forEach((t) => {
+        const tk = `${clean(t).toLowerCase()}__${date}__${time}`;
+        if (!byTeacherSlot.has(tk)) byTeacherSlot.set(tk, []);
+        byTeacherSlot.get(tk).push(idx);
+      });
+      const room = clean(r.room).replace(/\s+/g, '').toLowerCase();
+      if (room) {
+        const rk = `${room}__${date}__${time}`;
+        if (!byRoomSlot.has(rk)) byRoomSlot.set(rk, []);
+        byRoomSlot.get(rk).push(idx);
+      }
+    });
+    [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((map) => map.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => out.add(i)); }));
+    return out;
+  }
+
+  function buildSuggestions() {
+    syncFromGrid();
+    const rows = state.filteredRows.slice();
+    const conflictSet = collectConflictIndices(rows);
+    if (!conflictSet.size) {
+      els.suggestionsBox.classList.remove('hidden');
+      els.suggestionsBox.textContent = 'Конфліктів не знайдено. Підказки не потрібні.';
+      return;
+    }
+    const examDates = datesBetween(els.examStartDate.value, els.examEndDate.value);
+    if (!examDates.length) {
+      els.suggestionsBox.classList.remove('hidden');
+      els.suggestionsBox.textContent = 'Для smart-підказок вкажіть діапазон дат іспитів.';
+      return;
+    }
+
+    const currentConflicts = conflictSet.size;
+    const suggestions = [];
+    Array.from(conflictSet).slice(0, 30).forEach((idx) => {
+      const item = rows[idx];
+      if (clean(item.controlType).toLowerCase() !== 'іспит' || !clean(item.time)) return;
+      let best = null;
+      examDates.forEach((candidateDate) => {
+        if (candidateDate === clean(item.date)) return;
+        const clone = rows.map((x) => ({ ...x, teachers: Array.isArray(x.teachers) ? x.teachers.slice() : [] }));
+        clone[idx].date = candidateDate;
+        const nextConf = collectConflictIndices(clone).size;
+        const improvement = currentConflicts - nextConf;
+        if (improvement > 0 && (!best || improvement > best.improvement)) {
+          best = { candidateDate, nextConf, improvement };
+        }
+      });
+      if (best) {
+        suggestions.push({
+          idx,
+          text: `Група ${item.group}: "${item.discipline}" (${(item.teachers || []).join(', ')}) — перенести з ${item.date || '—'} ${item.time || ''} на ${best.candidateDate} ${item.time}. Конфліктів стане менше на ${best.improvement}.`
+        });
+      }
+    });
+
+    els.suggestionsBox.classList.remove('hidden');
+    if (!suggestions.length) {
+      els.suggestionsBox.textContent = 'Автопокращень не знайдено в заданому діапазоні дат.';
+      return;
+    }
+    els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Рекомендації:</div><ul class="list-disc pl-5">${suggestions.slice(0, 20).map((s) => `<li>${s.text}</li>`).join('')}</ul>`;
   }
 
   async function buildFromSchedule() {
@@ -334,7 +452,8 @@
           teachers: splitTeachers(l.employee_short || l.employee || ''),
           controlType: st.includes('іспит') ? 'іспит' : 'залік',
           date: '',
-          time: ''
+          time: '',
+          room: clean(l.auditorium || l.room || '')
         });
       });
     }
@@ -355,7 +474,7 @@
   function addCustomRow() {
     syncFromGrid();
     mergeFilteredBack();
-    state.rows.unshift({ discipline: 'Новий предмет', group: '', teachers: [], controlType: 'залік', date: '', time: '' });
+    state.rows.unshift({ discipline: 'Новий предмет', group: '', teachers: [], controlType: 'залік', date: '', time: '', room: '' });
     renderFilters(state.rows);
     applyFilters();
   }
@@ -392,7 +511,7 @@
           teacher: r.teachers.join('; '),
           date: r.date || '',
           time: r.controlType === 'іспит' ? (r.time || '') : '',
-          room: '',
+          room: r.room || '',
           sourceTable: 0,
           sourceFile: els.docxFiles.files?.[0]?.name || 'schedule-based'
         }))
@@ -411,8 +530,8 @@
 
   function exportExcel() {
     syncFromGrid();
-    const data = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час']];
-    state.filteredRows.forEach((r, i) => data.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.controlType === 'іспит' ? (r.time || '') : '']));
+    const data = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час', 'Аудиторія']];
+    state.filteredRows.forEach((r, i) => data.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.controlType === 'іспит' ? (r.time || '') : '', r.room || '']));
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Session');
@@ -435,8 +554,8 @@
     Array.from(grouped.entries()).forEach(([g, list]) => {
       body += `<h3 style="margin:18px 0 8px 0;">Група: ${escapeHtml(g)}</h3>`;
       body += '<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%; font-size:12pt;">';
-      body += '<tr><th>№</th><th>Дисципліна</th><th>Викладачі</th><th>Форма контролю</th><th>Дата</th><th>Час</th></tr>';
-      list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td><td>${escapeHtml(r.controlType === 'іспит' ? (r.time || '') : '')}</td></tr>`; });
+      body += '<tr><th>№</th><th>Дисципліна</th><th>Викладачі</th><th>Форма контролю</th><th>Дата</th><th>Час</th><th>Аудиторія</th></tr>';
+      list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td><td>${escapeHtml(r.controlType === 'іспит' ? (r.time || '') : '')}</td><td>${escapeHtml(r.room || '')}</td></tr>`; });
       body += '</table>';
     });
     const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri, Arial, sans-serif;"><h2>${escapeHtml(clean(els.sessionTerm.value) || 'Сесія')}</h2>${body}</body></html>`;
@@ -450,8 +569,8 @@
 
   async function copyTable() {
     syncFromGrid();
-    const lines = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час'].join('\t')];
-    state.filteredRows.forEach((r, i) => lines.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.controlType === 'іспит' ? (r.time || '') : ''].join('\t')));
+    const lines = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час', 'Аудиторія'].join('\t')];
+    state.filteredRows.forEach((r, i) => lines.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.controlType === 'іспит' ? (r.time || '') : '', r.room || ''].join('\t')));
     await navigator.clipboard.writeText(lines.join('\n'));
     setStatus('Таблицю скопійовано');
   }
@@ -501,6 +620,7 @@
   els.copyBtn.addEventListener('click', () => copyTable().catch((e) => showError(e.message || String(e))));
   els.autoPlanBtn.addEventListener('click', autoPlanDates);
   els.conflictsBtn.addEventListener('click', () => { syncFromGrid(); detectConflicts(true); renderTable(state.filteredRows); });
+  els.suggestionsBtn.addEventListener('click', buildSuggestions);
   els.searchInput.addEventListener('input', applyFilters);
   els.groupFilter.addEventListener('change', applyFilters);
   els.teacherFilter.addEventListener('change', applyFilters);
@@ -526,7 +646,21 @@
     const isExam = clean(sel.value) === 'іспит';
     tm.classList.toggle('hidden', !isExam);
     if (!isExam) tm.value = '';
+    syncFromGrid();
+    detectConflicts(false);
+    renderTable(state.filteredRows);
   });
+
+  let liveTimer = null;
+  const triggerLiveChecks = () => {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => {
+      syncFromGrid();
+      detectConflicts(false);
+      renderTable(state.filteredRows);
+    }, 120);
+  };
+  els.tableBody.addEventListener('input', triggerLiveChecks);
 
   renderSelect(els.groupFilter, [], 'Усі групи');
   renderSelect(els.teacherFilter, [], 'Усі викладачі');

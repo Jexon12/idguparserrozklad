@@ -657,7 +657,8 @@ const apiHandler = async (req, res) => {
                 const loaded = await loadSessionData();
                 const store = ensureSessionStore(loaded.data);
                 const stats = buildSessionStats(store);
-                res.status(200).json({ ...store, storage: loaded.storage, stats });
+                const snapshotMeta = (store.snapshots || []).map((s) => ({ id: s.id, at: s.at, reason: s.reason, by: s.by })).reverse();
+                res.status(200).json({ ...store, snapshots: snapshotMeta, storage: loaded.storage, stats });
                 return;
             }
 
@@ -696,12 +697,14 @@ const apiHandler = async (req, res) => {
 
                 if (action) {
                     const result = applySessionAction(store, action, payload);
+                    appendSessionSnapshot(store, action, actor);
                     const storedPayload = {
                         updatedAt: new Date().toISOString(),
                         sourceFile: store.sourceFile || '',
                         sessions: store.sessions,
                         trash: store.trash,
-                        history: store.history
+                        history: store.history,
+                        snapshots: store.snapshots
                     };
                     const storage = await saveSessionData(storedPayload);
                     await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), action, actor });
@@ -774,8 +777,10 @@ const apiHandler = async (req, res) => {
                         term,
                         by: actor,
                         added
-                    })
+                    }),
+                    snapshots: store.snapshots
                 };
+                appendSessionSnapshot(storedPayload, 'upsert', actor);
 
                 const storage = await saveSessionData(storedPayload);
                 const total = store.sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
@@ -1548,6 +1553,7 @@ const ensureSessionStore = (input) => {
             items: Array.isArray(s.items) ? s.items : []
         })) : [];
         const history = Array.isArray(input.history) ? input.history : [];
+        const snapshots = Array.isArray(input.snapshots) ? input.snapshots : [];
         const flat = sessions.flatMap((s) => s.items.map((it) => ({
             ...it,
             term: it.term || s.term || 'Session',
@@ -1559,7 +1565,8 @@ const ensureSessionStore = (input) => {
             sessions,
             items: flat,
             trash,
-            history
+            history,
+            snapshots
         };
     }
 
@@ -1581,7 +1588,8 @@ const ensureSessionStore = (input) => {
             }],
             items: mappedItems,
             trash: [],
-            history: []
+            history: [],
+            snapshots: []
         };
     }
 
@@ -1591,8 +1599,25 @@ const ensureSessionStore = (input) => {
         sessions: [],
         items: [],
         trash: [],
-        history: []
+        history: [],
+        snapshots: []
     };
+};
+
+const appendSessionSnapshot = (store, reason, actor) => {
+    const list = Array.isArray(store.snapshots) ? store.snapshots.slice() : [];
+    list.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        at: new Date().toISOString(),
+        reason: String(reason || 'update'),
+        by: String(actor || 'unknown'),
+        sessions: JSON.parse(JSON.stringify(store.sessions || [])),
+        trash: JSON.parse(JSON.stringify(store.trash || [])),
+        history: JSON.parse(JSON.stringify(store.history || []))
+    });
+    while (list.length > 30) list.shift();
+    store.snapshots = list;
+    return list[list.length - 1];
 };
 
 const loadSessionData = async () => {
@@ -1778,6 +1803,49 @@ const applySessionAction = (store, action, payload) => {
         store.history = appendSessionHistory(store.history, { at: nowIso, action, term, toTerm, by: actor });
         store.items = store.sessions.flatMap((s) => (s.items || []).map((it) => ({ ...it, term: it.term || s.term })));
         return { fromTerm: term, toTerm };
+    }
+
+    if (action === 'duplicateTerm') {
+        if (!toTerm) throw new Error('Missing toTerm');
+        const idx = store.sessions.findIndex((s) => normalizeSessionTerm(s.term) === normTerm);
+        if (idx < 0) throw new Error('Session term not found');
+        const targetNorm = normalizeSessionTerm(toTerm);
+        const existsTarget = store.sessions.some((s) => normalizeSessionTerm(s.term) === targetNorm);
+        if (existsTarget) throw new Error('Target term already exists');
+
+        const source = store.sessions[idx];
+        const copy = JSON.parse(JSON.stringify(source));
+        copy.term = toTerm;
+        copy.generatedAt = new Date().toISOString();
+        copy.items = (copy.items || []).map((it) => ({ ...it, term: toTerm }));
+        store.sessions.push(copy);
+        store.history = appendSessionHistory(store.history, {
+            at: nowIso,
+            action,
+            term,
+            toTerm,
+            by: actor,
+            items: copy.items.length
+        });
+        store.items = store.sessions.flatMap((s) => (s.items || []).map((it) => ({ ...it, term: it.term || s.term })));
+        return { fromTerm: term, toTerm, duplicatedItems: copy.items.length };
+    }
+
+    if (action === 'rollbackSnapshot') {
+        const snapshotId = String(payload.snapshotId || '').trim();
+        if (!snapshotId) throw new Error('Missing snapshotId');
+        const snap = (store.snapshots || []).find((s) => s.id === snapshotId);
+        if (!snap) throw new Error('Snapshot not found');
+        store.sessions = JSON.parse(JSON.stringify(snap.sessions || []));
+        store.trash = JSON.parse(JSON.stringify(snap.trash || []));
+        store.history = appendSessionHistory(JSON.parse(JSON.stringify(snap.history || [])), {
+            at: nowIso,
+            action,
+            snapshotId,
+            by: actor
+        });
+        store.items = store.sessions.flatMap((s) => (s.items || []).map((it) => ({ ...it, term: it.term || s.term })));
+        return { snapshotId, restoredSessions: store.sessions.length };
     }
 
     throw new Error(`Unsupported action: ${action}`);

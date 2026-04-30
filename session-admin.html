@@ -78,15 +78,25 @@
             <h2 class="font-bold">Активні сесії</h2>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <select id="existingTerms" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2"></select>
-                <input id="renameTermInput" type="text" placeholder="Нова назва сесії" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <input id="renameTermInput" type="text" placeholder="Нова назва сесії / копії" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <button id="refreshTerms" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Оновити список</button>
             </div>
             <div class="flex gap-2 flex-wrap">
                 <button id="renameTerm" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm">Перейменувати</button>
+                <button id="duplicateTerm" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">Дублювати</button>
                 <button id="deleteTerm" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm">У кошик</button>
                 <button id="exportSelectedTerm" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm">Експорт вибраної сесії</button>
             </div>
             <div id="termSummary" class="text-xs text-gray-500 dark:text-gray-400"></div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <h2 class="font-bold">Версії та відкат</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <select id="snapshotSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 md:col-span-2"></select>
+                <button id="rollbackSnapshot" class="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm">Відкотити до версії</button>
+            </div>
+            <div id="snapshotSummary" class="text-xs text-gray-500 dark:text-gray-400"></div>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
@@ -107,7 +117,7 @@
         </section>
     </div>
 
-    <script src="js/session-admin.js?v=20260410-10"></script>
+    <script src="js/session-admin.js?v=20260430-1"></script>
     <script src="js/i18n.js?v=20260412-1"></script>
     <script>window.ScheduleI18n && window.ScheduleI18n.applyI18n();</script>
     <script src="js/monitor.js?v=20260412-1"></script>

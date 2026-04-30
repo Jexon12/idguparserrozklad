@@ -102,8 +102,10 @@
             <div class="flex gap-2 flex-wrap">
                 <button id="autoPlanBtn" class="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm">Автодати (залік/іспит)</button>
                 <button id="conflictsBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm">Перевірити конфлікти</button>
+                <button id="suggestionsBtn" class="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">Smart-підказки</button>
                 <div id="conflictSummary" class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm">Конфліктів: 0</div>
             </div>
+            <div id="suggestionsBox" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-sm"></div>
 
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                 <div id="progressBar" class="h-full bg-violet-500 transition-all duration-200" style="width:0%"></div>
@@ -125,6 +127,7 @@
                             <th class="px-2 py-2 text-left">Форма контролю</th>
                             <th class="px-2 py-2 text-left">Дата</th>
                             <th class="px-2 py-2 text-left">Час (тільки іспит)</th>
+                            <th class="px-2 py-2 text-left">Аудиторія</th>
                             <th class="px-2 py-2 text-left">Дія</th>
                         </tr>
                     </thead>
@@ -133,7 +136,7 @@
             </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260430-8"></script>
+    <script src="js/session-constructor.js?v=20260430-10"></script>
 </body>
 </html>
 
