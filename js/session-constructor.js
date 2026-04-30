@@ -7,6 +7,7 @@
   const els = {
     adminPassword: document.getElementById('adminPassword'),
     adminActor: document.getElementById('adminActor'),
+    sessionTermSelect: document.getElementById('sessionTermSelect'),
     sessionTerm: document.getElementById('sessionTerm'),
     studyForm: document.getElementById('studyForm'),
     docxFiles: document.getElementById('docxFiles'),
@@ -87,6 +88,12 @@
       o.textContent = String(it.Value || it.value || '');
       el.appendChild(o);
     });
+  }
+  function resolveSessionTerm() {
+    const typed = clean(els.sessionTerm.value);
+    if (typed) return typed;
+    const selected = clean(els.sessionTermSelect?.value);
+    return selected || 'Session';
   }
   function renderCheckboxes(container, items, kind) {
     container.innerHTML = '';
@@ -177,6 +184,29 @@
     groups.forEach((g) => { const o = document.createElement('option'); o.value = g; o.textContent = g; els.groupFilter.appendChild(o); });
     els.teacherFilter.innerHTML = '<option value="">Усі викладачі</option>';
     teachers.forEach((t) => { const o = document.createElement('option'); o.value = t; o.textContent = t; els.teacherFilter.appendChild(o); });
+  }
+  async function loadSessionTerms() {
+    if (!els.sessionTermSelect) return;
+    els.sessionTermSelect.innerHTML = '<option value="">Завантаження сесій...</option>';
+    try {
+      const res = await fetch('/api/session');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const terms = Array.from(new Set((data.sessions || []).map((s) => clean(s.term)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
+      els.sessionTermSelect.innerHTML = '';
+      const first = document.createElement('option');
+      first.value = '';
+      first.textContent = terms.length ? 'Оберіть наявну сесію...' : 'Немає сесій (введіть нову назву)';
+      els.sessionTermSelect.appendChild(first);
+      terms.forEach((term) => {
+        const opt = document.createElement('option');
+        opt.value = term;
+        opt.textContent = term;
+        els.sessionTermSelect.appendChild(opt);
+      });
+    } catch (e) {
+      els.sessionTermSelect.innerHTML = '<option value="">Не вдалося завантажити список сесій</option>';
+    }
   }
 
   function renderTable(rows) {
@@ -498,7 +528,7 @@
       data: {
         sourceFile: els.docxFiles.files?.[0]?.name || 'schedule-based',
         generatedAt: new Date().toISOString(),
-        term: clean(els.sessionTerm.value) || 'Session',
+        term: resolveSessionTerm(),
         studyForm: clean(els.studyForm.value),
         items: state.filteredRows.map((r) => ({
           groupHeading: r.group,
@@ -558,12 +588,12 @@
       list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td><td>${escapeHtml(r.controlType === 'іспит' ? (r.time || '') : '')}</td><td>${escapeHtml(r.room || '')}</td></tr>`; });
       body += '</table>';
     });
-    const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri, Arial, sans-serif;"><h2>${escapeHtml(clean(els.sessionTerm.value) || 'Сесія')}</h2>${body}</body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri, Arial, sans-serif;"><h2>${escapeHtml(resolveSessionTerm() || 'Сесія')}</h2>${body}</body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `session_${(clean(els.sessionTerm.value) || 'session').replace(/\s+/g, '_')}.doc`;
+    a.download = `session_${(resolveSessionTerm() || 'session').replace(/\s+/g, '_')}.doc`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }
 
@@ -666,5 +696,6 @@
   renderSelect(els.teacherFilter, [], 'Усі викладачі');
   if (els.conflictSummary) els.conflictSummary.textContent = 'Конфліктів: 0';
   setProgress(0, 1, 'Готово');
+  loadSessionTerms();
   initControls().catch((e) => showError(e.message || String(e)));
 })();

@@ -39,7 +39,8 @@
             <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
                 <input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD (для API upload)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <input id="adminActor" type="text" placeholder="Ваше ім'я (лог)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                <input id="sessionTerm" type="text" placeholder="Назва сесії (напр. Зимова 2025-26)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                <select id="sessionTermSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
+                <input id="sessionTerm" type="text" placeholder="Нова назва сесії (або лишити порожнім для вибраної)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <select id="studyForm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                     <option value="денна форма навчання">Денна форма навчання</option>
                     <option value="заочна форма навчання">Заочна форма навчання</option>
@@ -136,7 +137,7 @@
             </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260430-10"></script>
+    <script src="js/session-constructor.js?v=20260430-11"></script>
 </body>
 </html>
 
