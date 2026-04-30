@@ -67,9 +67,9 @@
     els.errorBox.textContent = msg;
     els.errorBox.classList.remove('hidden');
   }
-  function setStatus(msg, err) {
+  function setStatus(msg, isErr) {
     els.status.textContent = msg || '';
-    els.status.className = err ? 'text-sm text-red-600' : 'text-sm text-gray-600 dark:text-gray-300';
+    els.status.className = isErr ? 'text-sm text-red-600' : 'text-sm text-gray-600 dark:text-gray-300';
   }
   function setProgress(current, total, label) {
     const t = Math.max(total || 1, 1);
@@ -77,13 +77,13 @@
     els.progressText.textContent = label || `${current}/${total}`;
   }
 
-  function renderSelect(selectEl, items, placeholder) {
-    selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+  function renderSelect(el, items, placeholder) {
+    el.innerHTML = `<option value="">${placeholder}</option>`;
     items.forEach((it) => {
       const o = document.createElement('option');
       o.value = String(it.Key || it.key || '');
       o.textContent = String(it.Value || it.value || '');
-      selectEl.appendChild(o);
+      el.appendChild(o);
     });
   }
   function renderCheckboxes(container, items, kind) {
@@ -151,16 +151,18 @@
       const g = clean(r.group);
       if (!d || !g) return;
       const key = `${d}__${g}`;
-      if (!map.has(key)) map.set(key, { discipline: d, group: g, teachers: new Set(), controlType: clean(r.controlType || ''), date: clean(r.date || '') });
+      if (!map.has(key)) map.set(key, { discipline: d, group: g, teachers: new Set(), controlType: clean(r.controlType || 'залік'), date: clean(r.date || ''), time: clean(r.time || '') });
       splitTeachers((r.teachers || []).join('; ')).forEach((t) => map.get(key).teachers.add(t));
       if (!map.get(key).date && r.date) map.get(key).date = clean(r.date);
+      if (!map.get(key).time && r.time) map.get(key).time = clean(r.time);
     });
     return Array.from(map.values()).map((x) => ({
       discipline: x.discipline,
       group: x.group,
       teachers: Array.from(x.teachers).sort((a, b) => a.localeCompare(b, 'uk')),
-      controlType: x.controlType,
-      date: x.date || ''
+      controlType: CONTROL_OPTIONS.includes(x.controlType) ? x.controlType : 'залік',
+      date: x.date || '',
+      time: x.time || ''
     }));
   }
 
@@ -177,22 +179,15 @@
     els.tableBody.innerHTML = '';
     rows.forEach((r, i) => {
       const tr = document.createElement('tr');
-      const currentControl = clean(r.controlType || '').toLowerCase();
-      const hasPreset = CONTROL_OPTIONS.includes(currentControl);
+      const currentControl = CONTROL_OPTIONS.includes(clean(r.controlType).toLowerCase()) ? clean(r.controlType).toLowerCase() : 'залік';
       tr.innerHTML = `
         <td class="px-2 py-2">${i + 1}</td>
         <td class="px-2 py-2"><input data-f="discipline" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><input data-f="group" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><input data-f="teachers" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers || []).join('; ').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2">
-          <select data-f="controlType" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">
-            <option value="">—</option>
-            ${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}
-            <option value="__custom__" ${(!hasPreset && currentControl) ? 'selected' : ''}>інше...</option>
-          </select>
-          <input data-f="controlTypeCustom" data-i="${i}" class="mt-1 w-full rounded border p-1 bg-white dark:bg-gray-700 ${(!hasPreset && currentControl) ? '' : 'hidden'}" value="${(!hasPreset ? (r.controlType || '') : '').replace(/"/g, '&quot;')}" placeholder="власна форма контролю">
-        </td>
+        <td class="px-2 py-2"><select data-f="controlType" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
         <td class="px-2 py-2"><input data-f="date" data-i="${i}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="time" data-i="${i}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700 ${currentControl === 'іспит' ? '' : 'hidden'}" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><button data-act="del" data-i="${i}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
       if (state.conflictIndices.has(i)) tr.classList.add('bg-red-50', 'dark:bg-red-900/20');
@@ -211,7 +206,7 @@
       if (gf && r.group !== gf) return false;
       if (tf && !r.teachers.includes(tf)) return false;
       if (!q) return true;
-      return `${r.discipline} ${r.group} ${r.teachers.join(' ')} ${r.controlType} ${r.date || ''}`.toLowerCase().includes(q);
+      return `${r.discipline} ${r.group} ${r.teachers.join(' ')} ${r.controlType} ${r.date || ''} ${r.time || ''}`.toLowerCase().includes(q);
     });
     detectConflicts(false);
     renderTable(state.filteredRows);
@@ -224,13 +219,15 @@
       const g = document.querySelector(`input[data-f="group"][data-i="${i}"]`);
       const t = document.querySelector(`input[data-f="teachers"][data-i="${i}"]`);
       const c = document.querySelector(`select[data-f="controlType"][data-i="${i}"]`);
-      const cc = document.querySelector(`input[data-f="controlTypeCustom"][data-i="${i}"]`);
       const dt = document.querySelector(`input[data-f="date"][data-i="${i}"]`);
+      const tm = document.querySelector(`input[data-f="time"][data-i="${i}"]`);
       if (d) r.discipline = normalizeDiscipline(d.value);
       if (g) r.group = clean(g.value);
       if (t) r.teachers = splitTeachers(t.value);
-      if (c) r.controlType = c.value === '__custom__' ? clean(cc ? cc.value : '') : clean(c.value);
+      if (c) r.controlType = clean(c.value || 'залік');
       if (dt) r.date = clean(dt.value);
+      if (tm) r.time = clean(tm.value);
+      if (r.controlType !== 'іспит') r.time = '';
     });
     state.filteredRows = list;
   }
@@ -255,22 +252,20 @@
     syncFromGrid();
     const zDates = datesBetween(els.zalikStartDate.value, els.zalikEndDate.value);
     const eDates = datesBetween(els.examStartDate.value, els.examEndDate.value);
-    if (!zDates.length && !eDates.length) {
-      showError('Вкажіть діапазони дат для заліків та/або іспитів');
-      return;
-    }
+    if (!zDates.length && !eDates.length) return showError('Вкажіть діапазони дат для заліків та/або іспитів');
     let zi = 0;
     let ei = 0;
     state.filteredRows.forEach((r) => {
       const ctl = clean(r.controlType).toLowerCase();
-      if (ctl.includes('залік') || ctl.includes('захист')) {
-        if (zDates.length) r.date = zDates[zi++ % zDates.length];
-      } else if (ctl.includes('іспит')) {
+      if (ctl === 'іспит') {
         if (eDates.length) r.date = eDates[ei++ % eDates.length];
+      } else {
+        if (zDates.length) r.date = zDates[zi++ % zDates.length];
       }
     });
     mergeFilteredBack();
     applyFilters();
+    showError('');
     setStatus('Дати проставлено автоматично');
   }
 
@@ -315,8 +310,7 @@
 
     const filters = await fetchApi('GetStudentScheduleFiltersData');
     const forms = Array.isArray(filters?.educForms) ? filters.educForms : [];
-    const selectedFormText = clean(els.studyForm.value).toLowerCase();
-    const selectedForm = forms.find((x) => clean(x.Value).toLowerCase() === selectedFormText) || forms[0];
+    const selectedForm = forms.find((x) => clean(x.Value).toLowerCase() === clean(els.studyForm.value).toLowerCase()) || forms[0];
 
     const groups = [];
     for (let i = 0; i < selectedCourses.length; i++) {
@@ -333,12 +327,14 @@
       const g = state.groups[i];
       const lessons = await fetchApi('GetScheduleDataX', { aStudyGroupID: g.key, aStartDate: startDate, aEndDate: endDate, aStudyTypeID: '' });
       (Array.isArray(lessons) ? lessons : []).forEach((l) => {
+        const st = clean(l.study_type || '').toLowerCase();
         rawRows.push({
           discipline: normalizeDiscipline(l.discipline),
           group: g.value,
           teachers: splitTeachers(l.employee_short || l.employee || ''),
-          controlType: clean(l.study_type || ''),
-          date: ''
+          controlType: st.includes('іспит') ? 'іспит' : 'залік',
+          date: '',
+          time: ''
         });
       });
     }
@@ -359,7 +355,7 @@
   function addCustomRow() {
     syncFromGrid();
     mergeFilteredBack();
-    state.rows.unshift({ discipline: 'Новий предмет', group: '', teachers: [], controlType: 'залік', date: '' });
+    state.rows.unshift({ discipline: 'Новий предмет', group: '', teachers: [], controlType: 'залік', date: '', time: '' });
     renderFilters(state.rows);
     applyFilters();
   }
@@ -390,12 +386,12 @@
           groups: [r.group],
           speciality: '',
           program: '',
-          controlType: r.controlType || '',
+          controlType: r.controlType || 'залік',
           discipline: r.discipline,
           examForm: '',
           teacher: r.teachers.join('; '),
           date: r.date || '',
-          time: '',
+          time: r.controlType === 'іспит' ? (r.time || '') : '',
           room: '',
           sourceTable: 0,
           sourceFile: els.docxFiles.files?.[0]?.name || 'schedule-based'
@@ -415,8 +411,8 @@
 
   function exportExcel() {
     syncFromGrid();
-    const data = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата']];
-    state.filteredRows.forEach((r, i) => data.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '']));
+    const data = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час']];
+    state.filteredRows.forEach((r, i) => data.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.controlType === 'іспит' ? (r.time || '') : '']));
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Session');
@@ -439,8 +435,8 @@
     Array.from(grouped.entries()).forEach(([g, list]) => {
       body += `<h3 style="margin:18px 0 8px 0;">Група: ${escapeHtml(g)}</h3>`;
       body += '<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%; font-size:12pt;">';
-      body += '<tr><th>№</th><th>Дисципліна</th><th>Викладачі</th><th>Форма контролю</th><th>Дата</th></tr>';
-      list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td></tr>`; });
+      body += '<tr><th>№</th><th>Дисципліна</th><th>Викладачі</th><th>Форма контролю</th><th>Дата</th><th>Час</th></tr>';
+      list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td><td>${escapeHtml(r.controlType === 'іспит' ? (r.time || '') : '')}</td></tr>`; });
       body += '</table>';
     });
     const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri, Arial, sans-serif;"><h2>${escapeHtml(clean(els.sessionTerm.value) || 'Сесія')}</h2>${body}</body></html>`;
@@ -454,8 +450,8 @@
 
   async function copyTable() {
     syncFromGrid();
-    const lines = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата'].join('\t')];
-    state.filteredRows.forEach((r, i) => lines.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || ''].join('\t')));
+    const lines = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час'].join('\t')];
+    state.filteredRows.forEach((r, i) => lines.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.controlType === 'іспит' ? (r.time || '') : ''].join('\t')));
     await navigator.clipboard.writeText(lines.join('\n'));
     setStatus('Таблицю скопійовано');
   }
@@ -520,13 +516,16 @@
     renderFilters(state.rows);
     applyFilters();
   });
+
   els.tableBody.addEventListener('change', (e) => {
     const sel = e.target.closest('select[data-f="controlType"]');
     if (!sel) return;
     const i = sel.dataset.i;
-    const custom = document.querySelector(`input[data-f="controlTypeCustom"][data-i="${i}"]`);
-    if (!custom) return;
-    custom.classList.toggle('hidden', sel.value !== '__custom__');
+    const tm = document.querySelector(`input[data-f="time"][data-i="${i}"]`);
+    if (!tm) return;
+    const isExam = clean(sel.value) === 'іспит';
+    tm.classList.toggle('hidden', !isExam);
+    if (!isExam) tm.value = '';
   });
 
   renderSelect(els.groupFilter, [], 'Усі групи');

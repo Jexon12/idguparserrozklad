@@ -655,10 +655,9 @@ const apiHandler = async (req, res) => {
         try {
             if (req.method === 'GET') {
                 const loaded = await loadSessionData();
-                res.status(200).json({
-                    ...loaded.data,
-                    storage: loaded.storage
-                });
+                const store = ensureSessionStore(loaded.data);
+                const stats = buildSessionStats(store);
+                res.status(200).json({ ...store, storage: loaded.storage, stats });
                 return;
             }
 
@@ -685,18 +684,36 @@ const apiHandler = async (req, res) => {
                 }
 
                 const { password, data } = payload;
+                const action = payload.action || '';
+                const actor = String(payload.actor || 'unknown').replace(/\s+/g, ' ').trim();
                 if (password !== ADMIN_PASSWORD) {
                     await appendAuditEvent(req, 'admin_auth_failed', 'session', { reason: 'wrong_password' });
                     res.status(403).json({ error: 'Wrong password' });
                     return;
                 }
+                const loaded = await loadSessionData();
+                const store = ensureSessionStore(loaded.data);
+
+                if (action) {
+                    const result = applySessionAction(store, action, payload);
+                    const storedPayload = {
+                        updatedAt: new Date().toISOString(),
+                        sourceFile: store.sourceFile || '',
+                        sessions: store.sessions,
+                        trash: store.trash,
+                        history: store.history
+                    };
+                    const storage = await saveSessionData(storedPayload);
+                    await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), action, actor });
+                    await appendAuditEvent(req, action, 'session', { actor, ...result });
+                    res.status(200).json({ success: true, storage, ...result });
+                    return;
+                }
+
                 if (!data || !Array.isArray(data.items)) {
                     res.status(400).json({ error: 'Invalid session payload (items[])' });
                     return;
                 }
-
-                const loaded = await loadSessionData();
-                const store = ensureSessionStore(loaded.data);
                 const term = data.term || 'Session';
                 const studyForm = data.studyForm || '';
                 const incomingItems = (data.items || []).map((item) => ({
@@ -749,7 +766,15 @@ const apiHandler = async (req, res) => {
                 const storedPayload = {
                     updatedAt: new Date().toISOString(),
                     sourceFile: session.sourceFile,
-                    sessions: store.sessions
+                    sessions: store.sessions,
+                    trash: store.trash,
+                    history: appendSessionHistory(store.history, {
+                        at: new Date().toISOString(),
+                        action: 'upsert',
+                        term,
+                        by: actor,
+                        added
+                    })
                 };
 
                 const storage = await saveSessionData(storedPayload);
@@ -1514,6 +1539,15 @@ const ensureSessionStore = (input) => {
             sourceFile: s.sourceFile || '',
             items: Array.isArray(s.items) ? s.items : []
         }));
+        const trash = Array.isArray(input.trash) ? input.trash.map((s) => ({
+            term: s.term || 'Session',
+            generatedAt: s.generatedAt || '',
+            sourceFile: s.sourceFile || '',
+            deletedAt: s.deletedAt || '',
+            deletedBy: s.deletedBy || '',
+            items: Array.isArray(s.items) ? s.items : []
+        })) : [];
+        const history = Array.isArray(input.history) ? input.history : [];
         const flat = sessions.flatMap((s) => s.items.map((it) => ({
             ...it,
             term: it.term || s.term || 'Session',
@@ -1523,7 +1557,9 @@ const ensureSessionStore = (input) => {
             updatedAt: input.updatedAt || '',
             sourceFile: input.sourceFile || '',
             sessions,
-            items: flat
+            items: flat,
+            trash,
+            history
         };
     }
 
@@ -1543,7 +1579,9 @@ const ensureSessionStore = (input) => {
                 sourceFile: input.sourceFile || '',
                 items: mappedItems
             }],
-            items: mappedItems
+            items: mappedItems,
+            trash: [],
+            history: []
         };
     }
 
@@ -1551,7 +1589,9 @@ const ensureSessionStore = (input) => {
         updatedAt: '',
         sourceFile: '',
         sessions: [],
-        items: []
+        items: [],
+        trash: [],
+        history: []
     };
 };
 
@@ -1607,6 +1647,140 @@ const saveSessionData = async (payload) => {
         throw new Error('Failed to write local session data');
     }
     return 'local-db';
+};
+
+const appendSessionHistory = (history, event) => {
+    const list = Array.isArray(history) ? history.slice() : [];
+    list.push(event);
+    while (list.length > 400) list.shift();
+    return list;
+};
+
+const buildSessionStats = (store) => {
+    const items = Array.isArray(store.items) ? store.items : [];
+    const onlyExams = items.filter((it) => String(it.controlType || '').toLowerCase().includes('іспит'));
+    const uniqueTeachers = new Set();
+    const uniqueGroups = new Set();
+
+    const mapGroup = new Map();
+    const mapTeacher = new Map();
+    const mapRoom = new Map();
+    const conflicts = [];
+    const addConflict = (type, key, count) => { if (count > 1) conflicts.push({ type, key, count }); };
+
+    const parseTeachers = (value) => String(value || '')
+        .replace(/\s*(,|\/|\|)\s*/g, ';')
+        .split(';')
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+    const parseGroups = (item) => {
+        const groups = Array.isArray(item.groups) ? item.groups : [];
+        if (groups.length) return groups;
+        const heading = String(item.groupHeading || '');
+        return (heading.match(/\d{1,3}\s*[A-Za-zА-Яа-яІіЇїЄєҐґ]?/g) || []).map((g) => g.replace(/\s+/g, '').toLowerCase());
+    };
+
+    items.forEach((it) => {
+        parseTeachers(it.teacher).forEach((t) => uniqueTeachers.add(t));
+        parseGroups(it).forEach((g) => uniqueGroups.add(g));
+    });
+
+    onlyExams.forEach((it) => {
+        const date = String(it.date || '').trim();
+        const time = String(it.time || '').trim();
+        if (!date || !time) return;
+
+        parseGroups(it).forEach((g) => {
+            const key = `${String(g).toLowerCase()}__${date}__${time}`;
+            if (!mapGroup.has(key)) mapGroup.set(key, 0);
+            mapGroup.set(key, mapGroup.get(key) + 1);
+        });
+        parseTeachers(it.teacher).forEach((t) => {
+            const key = `${String(t).toLowerCase()}__${date}__${time}`;
+            if (!mapTeacher.has(key)) mapTeacher.set(key, 0);
+            mapTeacher.set(key, mapTeacher.get(key) + 1);
+        });
+        const room = String(it.room || '').replace(/\s+/g, '').toLowerCase();
+        if (room) {
+            const key = `${room}__${date}__${time}`;
+            if (!mapRoom.has(key)) mapRoom.set(key, 0);
+            mapRoom.set(key, mapRoom.get(key) + 1);
+        }
+    });
+
+    mapGroup.forEach((count, key) => addConflict('group_exam_overlap', key, count));
+    mapTeacher.forEach((count, key) => addConflict('teacher_exam_overlap', key, count));
+    mapRoom.forEach((count, key) => addConflict('room_exam_overlap', key, count));
+
+    return {
+        sessions: Array.isArray(store.sessions) ? store.sessions.length : 0,
+        items: items.length,
+        teachers: uniqueTeachers.size,
+        groups: uniqueGroups.size,
+        exams: onlyExams.length,
+        conflictsCount: conflicts.length,
+        conflicts: conflicts.slice(0, 200)
+    };
+};
+
+const applySessionAction = (store, action, payload) => {
+    const term = String(payload.term || '').trim();
+    const toTerm = String(payload.toTerm || '').trim();
+    const actor = String(payload.actor || 'unknown').trim();
+    const nowIso = new Date().toISOString();
+    const normTerm = normalizeSessionTerm(term);
+
+    if (action === 'deleteTerm') {
+        const idx = store.sessions.findIndex((s) => normalizeSessionTerm(s.term) === normTerm);
+        if (idx < 0) throw new Error('Session term not found');
+        const [session] = store.sessions.splice(idx, 1);
+        const deletedItems = Array.isArray(session.items) ? session.items.length : 0;
+        store.trash.push({ ...session, deletedAt: nowIso, deletedBy: actor });
+        store.history = appendSessionHistory(store.history, { at: nowIso, action, term, by: actor, deletedItems });
+        store.items = store.sessions.flatMap((s) => (s.items || []).map((it) => ({ ...it, term: it.term || s.term })));
+        return { term, deletedItems };
+    }
+
+    if (action === 'restoreTerm') {
+        const idx = store.trash.findIndex((s) => normalizeSessionTerm(s.term) === normTerm);
+        if (idx < 0) throw new Error('Session term not found in trash');
+        const [session] = store.trash.splice(idx, 1);
+        const restoredItems = Array.isArray(session.items) ? session.items.length : 0;
+        delete session.deletedAt;
+        delete session.deletedBy;
+        store.sessions.push(session);
+        store.history = appendSessionHistory(store.history, { at: nowIso, action, term, by: actor, restoredItems });
+        store.items = store.sessions.flatMap((s) => (s.items || []).map((it) => ({ ...it, term: it.term || s.term })));
+        return { term, restoredItems };
+    }
+
+    if (action === 'purgeTerm') {
+        const idx = store.trash.findIndex((s) => normalizeSessionTerm(s.term) === normTerm);
+        if (idx < 0) throw new Error('Session term not found in trash');
+        const [session] = store.trash.splice(idx, 1);
+        const purgedItems = Array.isArray(session.items) ? session.items.length : 0;
+        store.history = appendSessionHistory(store.history, { at: nowIso, action, term, by: actor, purgedItems });
+        return { term, purgedItems };
+    }
+
+    if (action === 'renameTerm') {
+        if (!toTerm) throw new Error('Missing toTerm');
+        const idx = store.sessions.findIndex((s) => normalizeSessionTerm(s.term) === normTerm);
+        if (idx < 0) throw new Error('Session term not found');
+        const targetNorm = normalizeSessionTerm(toTerm);
+        const existsTarget = store.sessions.some((s, i) => i !== idx && normalizeSessionTerm(s.term) === targetNorm);
+        if (existsTarget) throw new Error('Target term already exists');
+
+        const session = store.sessions[idx];
+        session.term = toTerm;
+        session.items = (session.items || []).map((it) => ({ ...it, term: toTerm }));
+        store.history = appendSessionHistory(store.history, { at: nowIso, action, term, toTerm, by: actor });
+        store.items = store.sessions.flatMap((s) => (s.items || []).map((it) => ({ ...it, term: it.term || s.term })));
+        return { fromTerm: term, toTerm };
+    }
+
+    throw new Error(`Unsupported action: ${action}`);
 };
 
 const normalizeSessionTerm = (value) => String(value || '')
