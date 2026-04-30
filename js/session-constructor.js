@@ -46,6 +46,12 @@
         filteredRows: [],
         sourceFiles: []
     };
+    function updateUploadAvailability() {
+        const hasRows = Array.isArray(state.filteredRows) && state.filteredRows.length > 0;
+        els.uploadBtn.disabled = !hasRows;
+        els.uploadBtn.classList.toggle('opacity-60', !hasRows);
+        els.uploadBtn.classList.toggle('cursor-not-allowed', !hasRows);
+    }
 
     function clean(v) {
         return String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -200,6 +206,7 @@
             els.tableBody.appendChild(tr);
         });
         els.countLabel.textContent = String(rows.length);
+        updateUploadAvailability();
     }
 
     function applyFilters() {
@@ -298,7 +305,11 @@
         syncFromGrid();
         mergeFilteredBack();
         applyFilters();
-        if (!state.filteredRows.length) throw new Error('Немає записів для завантаження');
+        if (!state.filteredRows.length) {
+            setStatus('Немає записів у таблиці. Запускаю автозбір з розкладу...');
+            await buildFromSchedule();
+            if (!state.filteredRows.length) throw new Error('Немає записів для завантаження');
+        }
         const password = clean(els.adminPassword.value);
         if (!password) throw new Error('Введіть ADMIN_PASSWORD');
 
@@ -427,5 +438,6 @@
     renderSelect(els.groupFilter, [], 'Усі групи');
     renderSelect(els.teacherFilter, [], 'Усі викладачі');
     setProgress(0, 1, 'Готово');
+    updateUploadAvailability();
     initControls().catch((e) => showError(e.message || String(e)));
 })();
