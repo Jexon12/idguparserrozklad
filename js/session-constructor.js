@@ -47,10 +47,10 @@
         sourceFiles: []
     };
     function updateUploadAvailability() {
-        const hasRows = Array.isArray(state.filteredRows) && state.filteredRows.length > 0;
-        els.uploadBtn.disabled = !hasRows;
-        els.uploadBtn.classList.toggle('opacity-60', !hasRows);
-        els.uploadBtn.classList.toggle('cursor-not-allowed', !hasRows);
+        // Keep upload button always clickable.
+        // If there are no rows, upload flow auto-runs schedule collection first.
+        els.uploadBtn.disabled = false;
+        els.uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
     }
 
     function clean(v) {
