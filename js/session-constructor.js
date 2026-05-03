@@ -221,7 +221,14 @@
   }
 
   function renderFilters(rows) {
-    const groups = Array.from(new Set(rows.map((r) => r.group).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
+    const uniqueGroupsMap = new Map();
+    rows.forEach(r => {
+      if (!r.group) return;
+      const key = r.group.toUpperCase();
+      if (!uniqueGroupsMap.has(key)) uniqueGroupsMap.set(key, r.group.toUpperCase()); // Convert everything to uppercase for consistency
+    });
+    const groups = Array.from(uniqueGroupsMap.values()).sort((a, b) => a.localeCompare(b, 'uk'));
+    
     const teachers = Array.from(new Set(rows.flatMap((r) => r.teachers).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
     const rooms = Array.from(new Set(rows.map((r) => r.room).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
     els.groupFilter.innerHTML = '<option value="">Усі групи</option>';
@@ -345,7 +352,7 @@
     state.filteredRows = state.rows.filter((r, i) => {
       if (state.filterConflictsOnly && !state.conflictIndices.has(i)) return false;
       if (state.filterMissingOnly && (!r.date || (!r.time && r.controlType === 'іспит'))) return false;
-      if (gf && r.group !== gf) return false;
+      if (gf && r.group.toUpperCase() !== gf.toUpperCase()) return false;
       if (tf && !r.teachers.includes(tf)) return false;
       if (!q) return true;
       return `${r.discipline} ${r.group} ${r.teachers.join(' ')} ${r.controlType} ${r.date || ''} ${r.time || ''}`.toLowerCase().includes(q);
