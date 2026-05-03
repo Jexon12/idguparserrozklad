@@ -69,7 +69,8 @@
     proPanel: document.getElementById('proPanel'),
     saveSessionBtn: document.getElementById('saveSessionBtn'),
     loadSessionBtn: document.getElementById('loadSessionBtn'),
-    loadSessionFile: document.getElementById('loadSessionFile')
+    loadSessionFile: document.getElementById('loadSessionFile'),
+    loadApiBtn: document.getElementById('loadApiBtn')
   };
 
   const state = {
@@ -719,11 +720,8 @@
 
     const filters = await fetchApi('GetStudentScheduleFiltersData');
     const forms = Array.isArray(filters?.educForms) ? filters.educForms : [];
-    const formVal = clean(els.studyForm.value).toLowerCase();
-    const selectedForm = forms.find((x) => {
-      const v = clean(x.Value).toLowerCase();
-      return v === formVal || v.includes(formVal.split(' ')[0]) || formVal.includes(v.split(' ')[0]);
-    }) || forms.find((x) => clean(x.Value).toLowerCase().includes('заочн')) || forms[0];
+    const isZaochna = clean(els.studyForm.value).toLowerCase().includes('заочн');
+    const selectedForm = forms.find((x) => clean(x.Value).toLowerCase().includes(isZaochna ? 'заочн' : 'денн')) || forms[0];
 
     const groups = [];
     for (let i = 0; i < selectedCourses.length; i++) {
@@ -753,7 +751,12 @@
       });
     }
 
-    state.rows = dedupeRows(rawRows).filter((r) => r.discipline && r.group);
+    if (state.rows.length > 0) {
+      if (confirm("У таблиці вже є записи. Очистити їх перед формуванням з розкладу? (Натисніть 'Скасувати', щоб просто додати нові записи до існуючих)")) {
+        state.rows = [];
+      }
+    }
+    state.rows = dedupeRows(state.rows.concat(rawRows)).filter((r) => r.discipline && r.group);
     renderFilters(state.rows);
     applyFilters();
     setStatus(state.rows.length ? `Сформовано ${state.rows.length} записів на базі розкладу` : 'Немає записів у вибраному періоді');
@@ -778,6 +781,51 @@
       if (lastRow) lastRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
     saveDraftDebounced();
+  }
+
+  async function loadFromApi() {
+    const term = resolveSessionTerm();
+    if (!term) return showError('Оберіть або введіть назву сесії у шапці, щоб завантажити її з API');
+    
+    showError('');
+    setStatus(`Завантаження сесії "${term}" з API...`);
+    
+    try {
+      const res = await fetch(`/api/session?term=${encodeURIComponent(term)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      
+      const items = (data.sessions || []).flatMap(s => s.items || []);
+      if (!items.length) {
+         setStatus(`У сесії "${term}" немає записів або сесію не знайдено.`);
+         return;
+      }
+      
+      const parsed = items.map(item => ({
+          discipline: item.discipline || '',
+          group: (item.groups && item.groups[0]) || item.groupHeading || '',
+          teachers: splitTeachers(item.teacher || ''),
+          controlType: CONTROL_OPTIONS.includes(clean(item.controlType).toLowerCase()) ? clean(item.controlType).toLowerCase() : 'залік',
+          date: item.date || '',
+          time: item.time || '',
+          room: item.room || ''
+      }));
+      
+      if (state.rows.length > 0) {
+        if (confirm("У таблиці вже є записи. Очистити їх перед завантаженням з API? (Натисніть 'Скасувати', щоб додати до існуючих)")) {
+          state.rows = [];
+        }
+      }
+      
+      state.rows = dedupeRows(state.rows.concat(parsed));
+      renderFilters(state.rows);
+      applyFilters();
+      saveDraftDebounced();
+      setStatus(`Завантажено ${parsed.length} записів з API для сесії "${term}".`);
+      
+    } catch(err) {
+      showError('Помилка завантаження з API: ' + err.message);
+    }
   }
 
   async function uploadToApi() {
@@ -917,11 +965,8 @@
       if (!fac) return renderCheckboxes(els.groupsBox, [], 'group');
       const base2 = await fetchApi('GetStudentScheduleFiltersData');
       const forms = Array.isArray(base2?.educForms) ? base2.educForms : [];
-      const fVal = clean(els.studyForm.value).toLowerCase();
-      const selectedForm = forms.find((x) => {
-        const v = clean(x.Value).toLowerCase();
-        return v === fVal || v.includes(fVal.split(' ')[0]) || fVal.includes(v.split(' ')[0]);
-      }) || forms.find((x) => clean(x.Value).toLowerCase().includes('заочн')) || forms[0];
+      const isZaochna = clean(els.studyForm.value).toLowerCase().includes('заочн');
+      const selectedForm = forms.find((x) => clean(x.Value).toLowerCase().includes(isZaochna ? 'заочн' : 'денн')) || forms[0];
       const selectedCourses = getChecked('course');
       const arr = [];
       for (let i = 0; i < selectedCourses.length; i++) {
@@ -1001,6 +1046,7 @@
   }
 
   els.parseBtn.addEventListener('click', () => buildFromSchedule().catch((e) => showError(e.message || String(e))));
+  els.loadApiBtn?.addEventListener('click', () => loadFromApi().catch((e) => showError(e.message || String(e))));
   els.normalizeBtn.addEventListener('click', normalizeAction);
   els.addRowBtn.addEventListener('click', addCustomRow);
   els.uploadBtn.addEventListener('click', () => uploadToApi().catch((e) => showError(e.message || String(e))));
@@ -1135,7 +1181,12 @@
     el?.addEventListener('change', () => { validateYearRanges(); saveDraftDebounced(); });
   });
   els.clearDraftBtn?.addEventListener('click', () => {
+    if (!confirm('Ви впевнені, що хочете видалити всі записи з таблиці та очистити чернетку?')) return;
     localStorage.removeItem(DRAFT_KEY);
+    state.rows = [];
+    state.filteredRows = [];
+    renderFilters(state.rows);
+    applyFilters();
     if (els.draftInfo) els.draftInfo.textContent = 'Чернетку очищено';
   });
   els.qualityPanel?.addEventListener('click', (e) => {
