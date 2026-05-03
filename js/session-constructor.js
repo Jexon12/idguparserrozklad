@@ -70,7 +70,11 @@
     saveSessionBtn: document.getElementById('saveSessionBtn'),
     loadSessionBtn: document.getElementById('loadSessionBtn'),
     loadSessionFile: document.getElementById('loadSessionFile'),
-    loadApiBtn: document.getElementById('loadApiBtn')
+    loadApiBtn: document.getElementById('loadApiBtn'),
+    shiftMinusBtn: document.getElementById('shiftMinusBtn'),
+    shiftPlusBtn: document.getElementById('shiftPlusBtn'),
+    filterConflictsBtn: document.getElementById('filterConflictsBtn'),
+    filterMissingBtn: document.getElementById('filterMissingBtn')
   };
 
   const state = {
@@ -88,7 +92,10 @@
     sortAsc: true,
     undoStack: [],
     redoStack: [],
-    maxUndo: 30
+    maxUndo: 30,
+    filterConflictsOnly: false,
+    filterMissingOnly: false,
+    overloadIndices: new Set()
   };
   let conflictsWorker = null;
 
@@ -264,6 +271,8 @@
       const key = rowKey(r);
       const checked = state.selectedRowKeys.has(key) ? 'checked' : '';
       const colors = CONTROL_COLORS[currentControl] || CONTROL_COLORS['залік'];
+      tr.draggable = true;
+      tr.dataset.dragIndex = i;
       tr.innerHTML = `
         <td class="px-2 py-2"><input type="checkbox" data-act="select-row" data-i="${i}" ${checked}></td>
         <td class="px-2 py-2">${i + 1}</td>
@@ -279,6 +288,10 @@
       if (state.conflictIndices.has(i)) {
         tr.style.backgroundColor = '#fef2f2';
         tr.style.borderLeft = '4px solid #ef4444';
+      } else if (state.overloadIndices && state.overloadIndices.has(i)) {
+        tr.style.backgroundColor = '#fefce8';
+        tr.style.borderLeft = '4px solid #facc15';
+        tr.title = 'Попередження: викладач має більше 2-х іспитів/заліків у цей день!';
       } else {
         tr.style.backgroundColor = colors.bg;
         tr.style.borderLeft = '4px solid ' + colors.border;
@@ -329,7 +342,9 @@
     const q = clean(els.searchInput.value).toLowerCase();
     const gf = clean(els.groupFilter.value);
     const tf = clean(els.teacherFilter.value);
-    state.filteredRows = state.rows.filter((r) => {
+    state.filteredRows = state.rows.filter((r, i) => {
+      if (state.filterConflictsOnly && !state.conflictIndices.has(i)) return false;
+      if (state.filterMissingOnly && (!r.date || (!r.time && r.controlType === 'іспит'))) return false;
       if (gf && r.group !== gf) return false;
       if (tf && !r.teachers.includes(tf)) return false;
       if (!q) return true;
@@ -529,12 +544,13 @@
 
   function detectConflicts(withStatus = true) {
     if (!conflictsWorker) {
-      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=20260503-4');
+      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=20260503-6');
       conflictsWorker.onmessage = (evt) => {
         const data = evt.data || {};
         state.conflictIndices = new Set(data.conflictIndices || []);
-        state.quality = data.quality || state.quality;
-        if (els.conflictSummary) els.conflictSummary.textContent = `Конфліктів: ${state.conflictIndices.size}`;
+        state.overloadIndices = new Set(data.overloadIndices || []);
+        state.quality = data.quality || {};
+        if (els.conflictSummary) els.conflictSummary.innerHTML = `Конфліктів: <b>${state.conflictIndices.size}</b>${state.overloadIndices.size ? ` | Перевантажень: <b class="text-amber-600">${state.overloadIndices.size}</b>` : ''}`;
         renderQualityPanel();
         renderTable(state.filteredRows);
       };
@@ -621,6 +637,7 @@
   }
   function applyBulkToSelected() {
     syncFromGrid();
+    pushUndo();
     const ctl = clean(els.bulkControlType.value);
     const date = clean(els.bulkDate.value);
     const time = clean(els.bulkTime.value);
@@ -636,6 +653,25 @@
     mergeFilteredBack();
     applyFilters();
     saveDraftDebounced();
+  }
+
+  function shiftSelectedDates(days) {
+    syncFromGrid();
+    if (!state.selectedRowKeys.size) return showError('Оберіть рядки для зсуву дат');
+    pushUndo();
+    let shiftedCount = 0;
+    state.filteredRows.forEach((r) => {
+      if (!state.selectedRowKeys.has(rowKey(r)) || !r.date) return;
+      const d = new Date(r.date);
+      if (Number.isNaN(d.getTime())) return;
+      d.setDate(d.getDate() + days);
+      r.date = d.toISOString().slice(0, 10);
+      shiftedCount++;
+    });
+    mergeFilteredBack();
+    applyFilters();
+    saveDraftDebounced();
+    setStatus(`Зміщено дат: ${shiftedCount}`);
   }
   function validateYearRanges() {
     const bad = [els.zalikStartDate.value, els.zalikEndDate.value, els.examStartDate.value, els.examEndDate.value, els.startDate.value, els.endDate.value]
@@ -1066,6 +1102,29 @@
   // Undo/Redo buttons
   document.getElementById('undoBtn')?.addEventListener('click', undo);
   document.getElementById('redoBtn')?.addEventListener('click', redo);
+  
+  // Smart filters
+  const updateFilterBtns = () => {
+    els.filterConflictsBtn.classList.toggle('bg-rose-100', state.filterConflictsOnly);
+    els.filterConflictsBtn.classList.toggle('text-rose-700', state.filterConflictsOnly);
+    els.filterMissingBtn.classList.toggle('bg-amber-100', state.filterMissingOnly);
+    els.filterMissingBtn.classList.toggle('text-amber-700', state.filterMissingOnly);
+  };
+  els.filterConflictsBtn?.addEventListener('click', () => {
+    state.filterConflictsOnly = !state.filterConflictsOnly;
+    updateFilterBtns();
+    applyFilters();
+  });
+  els.filterMissingBtn?.addEventListener('click', () => {
+    state.filterMissingOnly = !state.filterMissingOnly;
+    updateFilterBtns();
+    applyFilters();
+  });
+  
+  // Bulk shift
+  els.shiftMinusBtn?.addEventListener('click', () => shiftSelectedDates(-1));
+  els.shiftPlusBtn?.addEventListener('click', () => shiftSelectedDates(1));
+
   // Sort headers
   document.querySelector('thead')?.addEventListener('click', (e) => {
     const th = e.target.closest('th[data-sort]');
@@ -1159,6 +1218,93 @@
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+  });
+
+  // Excel-like Keyboard Navigation
+  els.tableBody.addEventListener('keydown', (e) => {
+    const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'];
+    if (!keys.includes(e.key) || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    
+    // Ignore if typing in a text field and pressing Left/Right
+    const t = e.target;
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && (t.type === 'text' || t.type === 'search') && t.selectionStart !== t.selectionEnd && t.value.length > 0) return;
+    
+    const tr = t.closest('tr');
+    const td = t.closest('td');
+    if (!tr || !td) return;
+    
+    e.preventDefault();
+    let nextEl = null;
+    
+    if (e.key === 'ArrowRight') {
+      nextEl = td.nextElementSibling?.querySelector('input:not([type="checkbox"]), select, button');
+    } else if (e.key === 'ArrowLeft') {
+      nextEl = td.previousElementSibling?.querySelector('input:not([type="checkbox"]), select, button');
+    } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+      const nextTr = tr.nextElementSibling;
+      if (nextTr) {
+        const cellIdx = Array.from(tr.children).indexOf(td);
+        nextEl = nextTr.children[cellIdx]?.querySelector('input, select, button');
+      }
+    } else if (e.key === 'ArrowUp') {
+      const prevTr = tr.previousElementSibling;
+      if (prevTr) {
+        const cellIdx = Array.from(tr.children).indexOf(td);
+        nextEl = prevTr.children[cellIdx]?.querySelector('input, select, button');
+      }
+    }
+    
+    if (nextEl) {
+      nextEl.focus();
+      if (nextEl.select && typeof nextEl.select === 'function') nextEl.select();
+    }
+  });
+
+  // Drag and Drop Rows
+  let draggedIndex = null;
+  els.tableBody.addEventListener('dragstart', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr || tr.dataset.dragIndex === undefined) return;
+    draggedIndex = Number(tr.dataset.dragIndex);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedIndex);
+    tr.classList.add('opacity-50');
+  });
+  els.tableBody.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const tr = e.target.closest('tr');
+    if (tr && tr.dataset.dragIndex !== undefined) {
+      tr.classList.add('border-t-2', 'border-violet-500');
+    }
+  });
+  els.tableBody.addEventListener('dragleave', (e) => {
+    const tr = e.target.closest('tr');
+    if (tr) tr.classList.remove('border-t-2', 'border-violet-500');
+  });
+  els.tableBody.addEventListener('dragend', (e) => {
+    const tr = e.target.closest('tr');
+    if (tr) tr.classList.remove('opacity-50');
+    Array.from(els.tableBody.children).forEach(r => r.classList.remove('border-t-2', 'border-violet-500'));
+  });
+  els.tableBody.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    Array.from(els.tableBody.children).forEach(r => r.classList.remove('border-t-2', 'border-violet-500'));
+    if (draggedIndex === null || !tr || tr.dataset.dragIndex === undefined) return;
+    
+    const targetIndex = Number(tr.dataset.dragIndex);
+    if (draggedIndex === targetIndex) return;
+    
+    syncFromGrid();
+    pushUndo();
+    
+    const item = state.filteredRows.splice(draggedIndex, 1)[0];
+    state.filteredRows.splice(targetIndex, 0, item);
+    
+    mergeFilteredBack();
+    renderTable(state.filteredRows);
+    saveDraftDebounced();
   });
   els.selectAllRows?.addEventListener('change', () => {
     const checked = !!els.selectAllRows.checked;

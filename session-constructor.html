@@ -119,11 +119,14 @@
                 <button id="redoBtn" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold" title="Ctrl+Y">↪ Redo</button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <input id="searchInput" type="text" placeholder="Пошук по предмету/групі/викладачу..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                <input id="searchInput" type="text" placeholder="Пошук по предмету/групі/викладачу..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm md:col-span-2">
                 <select id="groupFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
                 <select id="teacherFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
-                <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm">Записів: <span id="countLabel" class="font-bold">0</span></div>
+                <button id="filterConflictsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">🚨 Конфлікти</button>
+                <button id="filterMissingBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">⚠️ Без дат/часу</button>
+            </div>
+            <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm w-fit mt-2">Записів: <span id="countLabel" class="font-bold">0</span></div>
             </div>
             <div id="proPanel" class="space-y-2">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -158,7 +161,7 @@
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
+                    <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-700 shadow-sm shadow-gray-200 dark:shadow-gray-800">
                         <tr>
                             <th class="px-2 py-2 text-left"><input type="checkbox" id="selectAllRows"></th>
                             <th class="px-2 py-2 text-left">№</th>
@@ -191,6 +194,10 @@
                     <input id="bulkRoom" type="text" placeholder="Аудиторія" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                     <button id="applyBulkBtn" class="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">Застосувати до вибраних</button>
                 </div>
+                <div class="flex gap-2 mt-2 items-center">
+                    <button id="shiftMinusBtn" class="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-sm" title="Зменшити всі вибрані дати на 1 день">🗓️ -1 день</button>
+                    <button id="shiftPlusBtn" class="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-sm" title="Збільшити всі вибрані дати на 1 день">🗓️ +1 день</button>
+                </div>
                 <div class="flex gap-2 mt-3 items-center flex-wrap">
                     <button id="clearDraftBtn" class="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border border-rose-200 dark:border-rose-700 text-sm font-bold leading-none min-h-[40px]">Очистити чернетку</button>
                     <div id="renderInfo" class="text-xs text-gray-500 self-center"></div>
@@ -205,7 +212,7 @@
             </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260503-5"></script>
+    <script src="js/session-constructor.js?v=20260503-6"></script>
 </body>
 </html>
 

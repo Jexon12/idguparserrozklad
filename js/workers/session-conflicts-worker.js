@@ -6,6 +6,7 @@ self.onmessage = function (e) {
   const byTeacherSlot = new Map();
   const byRoomSlot = new Map();
   const byGroupExamDay = new Map();
+  const byTeacherExamDay = new Map();
   const teachersNormMap = new Map();
   let missingDate = 0, missingTime = 0, missingRoom = 0, missingTeacher = 0;
 
@@ -52,6 +53,13 @@ self.onmessage = function (e) {
 
     if (!byGroupExamDay.has(group)) byGroupExamDay.set(group, []);
     byGroupExamDay.get(group).push({ idx, date });
+    
+    teachers.forEach((t) => {
+      const key = teacherNormalize(t);
+      if (!byTeacherExamDay.has(key)) byTeacherExamDay.set(key, new Map());
+      if (!byTeacherExamDay.get(key).has(date)) byTeacherExamDay.get(key).set(date, []);
+      byTeacherExamDay.get(key).get(date).push(idx);
+    });
   });
 
   [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((m) => m.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => idxSet.add(i)); }));
@@ -80,8 +88,16 @@ self.onmessage = function (e) {
   let duplicateRows = 0;
   dups.forEach((n) => { if (n > 1) duplicateRows += (n - 1); });
 
+  const overloadIdxSet = new Set();
+  byTeacherExamDay.forEach((dayMap) => {
+    dayMap.forEach((arr) => {
+      if (arr.length > 2) arr.forEach(i => overloadIdxSet.add(i));
+    });
+  });
+
   self.postMessage({
     conflictIndices: Array.from(idxSet),
+    overloadIndices: Array.from(overloadIdxSet),
     quality: { missingDate, missingTime, missingRoom, missingTeacher, teacherAliases, duplicateRows }
   });
 };
