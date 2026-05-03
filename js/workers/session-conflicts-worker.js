@@ -1,4 +1,4 @@
-﻿self.onmessage = function (e) {
+self.onmessage = function (e) {
   const { rows, mode } = e.data || {};
   const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
   const idxSet = new Set();
@@ -30,7 +30,7 @@
       teachersNormMap.get(key).add(clean(t));
     });
 
-    if (!isExam || !date) return;
+    if (!date) return;
 
     if (time) {
       const gk = `${group}__${date}__${time}`;

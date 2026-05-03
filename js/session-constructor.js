@@ -4,10 +4,10 @@
   const VUZ_ID = 11927;
   const CONTROL_OPTIONS = ['залік', 'іспит', 'захист', 'диф.залік'];
   const CONTROL_COLORS = {
-    'залік': { light: 'bg-emerald-50 border-l-4 border-l-emerald-400', dark: 'dark:bg-emerald-900/15 dark:border-l-emerald-500' },
-    'іспит': { light: 'bg-blue-50 border-l-4 border-l-blue-400', dark: 'dark:bg-blue-900/15 dark:border-l-blue-500' },
-    'захист': { light: 'bg-amber-50 border-l-4 border-l-amber-400', dark: 'dark:bg-amber-900/15 dark:border-l-amber-500' },
-    'диф.залік': { light: 'bg-violet-50 border-l-4 border-l-violet-400', dark: 'dark:bg-violet-900/15 dark:border-l-violet-500' }
+    'залік': { bg: '#ecfdf5', border: '#34d399' },
+    'іспит': { bg: '#eff6ff', border: '#60a5fa' },
+    'захист': { bg: '#fffbeb', border: '#fbbf24' },
+    'диф.залік': { bg: '#f5f3ff', border: '#a78bfa' }
   };
   const DRAFT_KEY = 'session_constructor_draft_v1';
 
@@ -276,10 +276,11 @@
         <td class="px-2 py-2"><button data-act="del" data-i="${i}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
       if (state.conflictIndices.has(i)) {
-        tr.classList.add('bg-red-50', 'dark:bg-red-900/20');
+        tr.style.backgroundColor = '#fef2f2';
+        tr.style.borderLeft = '4px solid #ef4444';
       } else {
-        colors.light.split(' ').forEach((c) => tr.classList.add(c));
-        colors.dark.split(' ').forEach((c) => tr.classList.add(c));
+        tr.style.backgroundColor = colors.bg;
+        tr.style.borderLeft = '4px solid ' + colors.border;
       }
       els.tableBody.appendChild(tr);
     });
@@ -527,7 +528,7 @@
 
   function detectConflicts(withStatus = true) {
     if (!conflictsWorker) {
-      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js');
+      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=20260503-4');
       conflictsWorker.onmessage = (evt) => {
         const data = evt.data || {};
         state.conflictIndices = new Set(data.conflictIndices || []);
@@ -1056,8 +1057,15 @@
     const sel = e.target.closest('select[data-f="controlType"]');
     if (!sel) return;
     syncFromGrid();
-    detectConflicts(false);
-    renderTable(state.filteredRows);
+    // Update just this row's color without full re-render
+    const idx = Number(sel.dataset.i);
+    const tr = sel.closest('tr');
+    const ct = clean(sel.value).toLowerCase();
+    const colors = CONTROL_COLORS[ct] || CONTROL_COLORS['залік'];
+    if (tr) {
+      tr.style.backgroundColor = colors.bg;
+      tr.style.borderLeft = '4px solid ' + colors.border;
+    }
     saveDraftDebounced();
   });
 
@@ -1071,24 +1079,35 @@
     }, 400);
   };
   els.tableBody.addEventListener('input', triggerLiveChecks);
-  // Run conflict detection only on blur (leaving a field)
+  // Run conflict detection only on blur — but NOT if focus is moving to another element in the table
+  let focusoutTimer = null;
   els.tableBody.addEventListener('focusout', (e) => {
     clearTimeout(liveTimer);
-    syncFromGrid();
-    // Auto-detect control type when discipline changes
-    const inp = e.target;
-    if (inp && inp.dataset && inp.dataset.f === 'discipline') {
-      const idx = Number(inp.dataset.i);
-      const row = state.filteredRows[idx];
-      if (row) {
-        const detected = autoDetectControlType(inp.value);
-        if (detected && row.controlType === 'залік') {
-          row.controlType = detected;
+    clearTimeout(focusoutTimer);
+    // Delay to let the new focusin fire first
+    focusoutTimer = setTimeout(() => {
+      // If focus is still inside the table, don't re-render
+      if (els.tableBody.contains(document.activeElement)) {
+        syncFromGrid();
+        saveDraftDebounced();
+        return;
+      }
+      syncFromGrid();
+      // Auto-detect control type when discipline changes
+      const inp = e.target;
+      if (inp && inp.dataset && inp.dataset.f === 'discipline') {
+        const idx = Number(inp.dataset.i);
+        const row = state.filteredRows[idx];
+        if (row) {
+          const detected = autoDetectControlType(inp.value);
+          if (detected && row.controlType === 'залік') {
+            row.controlType = detected;
+          }
         }
       }
-    }
-    detectConflicts(false);
-    saveDraftDebounced();
+      detectConflicts(false);
+      saveDraftDebounced();
+    }, 100);
   });
   // Ctrl+Z / Ctrl+Y for undo/redo
   document.addEventListener('keydown', (e) => {
