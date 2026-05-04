@@ -74,7 +74,12 @@
     shiftMinusBtn: document.getElementById('shiftMinusBtn'),
     shiftPlusBtn: document.getElementById('shiftPlusBtn'),
     filterConflictsBtn: document.getElementById('filterConflictsBtn'),
-    filterMissingBtn: document.getElementById('filterMissingBtn')
+    filterMissingBtn: document.getElementById('filterMissingBtn'),
+    conflictMode: document.getElementById('conflictMode'),
+    validateOnlyBtn: document.getElementById('validateOnlyBtn'),
+    qualityPanel: document.getElementById('qualityPanel'),
+    clearDraftBtn: document.getElementById('clearDraftBtn'),
+    renderInfo: document.getElementById('renderInfo')
   };
 
   const state = {
