@@ -944,11 +944,15 @@
     else setStatus(`Успішно: додано ${added}, всього ${total} (${json.term || ''})`);
   }
 
-  async function clearApiSession() {
+  async function clearApiSession(isPurge = false) {
     showError('');
     const term = resolveSessionTerm();
     if (!term) return showError('Оберіть назву сесії для видалення');
-    if (!confirm(`Ви впевнені, що хочете ПОВНІСТЮ ВИДАЛИТИ записи для сесії "${term}" з API? Цю дію неможливо скасувати.`)) return;
+    
+    const action = isPurge ? 'purgeTerm' : 'deleteTerm';
+    const actionText = isPurge ? 'ВИДАЛИТИ НАЗАВЖДИ' : 'перемістити у кошик';
+    
+    if (!confirm(`Ви впевнені, що хочете ${actionText} сесію "${term}" в API?`)) return;
 
     const password = clean(els.adminPassword.value);
     if (!password) return showError('Введіть ADMIN_PASSWORD');
@@ -956,12 +960,12 @@
     const payload = {
       password,
       actor: clean(els.adminActor.value) || 'session-constructor',
-      action: 'deleteTerm',
+      action: action,
       term: term
     };
 
     try {
-      setStatus(`Видалення сесії "${term}" з API (переміщення в кошик)...`);
+      setStatus(`${isPurge ? 'Очищення' : 'Видалення'} "${term}" з API...`);
       const res = await fetch(API_SESSION, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -970,9 +974,10 @@
       const raw = await res.text();
       let json = null; try { json = JSON.parse(raw); } catch(e) {}
       if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
-      setStatus(`Успішно: сесія "${term}" очищена в API.`);
+      setStatus(`Успішно: сесія "${term}" ${isPurge ? 'видалена назавжди' : 'переміщена в кошик'}.`);
+      loadSessionTerms();
     } catch(err) {
-      showError('Помилка видалення з API: ' + err.message);
+      showError(`Помилка API (${action}): ` + err.message);
     }
   }
   async function validateOnly() {
@@ -1147,7 +1152,11 @@
   els.normalizeBtn.addEventListener('click', normalizeAction);
   els.addRowBtn.addEventListener('click', addCustomRow);
   document.getElementById('clearAllBtn')?.addEventListener('click', () => els.clearDraftBtn?.click());
-  document.getElementById('clearApiBtn')?.addEventListener('click', () => clearApiSession().catch((e) => showError(e.message || String(e))));
+  document.getElementById('clearApiBtn')?.addEventListener('click', () => clearApiSession(false).catch((e) => showError(e.message || String(e))));
+  document.getElementById('purgeApiBtn')?.addEventListener('click', () => clearApiSession(true).catch((e) => showError(e.message || String(e))));
+  els.sessionTermSelect?.addEventListener('change', () => {
+     if (els.sessionTermSelect.value) els.sessionTerm.value = els.sessionTermSelect.value;
+  });
   els.uploadBtn.addEventListener('click', () => uploadToApi().catch((e) => showError(e.message || String(e))));
   els.excelBtn.addEventListener('click', exportExcel);
   els.wordBtn.addEventListener('click', exportWord);
