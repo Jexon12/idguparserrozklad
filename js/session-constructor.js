@@ -92,7 +92,7 @@
     selectedRowKeys: new Set(),
     mode: 'basic',
     quality: { missingDate: 0, missingTime: 0, missingRoom: 0, missingTeacher: 0, teacherAliases: 0, duplicateRows: 0 },
-    renderLimit: 200,
+    renderLimit: 500,
     sortField: null,
     sortAsc: true,
     undoStack: [],
@@ -107,7 +107,9 @@
   const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
   const splitTeachers = (v) => Array.from(new Set(clean(v).replace(/\s*(,|\/|\|)\s*/g, '; ').replace(/\s+та\s+/giu, '; ').split(';').map(clean).filter(Boolean)));
-  const rowKey = (r) => `${clean(r.discipline)}__${clean(r.group)}`;
+  const rowKey = (r) => r.id || `${clean(r.discipline)}__${clean(r.group)}`;
+  const generateId = () => Math.random().toString(36).slice(2, 11);
+  const CONTROL_PRIORITY = { 'іспит': 4, 'диф.залік': 3, 'захист': 2, 'залік': 1 };
 
   function showError(msg) {
     if (!msg) {
@@ -207,21 +209,43 @@
       const d = normalizeDiscipline(r.discipline);
       const g = clean(r.group);
       if (!d || !g) return;
+      
       const key = `${d}__${g}`;
-      if (!map.has(key)) map.set(key, { discipline: d, group: g, teachers: new Set(), controlType: clean(r.controlType || 'залік'), date: clean(r.date || ''), time: clean(r.time || ''), room: clean(r.room || '') });
-      splitTeachers((r.teachers || []).join('; ')).forEach((t) => map.get(key).teachers.add(t));
-      if (!map.get(key).date && r.date) map.get(key).date = clean(r.date);
-      if (!map.get(key).time && r.time) map.get(key).time = clean(r.time);
-      if (!map.get(key).room && r.room) map.get(key).room = clean(r.room);
+      const ct = clean(r.controlType || 'залік').toLowerCase();
+      
+      if (!map.has(key)) {
+        map.set(key, { 
+          id: r.id || generateId(),
+          discipline: d, 
+          group: g, 
+          teachers: new Set(r.teachers || []), 
+          controlType: ct, 
+          date: clean(r.date || ''), 
+          time: clean(r.time || ''), 
+          room: clean(r.room || '') 
+        });
+      } else {
+        const existing = map.get(key);
+        // Зберігаємо більш пріоритетну форму контролю (іспит > диф.залік > залік)
+        const p1 = CONTROL_PRIORITY[existing.controlType] || 0;
+        const p2 = CONTROL_PRIORITY[ct] || 0;
+        if (p2 > p1) {
+          existing.controlType = ct;
+          // Якщо прийшла форма з вищим пріоритетом, оновлюємо дату/час/ауд, якщо вони там є
+          if (r.date) existing.date = clean(r.date);
+          if (r.time) existing.time = clean(r.time);
+          if (r.room) existing.room = clean(r.room);
+        }
+        
+        if (r.teachers) splitTeachers(Array.isArray(r.teachers) ? r.teachers.join('; ') : r.teachers).forEach((t) => existing.teachers.add(t));
+        if (!existing.date && r.date) existing.date = clean(r.date);
+        if (!existing.time && r.time) existing.time = clean(r.time);
+        if (!existing.room && r.room) existing.room = clean(r.room);
+      }
     });
     return Array.from(map.values()).map((x) => ({
-      discipline: x.discipline,
-      group: x.group,
-      teachers: Array.from(x.teachers).sort((a, b) => a.localeCompare(b, 'uk')),
-      controlType: CONTROL_OPTIONS.includes(x.controlType) ? x.controlType : 'залік',
-      date: x.date || '',
-      time: x.time || '',
-      room: x.room || ''
+      ...x,
+      teachers: Array.from(x.teachers).sort((a, b) => a.localeCompare(b, 'uk'))
     }));
   }
 
@@ -280,27 +304,29 @@
     visibleRows.forEach((r, i) => {
       const tr = document.createElement('tr');
       const currentControl = CONTROL_OPTIONS.includes(clean(r.controlType).toLowerCase()) ? clean(r.controlType).toLowerCase() : 'залік';
-      const key = rowKey(r);
+      const key = r.id;
       const checked = state.selectedRowKeys.has(key) ? 'checked' : '';
       const colors = CONTROL_COLORS[currentControl] || CONTROL_COLORS['залік'];
       tr.draggable = true;
-      tr.dataset.dragIndex = i;
+      tr.dataset.id = r.id;
+      tr.dataset.renderIndex = i;
       tr.innerHTML = `
-        <td class="px-2 py-2"><input type="checkbox" data-act="select-row" data-i="${i}" ${checked}></td>
+        <td class="px-2 py-2"><input type="checkbox" data-act="select-row" data-id="${r.id}" ${checked}></td>
         <td class="px-2 py-2">${i + 1}</td>
-        <td class="px-2 py-2"><input data-f="discipline" data-i="${i}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="group" data-i="${i}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="teachers" data-i="${i}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers || []).join('; ').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><select data-f="controlType" data-i="${i}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
-        <td class="px-2 py-2"><input data-f="date" data-i="${i}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="time" data-i="${i}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="room" data-i="${i}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.room || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><button data-act="del" data-i="${i}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
+        <td class="px-2 py-2"><input data-f="discipline" data-id="${r.id}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="group" data-id="${r.id}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="teachers" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers || []).join('; ').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><select data-f="controlType" data-id="${r.id}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
+        <td class="px-2 py-2"><input data-f="date" data-id="${r.id}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="time" data-id="${r.id}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="room" data-id="${r.id}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.room || '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><button data-act="del" data-id="${r.id}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
-      if (state.conflictIndices.has(i)) {
+      const globalIdx = state.rows.findIndex(x => x.id === r.id);
+      if (state.conflictIndices.has(globalIdx)) {
         tr.style.backgroundColor = '#fee2e2';
         tr.style.borderLeft = '4px solid #ef4444';
-      } else if (state.overloadIndices && state.overloadIndices.has(i)) {
+      } else if (state.overloadIndices && state.overloadIndices.has(globalIdx)) {
         tr.style.backgroundColor = '#fef9c3';
         tr.style.borderLeft = '4px solid #facc15';
         tr.title = 'Попередження: викладач має більше 2-х іспитів/заліків у цей день!';
@@ -464,37 +490,28 @@
   }
 
   function syncFromGrid() {
-    const list = state.filteredRows.slice();
-    list.forEach((r, i) => {
-      const d = document.querySelector(`input[data-f="discipline"][data-i="${i}"]`);
-      const g = document.querySelector(`input[data-f="group"][data-i="${i}"]`);
-      const t = document.querySelector(`input[data-f="teachers"][data-i="${i}"]`);
-      const c = document.querySelector(`select[data-f="controlType"][data-i="${i}"]`);
-      const dt = document.querySelector(`input[data-f="date"][data-i="${i}"]`);
-      const tm = document.querySelector(`input[data-f="time"][data-i="${i}"]`);
-      const rm = document.querySelector(`input[data-f="room"][data-i="${i}"]`);
-      if (d) r.discipline = normalizeDiscipline(d.value);
-      if (g) r.group = clean(g.value);
-      if (t) r.teachers = splitTeachers(t.value);
-      if (c) r.controlType = clean(c.value || 'залік');
-      if (dt) r.date = clean(dt.value);
-      if (tm) r.time = clean(tm.value);
-      // time is now allowed for all control types
-      if (rm) r.room = clean(rm.value);
-
-      const rowChecked = document.querySelector(`input[data-act="select-row"][data-i="${i}"]`);
-      const key = rowKey(r);
-      if (rowChecked?.checked) state.selectedRowKeys.add(key);
-      else state.selectedRowKeys.delete(key);
+    const inputs = els.tableBody.querySelectorAll('[data-f][data-id]');
+    const rowMap = new Map(state.rows.map(r => [r.id, r]));
+    inputs.forEach(inp => {
+      const id = inp.dataset.id;
+      const field = inp.dataset.f;
+      const row = rowMap.get(id);
+      if (!row) return;
+      if (field === 'teachers') row.teachers = splitTeachers(inp.value);
+      else if (field === 'discipline') row.discipline = normalizeDiscipline(inp.value);
+      else if (field === 'controlType') row.controlType = clean(inp.value);
+      else row[field] = clean(inp.value);
     });
-    state.filteredRows = list;
+    // Sync checkboxes
+    const cbs = els.tableBody.querySelectorAll('input[data-act="select-row"][data-id]');
+    cbs.forEach(cb => {
+      const id = cb.dataset.id;
+      if (cb.checked) state.selectedRowKeys.add(id);
+      else state.selectedRowKeys.delete(id);
+    });
   }
 
-  function mergeFilteredBack() {
-    const old = new Set(state.filteredRows.map((r) => `${r.discipline}__${r.group}`));
-    const rest = state.rows.filter((r) => !old.has(`${r.discipline}__${r.group}`));
-    state.rows = dedupeRows(rest.concat(state.filteredRows));
-  }
+  // mergeFilteredBack removed
   function applyDatePreset(preset) {
     const now = new Date();
     const year = now.getFullYear();
@@ -819,9 +836,17 @@
 
   function addCustomRow() {
     syncFromGrid();
-    mergeFilteredBack();
     pushUndo();
-    state.rows.push({ discipline: 'Новий предмет', group: '', teachers: [], controlType: 'залік', date: '', time: '', room: '' });
+    state.rows.push({ 
+      id: generateId(),
+      discipline: 'Новий предмет', 
+      group: '', 
+      teachers: [], 
+      controlType: 'залік', 
+      date: '', 
+      time: '', 
+      room: '' 
+    });
     renderFilters(state.rows);
     applyFilters();
     setTimeout(() => {
@@ -879,7 +904,6 @@
   async function uploadToApi() {
     showError('');
     syncFromGrid();
-    mergeFilteredBack();
     applyFilters();
     if (!state.filteredRows.length) {
       setStatus('Немає записів у таблиці. Запускаю автозбір...');
@@ -926,7 +950,6 @@
   }
   async function validateOnly() {
     syncFromGrid();
-    mergeFilteredBack();
     applyFilters();
     const payload = {
       action: 'validateOnly',
@@ -1040,7 +1063,6 @@
   // --- Save / Load session as JSON file ---
   function saveSession() {
     syncFromGrid();
-    mergeFilteredBack();
     const payload = getDraftPayload();
     payload.savedAt = new Date().toISOString();
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1153,13 +1175,11 @@
   els.tableBody.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act="del"]');
     if (!btn) return;
-    const i = Number(btn.dataset.i);
-    if (Number.isNaN(i)) return;
+    const id = btn.dataset.id;
+    if (!id) return;
     syncFromGrid();
     pushUndo();
-    state.filteredRows.splice(i, 1);
-    mergeFilteredBack();
-    renderFilters(state.rows);
+    state.rows = state.rows.filter(r => r.id !== id);
     applyFilters();
     saveDraftDebounced();
   });
@@ -1175,7 +1195,6 @@
     if (!sel) return;
     syncFromGrid();
     // Update just this row's color without full re-render
-    const idx = Number(sel.dataset.i);
     const tr = sel.closest('tr');
     const ct = clean(sel.value).toLowerCase();
     const colors = CONTROL_COLORS[ct] || CONTROL_COLORS['залік'];
@@ -1273,13 +1292,13 @@
   });
 
   // Drag and Drop Rows
-  let draggedIndex = null;
+  let draggedId = null;
   els.tableBody.addEventListener('dragstart', (e) => {
     const tr = e.target.closest('tr');
-    if (!tr || tr.dataset.dragIndex === undefined) return;
-    draggedIndex = Number(tr.dataset.dragIndex);
+    if (!tr || tr.dataset.id === undefined) return;
+    draggedId = tr.dataset.id;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', draggedIndex);
+    e.dataTransfer.setData('text/plain', draggedId);
     tr.classList.add('opacity-50');
   });
   els.tableBody.addEventListener('dragover', (e) => {
@@ -1303,19 +1322,21 @@
     e.preventDefault();
     const tr = e.target.closest('tr');
     Array.from(els.tableBody.children).forEach(r => r.classList.remove('border-t-2', 'border-violet-500'));
-    if (draggedIndex === null || !tr || tr.dataset.dragIndex === undefined) return;
-    
-    const targetIndex = Number(tr.dataset.dragIndex);
-    if (draggedIndex === targetIndex) return;
+    const targetId = tr.dataset.id;
+    if (draggedId === targetId) return;
     
     syncFromGrid();
     pushUndo();
     
-    const item = state.filteredRows.splice(draggedIndex, 1)[0];
-    state.filteredRows.splice(targetIndex, 0, item);
+    const dragIdx = state.rows.findIndex(r => r.id === draggedId);
+    const targetIdx = state.rows.findIndex(r => r.id === targetId);
     
-    mergeFilteredBack();
-    renderTable(state.filteredRows);
+    if (dragIdx !== -1 && targetIdx !== -1) {
+      const item = state.rows.splice(dragIdx, 1)[0];
+      state.rows.splice(targetIdx, 0, item);
+    }
+    
+    applyFilters();
     saveDraftDebounced();
   });
   els.selectAllRows?.addEventListener('change', () => {
@@ -1412,7 +1433,6 @@
             return;
           }
           syncFromGrid();
-          mergeFilteredBack();
           state.rows = dedupeRows(state.rows.concat(parsed));
           renderFilters(state.rows);
           applyFilters();
@@ -1467,7 +1487,6 @@
           return;
         }
         syncFromGrid();
-        mergeFilteredBack();
         state.rows = dedupeRows(state.rows.concat(parsed));
         renderFilters(state.rows);
         applyFilters();
