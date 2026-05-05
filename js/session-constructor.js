@@ -961,7 +961,8 @@
       password,
       actor: clean(els.adminActor.value) || 'session-constructor',
       action: action,
-      term: term
+      term: term,
+      studyForm: clean(els.studyForm.value)
     };
 
     try {
@@ -1154,6 +1155,14 @@
   document.getElementById('clearAllBtn')?.addEventListener('click', () => els.clearDraftBtn?.click());
   document.getElementById('clearApiBtn')?.addEventListener('click', () => clearApiSession(false).catch((e) => showError(e.message || String(e))));
   document.getElementById('purgeApiBtn')?.addEventListener('click', () => clearApiSession(true).catch((e) => showError(e.message || String(e))));
+  document.getElementById('listTermsBtn')?.addEventListener('click', async () => {
+     try {
+       const res = await fetch('/api/session');
+       const data = await res.json();
+       const list = (data.sessions || []).map(s => `${s.term} (${(s.items||[]).length})`).join('\n');
+       alert('Список сесій в API:\n' + (list || 'Порожньо'));
+     } catch(e) { showError(e.message); }
+  });
   els.sessionTermSelect?.addEventListener('change', () => {
      if (els.sessionTermSelect.value) els.sessionTerm.value = els.sessionTermSelect.value;
   });
