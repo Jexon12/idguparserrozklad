@@ -724,7 +724,10 @@
   function saveDraft() {
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(getDraftPayload()));
-      if (els.draftInfo) els.draftInfo.textContent = `Чернетка збережена: ${new Date().toLocaleTimeString('uk-UA')}`;
+      if (els.draftInfo) {
+        const time = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        els.draftInfo.innerHTML = `<span class="text-green-600 dark:text-green-400">●</span> Автозбереження: ${time}`;
+      }
     } catch (e) {}
   }
   let saveDraftTimer = null;
@@ -1113,6 +1116,7 @@
   els.loadApiBtn?.addEventListener('click', () => loadFromApi().catch((e) => showError(e.message || String(e))));
   els.normalizeBtn.addEventListener('click', normalizeAction);
   els.addRowBtn.addEventListener('click', addCustomRow);
+  document.getElementById('clearAllBtn')?.addEventListener('click', () => els.clearDraftBtn?.click());
   els.uploadBtn.addEventListener('click', () => uploadToApi().catch((e) => showError(e.message || String(e))));
   els.excelBtn.addEventListener('click', exportExcel);
   els.wordBtn.addEventListener('click', exportWord);
