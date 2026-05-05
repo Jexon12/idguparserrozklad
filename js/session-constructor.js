@@ -4,10 +4,10 @@
   const VUZ_ID = 11927;
   const CONTROL_OPTIONS = ['залік', 'іспит', 'захист', 'диф.залік'];
   const CONTROL_COLORS = {
-    'залік': { bg: '#ecfdf5', border: '#34d399' },
-    'іспит': { bg: '#eff6ff', border: '#60a5fa' },
-    'захист': { bg: '#fffbeb', border: '#fbbf24' },
-    'диф.залік': { bg: '#f5f3ff', border: '#a78bfa' }
+    'залік': { bg: '#d1fae5', border: '#10b981' },
+    'іспит': { bg: '#dbeafe', border: '#3b82f6' },
+    'захист': { bg: '#fef3c7', border: '#f59e0b' },
+    'диф.залік': { bg: '#ede9fe', border: '#8b5cf6' }
   };
   const DRAFT_KEY = 'session_constructor_draft_v1';
 
@@ -298,10 +298,10 @@
         <td class="px-2 py-2"><button data-act="del" data-i="${i}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
       if (state.conflictIndices.has(i)) {
-        tr.style.backgroundColor = '#fef2f2';
+        tr.style.backgroundColor = '#fee2e2';
         tr.style.borderLeft = '4px solid #ef4444';
       } else if (state.overloadIndices && state.overloadIndices.has(i)) {
-        tr.style.backgroundColor = '#fefce8';
+        tr.style.backgroundColor = '#fef9c3';
         tr.style.borderLeft = '4px solid #facc15';
         tr.title = 'Попередження: викладач має більше 2-х іспитів/заліків у цей день!';
       } else {
@@ -445,7 +445,7 @@
     const teacherLoad = {};
     rows.forEach((r) => (r.teachers || []).forEach((t) => { teacherLoad[t] = (teacherLoad[t] || 0) + 1; }));
     const busiestTeacher = Object.entries(teacherLoad).sort((a, b) => b[1] - a[1])[0];
-    const colorDot = (type) => `<span class="w-2 h-2 rounded-full inline-block" style="background:${{'залік':'#34d399','іспит':'#60a5fa','захист':'#fbbf24','диф.залік':'#a78bfa'}[type] || '#ccc'}"></span>`;
+    const colorDot = (type) => `<span class="w-2 h-2 rounded-full inline-block" style="background:${{'залік':'#10b981','іспит':'#3b82f6','захист':'#f59e0b','диф.залік':'#8b5cf6'}[type] || '#ccc'}"></span>`;
     el.innerHTML = `<div class="flex gap-4 flex-wrap items-center text-xs">
       ${CONTROL_OPTIONS.map((t) => `<span class="flex items-center gap-1">${colorDot(t)} ${t}: <b>${byType[t]}</b></span>`).join('')}
       <span>| Найбільше/день: <b>${maxPerDay}</b> (${busiestDay})</span>
