@@ -107,8 +107,8 @@
   const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
   const splitTeachers = (v) => Array.from(new Set(clean(v).replace(/\s*(,|\/|\|)\s*/g, '; ').replace(/\s+та\s+/giu, '; ').split(';').map(clean).filter(Boolean)));
-  const rowKey = (r) => r.id || `${clean(r.discipline)}__${clean(r.group)}__${clean(r.controlType)}`;
-  const generateId = () => Math.random().toString(36).slice(2, 11);
+  const rowKey = (r) => String(r.id || `${clean(r.discipline)}__${clean(r.group)}__${clean(r.controlType)}`);
+  const generateId = () => 'r_' + Math.random().toString(36).slice(2, 11);
   const CONTROL_PRIORITY = { 'іспит': 4, 'диф.залік': 3, 'захист': 2, 'залік': 1 };
 
   function showError(msg) {
@@ -483,9 +483,9 @@
 
   function syncFromGrid() {
     const inputs = els.tableBody.querySelectorAll('[data-f][data-id]');
-    const rowMap = new Map(state.rows.map(r => [r.id, r]));
+    const rowMap = new Map(state.rows.map(r => [String(r.id), r]));
     inputs.forEach(inp => {
-      const id = inp.dataset.id;
+      const id = String(inp.dataset.id);
       const field = inp.dataset.f;
       const row = rowMap.get(id);
       if (!row) return;
@@ -497,7 +497,7 @@
     // Sync checkboxes
     const cbs = els.tableBody.querySelectorAll('input[data-act="select-row"][data-id]');
     cbs.forEach(cb => {
-      const id = cb.dataset.id;
+      const id = String(cb.dataset.id);
       if (cb.checked) state.selectedRowKeys.add(id);
       else state.selectedRowKeys.delete(id);
     });
@@ -750,7 +750,11 @@
       if (typeof f.examStartDate === 'string') els.examStartDate.value = f.examStartDate;
       if (typeof f.examEndDate === 'string') els.examEndDate.value = f.examEndDate;
       if (Array.isArray(draft.rows) && draft.rows.length) {
-        state.rows = draft.rows.map((r) => ({ ...r, teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') }));
+        state.rows = draft.rows.map((r) => ({ 
+          ...r, 
+          id: r.id || generateId(),
+          teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') 
+        }));
         renderFilters(state.rows);
         applyFilters();
       }
@@ -1169,7 +1173,8 @@
     if (!id) return;
     syncFromGrid();
     pushUndo();
-    state.rows = state.rows.filter(r => r.id !== id);
+    const idToDel = String(id);
+    state.rows = state.rows.filter(r => String(r.id) !== idToDel);
     applyFilters();
     saveDraftDebounced();
   });
