@@ -903,9 +903,7 @@
     syncFromGrid();
     applyFilters();
     if (!state.filteredRows.length) {
-      setStatus('Немає записів у таблиці. Запускаю автозбір...');
-      await buildFromSchedule();
-      if (!state.filteredRows.length) throw new Error('Немає записів для завантаження');
+      if (!confirm('У таблиці немає записів. Ви впевнені, що хочете завантажити ПОРОЖНЮ сесію в API? Це може призвести до очищення даних на сервері.')) return;
     }
     const password = clean(els.adminPassword.value);
     if (!password) throw new Error('Введіть ADMIN_PASSWORD');
@@ -944,6 +942,40 @@
     const total = Number(json.count || 0);
     if (added === 0) setStatus(`Нових записів не додано (дублікати). Всього: ${total} (${json.term || ''})`);
     else setStatus(`Успішно: додано ${added}, всього ${total} (${json.term || ''})`);
+  }
+
+  async function clearApiSession() {
+    showError('');
+    const term = resolveSessionTerm();
+    if (!term) return showError('Оберіть назву сесії для видалення');
+    if (!confirm(`Ви впевнені, що хочете ПОВНІСТЮ ВИДАЛИТИ записи для сесії "${term}" з API? Цю дію неможливо скасувати.`)) return;
+
+    const password = clean(els.adminPassword.value);
+    if (!password) return showError('Введіть ADMIN_PASSWORD');
+
+    const payload = {
+      password,
+      action: 'clear',
+      data: {
+        term,
+        studyForm: clean(els.studyForm.value)
+      }
+    };
+
+    try {
+      setStatus(`Видалення записів "${term}" з API...`);
+      const res = await fetch(API_SESSION, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(payload) 
+      });
+      const raw = await res.text();
+      let json = null; try { json = JSON.parse(raw); } catch(e) {}
+      if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
+      setStatus(`Успішно: сесія "${term}" очищена в API.`);
+    } catch(err) {
+      showError('Помилка видалення з API: ' + err.message);
+    }
   }
   async function validateOnly() {
     syncFromGrid();
@@ -1117,6 +1149,7 @@
   els.normalizeBtn.addEventListener('click', normalizeAction);
   els.addRowBtn.addEventListener('click', addCustomRow);
   document.getElementById('clearAllBtn')?.addEventListener('click', () => els.clearDraftBtn?.click());
+  document.getElementById('clearApiBtn')?.addEventListener('click', () => clearApiSession().catch((e) => showError(e.message || String(e))));
   els.uploadBtn.addEventListener('click', () => uploadToApi().catch((e) => showError(e.message || String(e))));
   els.excelBtn.addEventListener('click', exportExcel);
   els.wordBtn.addEventListener('click', exportWord);
