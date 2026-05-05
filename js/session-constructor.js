@@ -107,7 +107,7 @@
   const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
   const splitTeachers = (v) => Array.from(new Set(clean(v).replace(/\s*(,|\/|\|)\s*/g, '; ').replace(/\s+та\s+/giu, '; ').split(';').map(clean).filter(Boolean)));
-  const rowKey = (r) => r.id || `${clean(r.discipline)}__${clean(r.group)}`;
+  const rowKey = (r) => r.id || `${clean(r.discipline)}__${clean(r.group)}__${clean(r.controlType)}`;
   const generateId = () => Math.random().toString(36).slice(2, 11);
   const CONTROL_PRIORITY = { 'іспит': 4, 'диф.залік': 3, 'захист': 2, 'залік': 1 };
 
@@ -203,15 +203,19 @@
     return json.d || json;
   }
 
-  function dedupeRows(rows) {
+  function dedupeRows(rows, ignoreDateTime = false) {
     const map = new Map();
     rows.forEach((r) => {
       const d = normalizeDiscipline(r.discipline);
       const g = clean(r.group);
+      const ct = clean(r.controlType || 'залік').toLowerCase();
+      const dt = ignoreDateTime ? '' : clean(r.date);
+      const tm = ignoreDateTime ? '' : clean(r.time);
+      
       if (!d || !g) return;
       
-      const key = `${d}__${g}`;
-      const ct = clean(r.controlType || 'залік').toLowerCase();
+      // Ключ залежить від того, чи хочемо ми бачити різні дати як окремі записи
+      const key = `${d}__${g}__${ct}__${dt}__${tm}`;
       
       if (!map.has(key)) {
         map.set(key, { 
@@ -226,17 +230,6 @@
         });
       } else {
         const existing = map.get(key);
-        // Зберігаємо більш пріоритетну форму контролю (іспит > диф.залік > залік)
-        const p1 = CONTROL_PRIORITY[existing.controlType] || 0;
-        const p2 = CONTROL_PRIORITY[ct] || 0;
-        if (p2 > p1) {
-          existing.controlType = ct;
-          // Якщо прийшла форма з вищим пріоритетом, оновлюємо дату/час/ауд, якщо вони там є
-          if (r.date) existing.date = clean(r.date);
-          if (r.time) existing.time = clean(r.time);
-          if (r.room) existing.room = clean(r.room);
-        }
-        
         if (r.teachers) splitTeachers(Array.isArray(r.teachers) ? r.teachers.join('; ') : r.teachers).forEach((t) => existing.teachers.add(t));
         if (!existing.date && r.date) existing.date = clean(r.date);
         if (!existing.time && r.time) existing.time = clean(r.time);
@@ -309,7 +302,6 @@
       const colors = CONTROL_COLORS[currentControl] || CONTROL_COLORS['залік'];
       tr.draggable = true;
       tr.dataset.id = r.id;
-      tr.dataset.renderIndex = i;
       tr.innerHTML = `
         <td class="px-2 py-2"><input type="checkbox" data-act="select-row" data-id="${r.id}" ${checked}></td>
         <td class="px-2 py-2">${i + 1}</td>
@@ -511,7 +503,8 @@
     });
   }
 
-  // mergeFilteredBack removed
+  // syncFromGrid handled above in turn history
+
   function applyDatePreset(preset) {
     const now = new Date();
     const year = now.getFullYear();
@@ -565,7 +558,6 @@
         if (zDates.length) r.date = zDates[zi++ % zDates.length];
       }
     });
-    mergeFilteredBack();
     applyFilters();
     showError('');
     setStatus('Дати проставлено автоматично');
@@ -679,7 +671,6 @@
       if (room) r.room = room;
       if (time) r.time = time;
     });
-    mergeFilteredBack();
     applyFilters();
     saveDraftDebounced();
   }
@@ -697,7 +688,6 @@
       r.date = d.toISOString().slice(0, 10);
       shiftedCount++;
     });
-    mergeFilteredBack();
     applyFilters();
     saveDraftDebounced();
     setStatus(`Зміщено дат: ${shiftedCount}`);
@@ -821,7 +811,7 @@
         state.rows = [];
       }
     }
-    state.rows = dedupeRows(state.rows.concat(rawRows)).filter((r) => r.discipline && r.group);
+    state.rows = dedupeRows(state.rows.concat(rawRows), true).filter((r) => r.discipline && r.group);
     renderFilters(state.rows);
     applyFilters();
     setStatus(state.rows.length ? `Сформовано ${state.rows.length} записів на базі розкладу` : 'Немає записів у вибраному періоді');
@@ -890,7 +880,7 @@
         }
       }
       
-      state.rows = dedupeRows(state.rows.concat(parsed));
+      state.rows = dedupeRows(state.rows.concat(parsed), false);
       renderFilters(state.rows);
       applyFilters();
       saveDraftDebounced();
@@ -1230,10 +1220,9 @@
       }
       syncFromGrid();
       // Auto-detect control type when discipline changes
-      const inp = e.target;
       if (inp && inp.dataset && inp.dataset.f === 'discipline') {
-        const idx = Number(inp.dataset.i);
-        const row = state.filteredRows[idx];
+        const id = inp.dataset.id;
+        const row = state.rows.find(x => x.id === id);
         if (row) {
           const detected = autoDetectControlType(inp.value);
           if (detected && row.controlType === 'залік') {
@@ -1519,7 +1508,6 @@
   // --- Save on page unload to prevent data loss ---
   window.addEventListener('beforeunload', () => {
     syncFromGrid();
-    mergeFilteredBack();
     saveDraft();
   });
 
