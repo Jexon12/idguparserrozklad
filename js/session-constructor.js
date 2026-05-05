@@ -955,15 +955,13 @@
 
     const payload = {
       password,
-      action: 'clear',
-      data: {
-        term,
-        studyForm: clean(els.studyForm.value)
-      }
+      actor: clean(els.adminActor.value) || 'session-constructor',
+      action: 'deleteTerm',
+      term: term
     };
 
     try {
-      setStatus(`Видалення записів "${term}" з API...`);
+      setStatus(`Видалення сесії "${term}" з API (переміщення в кошик)...`);
       const res = await fetch(API_SESSION, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
