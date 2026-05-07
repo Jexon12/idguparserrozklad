@@ -122,6 +122,8 @@
     warnings: [],
     qualityFilter: '',
     groupBy: '',
+    quickDateFrom: '',
+    quickDateTo: '',
     lastControlTypeFilter: ''
   };
   let conflictsWorker = null;
@@ -335,10 +337,6 @@
     updateDatalist('dl-rooms', rooms);
   }
 
-  function applyDateRangeFilter(from, to) {
-    const dates = Array.from(new Set(state.rows.map((r) => r.date).filter((date) => date && date >= from && date <= to))).sort();
-    setSelectValues(els.dateFilter, dates);
-  }
   function updateDatalist(id, items) {
     let dl = document.getElementById(id);
     if (!dl) { dl = document.createElement('datalist'); dl.id = id; document.body.appendChild(dl); }
@@ -489,6 +487,7 @@
     if (state.filterConflictsOnly) count += 1;
     if (state.filterMissingOnly) count += 1;
     if (state.qualityFilter) count += 1;
+    if (state.quickDateFrom || state.quickDateTo) count += 1;
     const tableFilters = getTableFilters();
     count += Object.values(tableFilters).filter(Boolean).length;
     return count;
@@ -508,6 +507,8 @@
         room: selectValues(els.roomFilter),
         emptyField: clean(els.emptyFieldFilter?.value),
         groupBy: clean(els.groupBySelect?.value),
+        quickDateFrom: state.quickDateFrom,
+        quickDateTo: state.quickDateTo,
         tableFilters,
         filterConflictsOnly: state.filterConflictsOnly,
         filterMissingOnly: state.filterMissingOnly,
@@ -536,6 +537,8 @@
       if (els.emptyFieldFilter) els.emptyFieldFilter.value = view.emptyField || '';
       if (els.groupBySelect) els.groupBySelect.value = view.groupBy || '';
       state.groupBy = clean(view.groupBy);
+      state.quickDateFrom = clean(view.quickDateFrom);
+      state.quickDateTo = clean(view.quickDateTo);
       state.filterConflictsOnly = !!view.filterConflictsOnly;
       state.filterMissingOnly = !!view.filterMissingOnly;
       state.qualityFilter = clean(view.qualityFilter);
@@ -560,6 +563,8 @@
     state.filterConflictsOnly = false;
     state.filterMissingOnly = false;
     state.qualityFilter = '';
+    state.quickDateFrom = '';
+    state.quickDateTo = '';
   }
   function setMode(mode) {
     state.mode = mode === 'pro' ? 'pro' : 'basic';
@@ -597,6 +602,8 @@
       if (state.qualityFilter === 'Missing room (exam)' && (clean(r.controlType) !== 'іспит' || clean(r.room))) return false;
       if (state.qualityFilter === 'Missing teacher' && (r.teachers || []).length) return false;
       if (state.qualityFilter === 'Duplicates' && !isDuplicateRow(r)) return false;
+      if (state.quickDateFrom && clean(r.date) < state.quickDateFrom) return false;
+      if (state.quickDateTo && clean(r.date) > state.quickDateTo) return false;
       if (emptyField === 'teacher' && (r.teachers || []).length) return false;
       if (emptyField === 'date' && clean(r.date)) return false;
       if (emptyField === 'time' && clean(r.time)) return false;
@@ -1560,8 +1567,8 @@
   els.applyBulkBtn.addEventListener('click', applyBulkToSelected);
   els.searchInput.addEventListener('input', applyFilters);
   els.disciplineFilter?.addEventListener('change', applyFilters);
-  els.groupFilter.addEventListener('change', applyFilters);
-  els.teacherFilter.addEventListener('change', applyFilters);
+  els.groupFilter?.addEventListener('change', applyFilters);
+  els.teacherFilter?.addEventListener('change', applyFilters);
   els.controlTypeFilter?.addEventListener('change', applyFilters);
   els.dateFilter?.addEventListener('change', applyFilters);
   els.timeFilter?.addEventListener('change', applyFilters);
@@ -1574,17 +1581,20 @@
   });
   els.presetExamsBtn?.addEventListener('click', () => {
     clearFilterControls();
-    setSelectValues(els.controlTypeFilter, ['іспит']);
+    const el = document.querySelector('[data-table-filter="controlType"]');
+    if (el) el.value = 'іспит';
     applyFilters();
   });
   els.presetTodayBtn?.addEventListener('click', () => {
     clearFilterControls();
-    setSelectValues(els.dateFilter, [todayIso()]);
+    const el = document.querySelector('[data-table-filter="date"]');
+    if (el) el.value = todayIso();
     applyFilters();
   });
   els.presetWeekBtn?.addEventListener('click', () => {
     clearFilterControls();
-    applyDateRangeFilter(todayIso(), addDaysIso(todayIso(), 6));
+    state.quickDateFrom = todayIso();
+    state.quickDateTo = addDaysIso(todayIso(), 6);
     applyFilters();
   });
   els.presetMissingRoomBtn?.addEventListener('click', () => {
@@ -1948,8 +1958,8 @@
     saveDraft();
   });
 
-  renderSelect(els.groupFilter, [], 'Усі групи');
-  renderSelect(els.teacherFilter, [], 'Усі викладачі');
+  if (els.groupFilter) renderSelect(els.groupFilter, [], 'Усі групи');
+  if (els.teacherFilter) renderSelect(els.teacherFilter, [], 'Усі викладачі');
   if (els.conflictSummary) els.conflictSummary.textContent = 'Конфліктів: 0';
   setProgress(0, 1, 'Готово');
   setMode('basic');
