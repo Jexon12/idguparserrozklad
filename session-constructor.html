@@ -203,6 +203,69 @@
                 <button id="presetMissingRoomBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Без аудиторії</button>
                 <button id="presetTeacherConflictsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Конфлікти викладачів</button>
             </div>
+            <details class="rounded-xl border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 p-3 text-sm">
+                <summary class="cursor-pointer font-bold text-gray-700 dark:text-gray-100">Інструкція з користування</summary>
+                <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700 dark:text-gray-200">
+                    <div>
+                        <h3 class="font-bold mb-1">Основний сценарій</h3>
+                        <ol class="list-decimal pl-5 space-y-1">
+                            <li>Виберіть існуючу сесію або введіть нову назву у верхньому блоці.</li>
+                            <li>Завантажте дані з розкладу, API або файлу.</li>
+                            <li>Перевірте таблицю через фільтри, проблеми та зведення по днях.</li>
+                            <li>Виправляйте записи прямо в таблиці.</li>
+                            <li>Виділяйте потрібні рядки та застосовуйте пакетні дії.</li>
+                            <li>Експортуйте результат або завантажуйте його в API.</li>
+                        </ol>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1">Фільтри</h3>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>Пошук зверху шукає по всій таблиці.</li>
+                            <li>Фільтри по колонках розташовані в шапці таблиці.</li>
+                            <li>Дата від/до обмежує ручний період.</li>
+                            <li>Тільки проблеми показує конфлікти, попередження, пропуски та дублі.</li>
+                            <li>Скинути фільтри очищає весь поточний відбір.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1">Робота з рядками</h3>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>Редагуйте предмет, групу, викладачів, форму, дату, час і аудиторію прямо в таблиці.</li>
+                            <li>Клік по рядку відкриває картку деталей.</li>
+                            <li>Виділити відфільтровані вибирає всі рядки поточного виду.</li>
+                            <li>Пакетні дії внизу змінюють вибрані рядки.</li>
+                            <li>-1 день / +1 день зсуває дати вибраних рядків.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1">Інструменти</h3>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>Групування збирає таблицю за датою, групою, викладачем або формою.</li>
+                            <li>У панелі Інструменти можна перемкнути Таблиця / Календар.</li>
+                            <li>Там само можна приховати зайві колонки.</li>
+                            <li>Нормалізувати викладачів приводить імена до одного стилю.</li>
+                            <li>Порівняти з API показує локальні, серверні та змінені записи.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1">Версії та безпека</h3>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>Чернетка зберігається автоматично.</li>
+                            <li>Знімок версії зберігає поточний стан таблиці.</li>
+                            <li>Можна відновити один з останніх 12 знімків.</li>
+                            <li>Undo / Redo працюють для більшості правок.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1">Експорт</h3>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>Оберіть режим: відфільтровані, усі або вибрані.</li>
+                            <li>Режим застосовується до Excel, Word і копіювання таблиці.</li>
+                            <li>Перед API upload перевірте назву сесії та пароль адміністратора.</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
             <div class="flex flex-wrap gap-2 items-center mt-2 text-sm">
                 <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700">Показано: <span id="shownCountLabel" class="font-bold">0</span> / <span id="totalCountLabel" class="font-bold">0</span></div>
                 <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700">Активні фільтри: <span id="activeFiltersLabel" class="font-bold">0</span></div>
