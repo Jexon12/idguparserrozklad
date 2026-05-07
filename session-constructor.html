@@ -102,25 +102,42 @@
             <div class="text-xs text-gray-500">DOCX використовується як опціональний шаблон/джерело назви файлу для експорту, але сесія формується з API розкладу.</div>
             <div id="draftInfo" class="text-xs text-emerald-700 dark:text-emerald-300"></div>
 
-            <div class="flex gap-2 flex-wrap">
-                <button id="loadApiBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm" style="background-color:#0891b2">⬇️ Відкрити з API</button>
-                <button id="parseBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm" style="background-color:#7c3aed">1) Сформувати з розкладу</button>
-                <button id="normalizeBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm" style="background-color:#2563eb">2) Нормалізувати</button>
-                <button id="addRowBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">+ Додати свій предмет</button>
-                <button id="clearAllBtn" class="px-4 py-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold text-sm">🗑️ Очистити все</button>
-                <button id="uploadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">3) Завантажити в API</button>
-                <button id="excelBtn" class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">Експорт Excel</button>
-                <button id="wordBtn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm">Експорт Word</button>
-                <button id="copyBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm" style="background-color:#0284c7">Скопіювати таблицю</button>
-                <button id="saveSessionBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm" style="background-color:#374151">💾 Зберегти сесію</button>
-                <button id="clearApiBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm" title="Перемістити у кошик">🗑️ Видалити в API</button>
-                <button id="purgeApiBtn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm" title="Очистити НАЗАВЖДИ">🧨 Очистити НАЗАВЖДИ</button>
-                <button id="listTermsBtn" class="px-4 py-2 rounded-xl bg-slate-500 hover:bg-slate-600 text-white font-bold text-sm">📋 Список сесій</button>
-                <button id="loadSessionBtn" class="px-4 py-2 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-bold text-sm">📂 Відкрити сесію</button>
-                <input id="loadSessionFile" type="file" accept=".json" class="hidden">
-                <button id="printBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm" style="background-color:#6b7280">🖨️ Друк</button>
-                <button id="undoBtn" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold" title="Ctrl+Z">↩ Undo</button>
-                <button id="redoBtn" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold" title="Ctrl+Y">↪ Redo</button>
+            <div class="flex flex-col gap-4">
+                <!-- Group 1: API Workflow -->
+                <div class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/50">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-violet-500 mb-1 w-full opacity-60">1. Основний робочий процес</div>
+                    <button id="loadApiBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#0891b2">⬇️ Відкрити з API</button>
+                    <button id="parseBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#7c3aed">1) Сформувати з розкладу</button>
+                    <button id="normalizeBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#2563eb">2) Нормалізувати</button>
+                    <button id="uploadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">3) Завантажити в API</button>
+                </div>
+
+                <!-- Group 2: Session & Files -->
+                <div class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1 w-full opacity-60">2. Управління сесіями та файлами</div>
+                    <button id="listTermsBtn" class="px-4 py-2 rounded-xl bg-slate-500 hover:bg-slate-600 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">📋 Список сесій</button>
+                    <button id="saveSessionBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#374151">💾 Зберегти у файл</button>
+                    <button id="loadSessionBtn" class="px-4 py-2 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">📂 Відкрити файл</button>
+                    <input id="loadSessionFile" type="file" accept=".json" class="hidden">
+                    <div class="h-8 w-px bg-gray-300 dark:bg-gray-600 mx-1"></div>
+                    <button id="clearApiBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" title="Перемістити у кошик">🗑️ Видалити в API</button>
+                    <button id="purgeApiBtn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" title="Очистити НАЗАВЖДИ">🧨 Очистити НАЗАВЖДИ</button>
+                </div>
+
+                <!-- Group 3: Tools & Export -->
+                <div class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/50">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1 w-full opacity-60">3. Інструменти та Експорт</div>
+                    <button id="addRowBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">+ Додати предмет</button>
+                    <button id="clearAllBtn" class="px-4 py-2 rounded-xl bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 font-bold text-sm transition-transform active:scale-95 shadow-sm">🗑️ Очистити все</button>
+                    <div class="h-8 w-px bg-blue-200 dark:bg-blue-800 mx-1"></div>
+                    <button id="excelBtn" class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">Excel</button>
+                    <button id="wordBtn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">Word</button>
+                    <button id="copyBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#0284c7">Копіювати</button>
+                    <button id="printBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm shadow-sm" style="background-color:#6b7280">🖨️ Друк</button>
+                    <div class="h-8 w-px bg-blue-200 dark:bg-blue-800 mx-1"></div>
+                    <button id="undoBtn" class="px-4 py-2 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm font-bold shadow-sm transition-transform active:scale-95" title="Ctrl+Z">↩ Undo</button>
+                    <button id="redoBtn" class="px-4 py-2 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm font-bold shadow-sm transition-transform active:scale-95" title="Ctrl+Y">↪ Redo</button>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-7 gap-2">
