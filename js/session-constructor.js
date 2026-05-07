@@ -101,9 +101,11 @@
     maxUndo: 30,
     filterConflictsOnly: false,
     filterMissingOnly: false,
-    overloadIndices: new Set()
+    overloadIndices: new Set(),
+    lastControlTypeFilter: ''
   };
   let conflictsWorker = null;
+  let conflictRequestId = 0;
 
   const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
@@ -375,6 +377,7 @@
     const gf = clean(els.groupFilter.value);
     const tf = clean(els.teacherFilter.value);
     const ctf = clean(els.controlTypeFilter?.value);
+    const controlTypeFilterChanged = ctf !== state.lastControlTypeFilter;
     state.filteredRows = state.rows.filter((r, i) => {
       if (state.filterConflictsOnly && !state.conflictIndices.has(i)) return false;
       if (state.filterMissingOnly && (!r.date || (!r.time && r.controlType === 'іспит'))) return false;
@@ -386,11 +389,12 @@
     });
     
     // Auto-sort by date if Exam filter is active
-    if (ctf === 'іспит') {
+    if (ctf === 'іспит' && controlTypeFilterChanged) {
       state.sortField = 'date';
       state.sortAsc = true;
       updateSortIndicators();
     }
+    state.lastControlTypeFilter = ctf;
     
     if (state.sortField) applySorting();
     detectConflicts(false);
@@ -496,17 +500,24 @@
   function syncFromGrid() {
     const inputs = els.tableBody.querySelectorAll('[data-f][data-id]');
     const rowMap = new Map(state.rows.map(r => [String(r.id), r]));
+    const pendingTeachers = new Map();
     inputs.forEach(inp => {
       const id = String(inp.dataset.id);
       const field = inp.dataset.f;
       const row = rowMap.get(id);
       if (!row) return;
       if (field === 'teachers') row.teachers = splitTeachers(inp.value);
-      else if (field === 'teachers1') { if (!Array.isArray(row.teachers)) row.teachers = []; row.teachers[0] = clean(inp.value); }
-      else if (field === 'teachers2') { if (!Array.isArray(row.teachers)) row.teachers = []; row.teachers[1] = clean(inp.value); }
+      else if (field === 'teachers1' || field === 'teachers2') {
+        if (!pendingTeachers.has(id)) pendingTeachers.set(id, Array.isArray(row.teachers) ? row.teachers.slice() : []);
+        pendingTeachers.get(id)[field === 'teachers1' ? 0 : 1] = clean(inp.value);
+      }
       else if (field === 'discipline') row.discipline = normalizeDiscipline(inp.value);
       else if (field === 'controlType') row.controlType = clean(inp.value);
       else row[field] = clean(inp.value);
+    });
+    pendingTeachers.forEach((teachers, id) => {
+      const row = rowMap.get(id);
+      if (row) row.teachers = teachers.map(clean).filter(Boolean);
     });
     // Sync checkboxes
     const cbs = els.tableBody.querySelectorAll('input[data-act="select-row"][data-id]');
@@ -579,18 +590,30 @@
 
   function detectConflicts(withStatus = true) {
     if (!conflictsWorker) {
-      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=20260503-6');
+      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=20260503-7');
       conflictsWorker.onmessage = (evt) => {
         const data = evt.data || {};
-        state.conflictIndices = new Set(data.conflictIndices || []);
-        state.overloadIndices = new Set(data.overloadIndices || []);
+        if (data.requestId !== conflictRequestId) return;
+        const rowIds = data.rowIds || [];
+        const globalIndexById = new Map(state.rows.map((r, i) => [String(r.id), i]));
+        const toGlobalIndexSet = (indices) => new Set((indices || [])
+          .map((idx) => globalIndexById.get(String(rowIds[idx])))
+          .filter((idx) => Number.isInteger(idx)));
+        state.conflictIndices = toGlobalIndexSet(data.conflictIndices);
+        state.overloadIndices = toGlobalIndexSet(data.overloadIndices);
         state.quality = data.quality || {};
         if (els.conflictSummary) els.conflictSummary.innerHTML = `Конфліктів: <b>${state.conflictIndices.size}</b>${state.overloadIndices.size ? ` | Перевантажень: <b class="text-amber-600">${state.overloadIndices.size}</b>` : ''}`;
         renderQualityPanel();
         renderTable(state.filteredRows);
       };
     }
-    conflictsWorker.postMessage({ rows: state.filteredRows, mode: clean(els.conflictMode?.value || 'soft') });
+    conflictRequestId += 1;
+    conflictsWorker.postMessage({
+      rows: state.filteredRows,
+      rowIds: state.filteredRows.map((r) => String(r.id)),
+      requestId: conflictRequestId,
+      mode: clean(els.conflictMode?.value || 'soft')
+    });
     if (withStatus) setStatus('Перевірка конфліктів виконана');
   }
 

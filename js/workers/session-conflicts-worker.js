@@ -1,5 +1,5 @@
 self.onmessage = function (e) {
-  const { rows, mode } = e.data || {};
+  const { rows, mode, requestId, rowIds } = e.data || {};
   const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
   const idxSet = new Set();
   const byGroupSlot = new Map();
@@ -96,6 +96,8 @@ self.onmessage = function (e) {
   });
 
   self.postMessage({
+    requestId,
+    rowIds,
     conflictIndices: Array.from(idxSet),
     overloadIndices: Array.from(overloadIdxSet),
     quality: { missingDate, missingTime, missingRoom, missingTeacher, teacherAliases, duplicateRows }
