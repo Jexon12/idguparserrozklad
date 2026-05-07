@@ -10,6 +10,7 @@
     'диф.залік': { bg: '#ede9fe', border: '#8b5cf6' }
   };
   const DRAFT_KEY = 'session_constructor_draft_v1';
+  const VIEW_STATE_KEY = 'session_constructor_view_state_v1';
 
   const els = {
     adminPassword: document.getElementById('adminPassword'),
@@ -43,9 +44,24 @@
     wordBtn: document.getElementById('wordBtn'),
     copyBtn: document.getElementById('copyBtn'),
     searchInput: document.getElementById('searchInput'),
+    disciplineFilter: document.getElementById('disciplineFilter'),
     groupFilter: document.getElementById('groupFilter'),
     teacherFilter: document.getElementById('teacherFilter'),
     controlTypeFilter: document.getElementById('controlTypeFilter'),
+    dateFilter: document.getElementById('dateFilter'),
+    timeFilter: document.getElementById('timeFilter'),
+    roomFilter: document.getElementById('roomFilter'),
+    emptyFieldFilter: document.getElementById('emptyFieldFilter'),
+    groupBySelect: document.getElementById('groupBySelect'),
+    activeFiltersLabel: document.getElementById('activeFiltersLabel'),
+    shownCountLabel: document.getElementById('shownCountLabel'),
+    totalCountLabel: document.getElementById('totalCountLabel'),
+    presetExamsBtn: document.getElementById('presetExamsBtn'),
+    presetTodayBtn: document.getElementById('presetTodayBtn'),
+    presetWeekBtn: document.getElementById('presetWeekBtn'),
+    presetMissingRoomBtn: document.getElementById('presetMissingRoomBtn'),
+    presetTeacherConflictsBtn: document.getElementById('presetTeacherConflictsBtn'),
+    clearFiltersBtn: document.getElementById('clearFiltersBtn'),
     zalikStartDate: document.getElementById('zalikStartDate'),
     zalikEndDate: document.getElementById('zalikEndDate'),
     examStartDate: document.getElementById('examStartDate'),
@@ -102,6 +118,10 @@
     filterConflictsOnly: false,
     filterMissingOnly: false,
     overloadIndices: new Set(),
+    warningIndices: new Set(),
+    warnings: [],
+    qualityFilter: '',
+    groupBy: '',
     lastControlTypeFilter: ''
   };
   let conflictsWorker = null;
@@ -113,6 +133,14 @@
   const rowKey = (r) => String(r.id || `${clean(r.discipline)}__${clean(r.group)}__${clean(r.controlType)}`);
   const generateId = () => 'r_' + Math.random().toString(36).slice(2, 11);
   const CONTROL_PRIORITY = { 'іспит': 4, 'диф.залік': 3, 'захист': 2, 'залік': 1 };
+  const selectValues = (el) => el ? Array.from(el.selectedOptions || []).map((o) => clean(o.value)).filter(Boolean) : [];
+  const matchesAny = (values, actual, normalizer = clean) => !values.length || values.some((value) => normalizer(actual) === normalizer(value));
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const addDaysIso = (iso, days) => {
+    const d = iso ? new Date(`${iso}T00:00:00`) : new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
 
   function showError(msg) {
     if (!msg) {
@@ -246,6 +274,34 @@
   }
 
   function renderFilters(rows) {
+    const keep = {
+      discipline: selectValues(els.disciplineFilter),
+      group: selectValues(els.groupFilter),
+      teacher: selectValues(els.teacherFilter),
+      controlType: selectValues(els.controlTypeFilter),
+      date: selectValues(els.dateFilter),
+      time: selectValues(els.timeFilter),
+      room: selectValues(els.roomFilter)
+    };
+    const setOptions = (select, values, label) => {
+      if (!select) return;
+      select.innerHTML = '';
+      const first = document.createElement('option');
+      first.value = '';
+      first.textContent = label;
+      select.appendChild(first);
+      values.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+    };
+    const restore = (el, values) => {
+      if (!el) return;
+      const selected = new Set(values || []);
+      Array.from(el.options || []).forEach((o) => { o.selected = selected.has(o.value); });
+    };
     const uniqueGroupsMap = new Map();
     rows.forEach(r => {
       if (!r.group) return;
@@ -254,16 +310,34 @@
     });
     const groups = Array.from(uniqueGroupsMap.values()).sort((a, b) => a.localeCompare(b, 'uk'));
     
+    const disciplines = Array.from(new Set(rows.map((r) => r.discipline).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
     const teachers = Array.from(new Set(rows.flatMap((r) => r.teachers).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
+    const dates = Array.from(new Set(rows.map((r) => r.date).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
+    const times = Array.from(new Set(rows.map((r) => r.time).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
     const rooms = Array.from(new Set(rows.map((r) => r.room).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
-    els.groupFilter.innerHTML = '<option value="">Усі групи</option>';
-    groups.forEach((g) => { const o = document.createElement('option'); o.value = g; o.textContent = g; els.groupFilter.appendChild(o); });
-    els.teacherFilter.innerHTML = '<option value="">Усі викладачі</option>';
-    teachers.forEach((t) => { const o = document.createElement('option'); o.value = t; o.textContent = t; els.teacherFilter.appendChild(o); });
+    setOptions(els.disciplineFilter, disciplines, 'Усі предмети');
+    setOptions(els.groupFilter, groups, 'Усі групи');
+    setOptions(els.teacherFilter, teachers, 'Усі викладачі');
+    setOptions(els.dateFilter, dates, 'Усі дати');
+    setOptions(els.timeFilter, times, 'Увесь час');
+    setOptions(els.roomFilter, rooms, 'Усі аудиторії');
+    restore(els.disciplineFilter, keep.discipline);
+    restore(els.groupFilter, keep.group);
+    restore(els.teacherFilter, keep.teacher);
+    restore(els.controlTypeFilter, keep.controlType);
+    restore(els.dateFilter, keep.date);
+    restore(els.timeFilter, keep.time);
+    restore(els.roomFilter, keep.room);
     // Update datalists for autocomplete
+    updateDatalist('dl-disciplines', disciplines);
     updateDatalist('dl-groups', groups);
     updateDatalist('dl-teachers', teachers);
     updateDatalist('dl-rooms', rooms);
+  }
+
+  function applyDateRangeFilter(from, to) {
+    const dates = Array.from(new Set(state.rows.map((r) => r.date).filter((date) => date && date >= from && date <= to))).sort();
+    setSelectValues(els.dateFilter, dates);
   }
   function updateDatalist(id, items) {
     let dl = document.getElementById(id);
@@ -297,7 +371,17 @@
   function renderTable(rows) {
     els.tableBody.innerHTML = '';
     const visibleRows = rows.slice(0, state.renderLimit);
+    let currentGroup = null;
     visibleRows.forEach((r, i) => {
+      const label = groupLabel(r);
+      if (label && label !== currentGroup) {
+        currentGroup = label;
+        const groupTr = document.createElement('tr');
+        groupTr.className = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200';
+        const count = rows.filter((x) => groupLabel(x) === label).length;
+        groupTr.innerHTML = `<td colspan="11" class="px-3 py-2 text-xs font-bold uppercase tracking-wide">${label} · ${count}</td>`;
+        els.tableBody.appendChild(groupTr);
+      }
       const tr = document.createElement('tr');
       const currentControl = CONTROL_OPTIONS.includes(clean(r.controlType).toLowerCase()) ? clean(r.controlType).toLowerCase() : 'залік';
       const key = r.id;
@@ -326,16 +410,29 @@
         tr.style.backgroundColor = '#fef9c3';
         tr.style.borderLeft = '4px solid #facc15';
         tr.title = 'Попередження: викладач має більше 2-х іспитів/заліків у цей день!';
+      } else if (state.warningIndices && state.warningIndices.has(globalIdx)) {
+        tr.style.backgroundColor = '#ffedd5';
+        tr.style.borderLeft = '4px solid #fb923c';
+        tr.title = (state.warnings || []).filter((w) => w.index === globalIdx).map((w) => w.message).join('; ');
       } else {
         tr.style.backgroundColor = colors.bg;
         tr.style.borderLeft = '4px solid ' + colors.border;
       }
+      const q = clean(els.searchInput?.value).toLowerCase();
+      if (q) {
+        tr.querySelectorAll('input[data-f], select[data-f]').forEach((el) => {
+          if (clean(el.value).toLowerCase().includes(q)) el.classList.add('ring-2', 'ring-yellow-300');
+        });
+      }
       els.tableBody.appendChild(tr);
     });
     els.countLabel.textContent = String(rows.length);
+    if (els.shownCountLabel) els.shownCountLabel.textContent = String(rows.length);
+    if (els.totalCountLabel) els.totalCountLabel.textContent = String(state.rows.length);
+    if (els.activeFiltersLabel) els.activeFiltersLabel.textContent = String(getActiveFilterCount());
     if (els.renderInfo) {
-      if (rows.length > state.renderLimit) els.renderInfo.textContent = `Показано ${state.renderLimit} з ${rows.length} (для швидкості)`;
-      else els.renderInfo.textContent = `Показано всі ${rows.length}`;
+      if (rows.length > state.renderLimit) els.renderInfo.textContent = `Показано ${state.renderLimit} з ${rows.length} / всього ${state.rows.length} (для швидкості)`;
+      else els.renderInfo.textContent = `Показано ${rows.length} з ${state.rows.length}`;
     }
     els.uploadBtn.disabled = false;
     els.uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -355,7 +452,114 @@
       ['Teacher aliases', q.teacherAliases || 0],
       ['Duplicates', q.duplicateRows || 0]
     ];
-    els.qualityPanel.innerHTML = items.map(([k, v]) => `<button data-q="${k}" class="text-left px-2 py-1 rounded bg-white dark:bg-gray-700 border dark:border-gray-600"><div class="text-[11px] text-gray-500">${k}</div><div class="font-bold">${v}</div></button>`).join('');
+    els.qualityPanel.innerHTML = items.map(([k, v]) => `<button data-q="${k}" class="text-left px-2 py-1 rounded border dark:border-gray-600 ${state.qualityFilter === k ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-100' : 'bg-white dark:bg-gray-700'}"><div class="text-[11px] text-gray-500">${k}</div><div class="font-bold">${v}</div></button>`).join('');
+  }
+
+  function getTableFilters() {
+    const out = {};
+    document.querySelectorAll('[data-table-filter]').forEach((el) => {
+      out[el.dataset.tableFilter] = clean(el.value);
+    });
+    return out;
+  }
+
+  function duplicateKey(r) {
+    return `${clean(r.discipline).toLowerCase()}__${clean(r.group).toLowerCase()}__${clean(r.controlType).toLowerCase()}`;
+  }
+
+  function isDuplicateRow(row) {
+    const key = duplicateKey(row);
+    return state.rows.filter((r) => duplicateKey(r) === key).length > 1;
+  }
+
+  function groupLabel(row) {
+    const mode = clean(state.groupBy);
+    if (mode === 'date') return clean(row.date) || 'Без дати';
+    if (mode === 'group') return clean(row.group) || 'Без групи';
+    if (mode === 'teacher') return clean((row.teachers || [])[0]) || 'Без викладача';
+    if (mode === 'controlType') return clean(row.controlType) || 'Без форми';
+    return '';
+  }
+
+  function getActiveFilterCount() {
+    let count = clean(els.searchInput?.value) ? 1 : 0;
+    [els.disciplineFilter, els.groupFilter, els.teacherFilter, els.controlTypeFilter, els.dateFilter, els.timeFilter, els.roomFilter]
+      .forEach((el) => { count += selectValues(el).length; });
+    if (clean(els.emptyFieldFilter?.value)) count += 1;
+    if (state.filterConflictsOnly) count += 1;
+    if (state.filterMissingOnly) count += 1;
+    if (state.qualityFilter) count += 1;
+    const tableFilters = getTableFilters();
+    count += Object.values(tableFilters).filter(Boolean).length;
+    return count;
+  }
+
+  function saveViewState() {
+    try {
+      const tableFilters = getTableFilters();
+      localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
+        q: clean(els.searchInput?.value),
+        discipline: selectValues(els.disciplineFilter),
+        group: selectValues(els.groupFilter),
+        teacher: selectValues(els.teacherFilter),
+        controlType: selectValues(els.controlTypeFilter),
+        date: selectValues(els.dateFilter),
+        time: selectValues(els.timeFilter),
+        room: selectValues(els.roomFilter),
+        emptyField: clean(els.emptyFieldFilter?.value),
+        groupBy: clean(els.groupBySelect?.value),
+        tableFilters,
+        filterConflictsOnly: state.filterConflictsOnly,
+        filterMissingOnly: state.filterMissingOnly,
+        qualityFilter: state.qualityFilter
+      }));
+    } catch (e) {}
+  }
+
+  function restoreViewState() {
+    try {
+      const raw = localStorage.getItem(VIEW_STATE_KEY);
+      if (!raw) return;
+      const view = JSON.parse(raw);
+      if (els.searchInput) els.searchInput.value = view.q || '';
+      const setMulti = (el, values) => {
+        const selected = new Set(Array.isArray(values) ? values : []);
+        Array.from(el?.options || []).forEach((o) => { o.selected = selected.has(o.value); });
+      };
+      setMulti(els.disciplineFilter, view.discipline);
+      setMulti(els.groupFilter, view.group);
+      setMulti(els.teacherFilter, view.teacher);
+      setMulti(els.controlTypeFilter, view.controlType);
+      setMulti(els.dateFilter, view.date);
+      setMulti(els.timeFilter, view.time);
+      setMulti(els.roomFilter, view.room);
+      if (els.emptyFieldFilter) els.emptyFieldFilter.value = view.emptyField || '';
+      if (els.groupBySelect) els.groupBySelect.value = view.groupBy || '';
+      state.groupBy = clean(view.groupBy);
+      state.filterConflictsOnly = !!view.filterConflictsOnly;
+      state.filterMissingOnly = !!view.filterMissingOnly;
+      state.qualityFilter = clean(view.qualityFilter);
+      Object.entries(view.tableFilters || {}).forEach(([key, value]) => {
+        const el = document.querySelector(`[data-table-filter="${key}"]`);
+        if (el) el.value = value || '';
+      });
+    } catch (e) {}
+  }
+
+  function setSelectValues(el, values) {
+    const selected = new Set(Array.isArray(values) ? values : [values].filter(Boolean));
+    Array.from(el?.options || []).forEach((o) => { o.selected = selected.has(o.value); });
+  }
+
+  function clearFilterControls() {
+    if (els.searchInput) els.searchInput.value = '';
+    [els.disciplineFilter, els.groupFilter, els.teacherFilter, els.controlTypeFilter, els.dateFilter, els.timeFilter, els.roomFilter]
+      .forEach((el) => setSelectValues(el, []));
+    if (els.emptyFieldFilter) els.emptyFieldFilter.value = '';
+    document.querySelectorAll('[data-table-filter]').forEach((el) => { el.value = ''; });
+    state.filterConflictsOnly = false;
+    state.filterMissingOnly = false;
+    state.qualityFilter = '';
   }
   function setMode(mode) {
     state.mode = mode === 'pro' ? 'pro' : 'basic';
@@ -372,33 +576,71 @@
     saveDraftDebounced();
   }
 
-  function applyFilters() {
+  function applyFilters(skipConflictDetect = false) {
     const q = clean(els.searchInput.value).toLowerCase();
-    const gf = clean(els.groupFilter.value);
-    const tf = clean(els.teacherFilter.value);
-    const ctf = clean(els.controlTypeFilter?.value);
-    const controlTypeFilterChanged = ctf !== state.lastControlTypeFilter;
+    const df = selectValues(els.disciplineFilter);
+    const gf = selectValues(els.groupFilter);
+    const tf = selectValues(els.teacherFilter);
+    const ctf = selectValues(els.controlTypeFilter);
+    const datef = selectValues(els.dateFilter);
+    const timef = selectValues(els.timeFilter);
+    const roomf = selectValues(els.roomFilter);
+    const emptyField = clean(els.emptyFieldFilter?.value);
+    const tableFilters = getTableFilters();
+    const controlTypeFilterKey = ctf.join('|');
+    const controlTypeFilterChanged = controlTypeFilterKey !== state.lastControlTypeFilter;
     state.filteredRows = state.rows.filter((r, i) => {
       if (state.filterConflictsOnly && !state.conflictIndices.has(i)) return false;
       if (state.filterMissingOnly && (!r.date || (!r.time && r.controlType === 'іспит'))) return false;
-      if (gf && r.group.toUpperCase() !== gf.toUpperCase()) return false;
-      if (tf && !r.teachers.includes(tf)) return false;
-      if (ctf && clean(r.controlType).toLowerCase() !== ctf.toLowerCase()) return false;
+      if (state.qualityFilter === 'Missing date' && clean(r.date)) return false;
+      if (state.qualityFilter === 'Missing time (exam)' && (clean(r.controlType) !== 'іспит' || clean(r.time))) return false;
+      if (state.qualityFilter === 'Missing room (exam)' && (clean(r.controlType) !== 'іспит' || clean(r.room))) return false;
+      if (state.qualityFilter === 'Missing teacher' && (r.teachers || []).length) return false;
+      if (state.qualityFilter === 'Duplicates' && !isDuplicateRow(r)) return false;
+      if (emptyField === 'teacher' && (r.teachers || []).length) return false;
+      if (emptyField === 'date' && clean(r.date)) return false;
+      if (emptyField === 'time' && clean(r.time)) return false;
+      if (emptyField === 'room' && clean(r.room)) return false;
+      if (!matchesAny(df, r.discipline)) return false;
+      if (!matchesAny(gf, r.group, (v) => clean(v).toUpperCase())) return false;
+      if (tf.length && !(r.teachers || []).some((t) => tf.includes(t))) return false;
+      if (!matchesAny(ctf, r.controlType, (v) => clean(v).toLowerCase())) return false;
+      if (!matchesAny(datef, r.date)) return false;
+      if (!matchesAny(timef, r.time)) return false;
+      if (!matchesAny(roomf, r.room)) return false;
+      if (tableFilters.discipline && !clean(r.discipline).toLowerCase().includes(tableFilters.discipline.toLowerCase())) return false;
+      if (tableFilters.group && !clean(r.group).toLowerCase().includes(tableFilters.group.toLowerCase())) return false;
+      if (tableFilters.teacher1 && !clean((r.teachers || [])[0]).toLowerCase().includes(tableFilters.teacher1.toLowerCase())) return false;
+      if (tableFilters.teacher2 && !clean((r.teachers || [])[1]).toLowerCase().includes(tableFilters.teacher2.toLowerCase())) return false;
+      if (tableFilters.controlType && clean(r.controlType).toLowerCase() !== tableFilters.controlType.toLowerCase()) return false;
+      if (tableFilters.date && clean(r.date) !== tableFilters.date) return false;
+      if (tableFilters.time && clean(r.time) !== tableFilters.time) return false;
+      if (tableFilters.room && !clean(r.room).toLowerCase().includes(tableFilters.room.toLowerCase())) return false;
       if (!q) return true;
-      return `${r.discipline} ${r.group} ${r.teachers.join(' ')} ${r.controlType} ${r.date || ''} ${r.time || ''}`.toLowerCase().includes(q);
+      return `${r.discipline} ${r.group} ${r.teachers.join(' ')} ${r.controlType} ${r.date || ''} ${r.time || ''} ${r.room || ''}`.toLowerCase().includes(q);
     });
     
     // Auto-sort by date if Exam filter is active
-    if (ctf === 'іспит' && controlTypeFilterChanged) {
+    if (ctf.length === 1 && ctf[0] === 'іспит' && controlTypeFilterChanged) {
       state.sortField = 'date';
       state.sortAsc = true;
       updateSortIndicators();
     }
-    state.lastControlTypeFilter = ctf;
+    state.lastControlTypeFilter = controlTypeFilterKey;
+    state.groupBy = clean(els.groupBySelect?.value);
     
     if (state.sortField) applySorting();
-    detectConflicts(false);
+    if (state.groupBy) {
+      state.filteredRows.sort((a, b) => {
+        const ga = groupLabel(a);
+        const gb = groupLabel(b);
+        if (ga !== gb) return ga.localeCompare(gb, 'uk');
+        return `${a.date || ''} ${a.time || ''} ${a.group || ''}`.localeCompare(`${b.date || ''} ${b.time || ''} ${b.group || ''}`, 'uk');
+      });
+    }
+    if (!skipConflictDetect) detectConflicts(false);
     renderTable(state.filteredRows);
+    saveViewState();
   }
 
   function applySorting() {
@@ -410,6 +652,7 @@
       if (f === 'discipline') { va = a.discipline; vb = b.discipline; }
       else if (f === 'group') { va = a.group; vb = b.group; }
       else if (f === 'teachers') { va = (a.teachers || []).join('; '); vb = (b.teachers || []).join('; '); }
+      else if (f === 'teacher2') { va = (a.teachers || [])[1] || ''; vb = (b.teachers || [])[1] || ''; }
       else if (f === 'controlType') { va = a.controlType; vb = b.controlType; }
       else if (f === 'date') { va = a.date || ''; vb = b.date || ''; }
       else if (f === 'time') { va = a.time || ''; vb = b.time || ''; }
@@ -601,9 +844,18 @@
           .filter((idx) => Number.isInteger(idx)));
         state.conflictIndices = toGlobalIndexSet(data.conflictIndices);
         state.overloadIndices = toGlobalIndexSet(data.overloadIndices);
+        state.warningIndices = toGlobalIndexSet(data.warningIndices);
+        state.warnings = (data.warnings || []).map((w) => ({
+          ...w,
+          index: globalIndexById.get(String(rowIds[w.index]))
+        })).filter((w) => Number.isInteger(w.index));
         state.quality = data.quality || {};
-        if (els.conflictSummary) els.conflictSummary.innerHTML = `Конфліктів: <b>${state.conflictIndices.size}</b>${state.overloadIndices.size ? ` | Перевантажень: <b class="text-amber-600">${state.overloadIndices.size}</b>` : ''}`;
+        if (els.conflictSummary) els.conflictSummary.innerHTML = `Конфліктів: <b>${state.conflictIndices.size}</b>${state.overloadIndices.size ? ` | Перевантажень: <b class="text-amber-600">${state.overloadIndices.size}</b>` : ''}${state.warningIndices.size ? ` | Попереджень: <b class="text-orange-600">${state.warningIndices.size}</b>` : ''}`;
         renderQualityPanel();
+        if (state.filterConflictsOnly) {
+          applyFilters(true);
+          return;
+        }
         renderTable(state.filteredRows);
       };
     }
@@ -692,6 +944,54 @@
       return;
     }
     els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Рекомендації:</div><ul class="list-disc pl-5">${suggestions.slice(0, 20).map((s) => `<li>${s.text}</li>`).join('')}</ul>`;
+  }
+
+  function duplicateGroups() {
+    const map = new Map();
+    state.rows.forEach((r) => {
+      const key = duplicateKey(r);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(r);
+    });
+    return Array.from(map.entries()).filter(([, rows]) => rows.length > 1);
+  }
+
+  function showDuplicateTools() {
+    const groups = duplicateGroups();
+    els.suggestionsBox.classList.remove('hidden');
+    if (!groups.length) {
+      els.suggestionsBox.textContent = 'Дублікатів не знайдено.';
+      return;
+    }
+    els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Дублікати</div>${groups.slice(0, 30).map(([key, rows], i) => `
+      <div class="mb-2 p-2 rounded bg-white dark:bg-gray-700 border dark:border-gray-600">
+        <div class="text-sm font-semibold">${escapeHtml(rows[0].discipline)} · ${escapeHtml(rows[0].group)} · ${escapeHtml(rows[0].controlType)} (${rows.length})</div>
+        <div class="flex gap-2 mt-2">
+          <button data-dup-act="merge" data-dup-key="${escapeHtml(key)}" class="px-2 py-1 rounded bg-emerald-600 text-white text-xs">Об'єднати</button>
+          <button data-dup-act="delete" data-dup-key="${escapeHtml(key)}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити зайві</button>
+        </div>
+      </div>`).join('')}`;
+  }
+
+  function mergeDuplicateGroup(key, mergeFields) {
+    const rows = state.rows.filter((r) => duplicateKey(r) === key);
+    if (rows.length < 2) return;
+    pushUndo();
+    const base = rows[0];
+    if (mergeFields) {
+      rows.slice(1).forEach((r) => {
+        base.teachers = Array.from(new Set([...(base.teachers || []), ...(r.teachers || [])].filter(Boolean)));
+        if (!base.date && r.date) base.date = r.date;
+        if (!base.time && r.time) base.time = r.time;
+        if (!base.room && r.room) base.room = r.room;
+      });
+    }
+    const keepId = String(base.id);
+    state.rows = state.rows.filter((r) => duplicateKey(r) !== key || String(r.id) === keepId);
+    renderFilters(state.rows);
+    applyFilters();
+    saveDraftDebounced();
+    showDuplicateTools();
   }
   function applyBulkToSelected() {
     syncFromGrid();
@@ -796,6 +1096,7 @@
           teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') 
         }));
         renderFilters(state.rows);
+        restoreViewState();
         applyFilters();
       }
       setMode(draft.mode || 'basic');
@@ -1250,12 +1551,60 @@
   });
   els.conflictsBtn.addEventListener('click', () => { syncFromGrid(); detectConflicts(true); renderTable(state.filteredRows); });
   els.suggestionsBtn.addEventListener('click', buildSuggestions);
+  els.suggestionsBox?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-dup-act]');
+    if (!btn) return;
+    mergeDuplicateGroup(btn.dataset.dupKey, btn.dataset.dupAct === 'merge');
+  });
   els.validateOnlyBtn?.addEventListener('click', () => validateOnly().catch((e) => showError(e.message || String(e))));
   els.applyBulkBtn.addEventListener('click', applyBulkToSelected);
   els.searchInput.addEventListener('input', applyFilters);
+  els.disciplineFilter?.addEventListener('change', applyFilters);
   els.groupFilter.addEventListener('change', applyFilters);
   els.teacherFilter.addEventListener('change', applyFilters);
   els.controlTypeFilter?.addEventListener('change', applyFilters);
+  els.dateFilter?.addEventListener('change', applyFilters);
+  els.timeFilter?.addEventListener('change', applyFilters);
+  els.roomFilter?.addEventListener('change', applyFilters);
+  els.emptyFieldFilter?.addEventListener('change', applyFilters);
+  els.groupBySelect?.addEventListener('change', applyFilters);
+  document.querySelectorAll('[data-table-filter]').forEach((el) => {
+    const eventName = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(eventName, applyFilters);
+  });
+  els.presetExamsBtn?.addEventListener('click', () => {
+    clearFilterControls();
+    setSelectValues(els.controlTypeFilter, ['іспит']);
+    applyFilters();
+  });
+  els.presetTodayBtn?.addEventListener('click', () => {
+    clearFilterControls();
+    setSelectValues(els.dateFilter, [todayIso()]);
+    applyFilters();
+  });
+  els.presetWeekBtn?.addEventListener('click', () => {
+    clearFilterControls();
+    applyDateRangeFilter(todayIso(), addDaysIso(todayIso(), 6));
+    applyFilters();
+  });
+  els.presetMissingRoomBtn?.addEventListener('click', () => {
+    clearFilterControls();
+    if (els.emptyFieldFilter) els.emptyFieldFilter.value = 'room';
+    applyFilters();
+  });
+  els.presetTeacherConflictsBtn?.addEventListener('click', () => {
+    clearFilterControls();
+    state.filterConflictsOnly = true;
+    updateFilterBtns();
+    detectConflicts(false);
+    applyFilters();
+  });
+  els.clearFiltersBtn?.addEventListener('click', () => {
+    clearFilterControls();
+    els.filterConflictsBtn?.classList.remove('bg-rose-100', 'dark:bg-rose-900', 'text-rose-700');
+    els.filterMissingBtn?.classList.remove('bg-amber-100', 'dark:bg-amber-900', 'text-amber-700');
+    applyFilters();
+  });
 
   els.tableBody.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act="del"]');
@@ -1448,6 +1797,7 @@
   els.clearDraftBtn?.addEventListener('click', () => {
     if (!confirm('Ви впевнені, що хочете видалити всі записи з таблиці та очистити чернетку?')) return;
     localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(VIEW_STATE_KEY);
     state.rows = [];
     state.filteredRows = [];
     renderFilters(state.rows);
@@ -1458,19 +1808,9 @@
     const btn = e.target.closest('button[data-q]');
     if (!btn) return;
     const key = btn.dataset.q;
-    if (key === 'Missing date') {
-      state.filteredRows = state.rows.filter((r) => !clean(r.date));
-    } else if (key === 'Missing time (exam)') {
-      state.filteredRows = state.rows.filter((r) => clean(r.controlType) === 'іспит' && !clean(r.time));
-    } else if (key === 'Missing room (exam)') {
-      state.filteredRows = state.rows.filter((r) => clean(r.controlType) === 'іспит' && !clean(r.room));
-    } else if (key === 'Missing teacher') {
-      state.filteredRows = state.rows.filter((r) => !(r.teachers || []).length);
-    } else {
-      applyFilters();
-      return;
-    }
-    detectConflicts(false);
+    state.qualityFilter = state.qualityFilter === key ? '' : key;
+    if (key === 'Duplicates') showDuplicateTools();
+    applyFilters();
   });
 
   // --- DOCX file parsing via mammoth.js ---
@@ -1621,6 +1961,9 @@
     .then(() => {
       // Re-apply draft on top of loaded controls if rows exist
       if (!state.rows.length) restoreDraft();
+      renderFilters(state.rows);
+      restoreViewState();
+      applyFilters();
     })
     .catch((e) => {
       showError('API недоступний, але чернетка відновлена: ' + (e.message || String(e)));

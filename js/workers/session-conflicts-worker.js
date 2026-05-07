@@ -8,6 +8,8 @@ self.onmessage = function (e) {
   const byGroupExamDay = new Map();
   const byTeacherExamDay = new Map();
   const teachersNormMap = new Map();
+  const warningIdxSet = new Set();
+  const warnings = [];
   let missingDate = 0, missingTime = 0, missingRoom = 0, missingTeacher = 0;
 
   const teacherNormalize = (t) => clean(t).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
@@ -32,6 +34,10 @@ self.onmessage = function (e) {
     });
 
     if (!date) return;
+    if (time && (time < '08:00' || time > '18:30')) {
+      warningIdxSet.add(idx);
+      warnings.push({ index: idx, type: 'outsideHours', message: 'Час поза типовим робочим діапазоном' });
+    }
 
     if (time) {
       const gk = `${group}__${date}__${time}`;
@@ -92,6 +98,24 @@ self.onmessage = function (e) {
   byTeacherExamDay.forEach((dayMap) => {
     dayMap.forEach((arr) => {
       if (arr.length > 2) arr.forEach(i => overloadIdxSet.add(i));
+      if (arr.length > 3) arr.forEach((i) => {
+        warningIdxSet.add(i);
+        warnings.push({ index: i, type: 'manyTeacherEvents', message: 'У викладача більше 3 подій на день' });
+      });
+    });
+  });
+
+  byGroupExamDay.forEach((arr) => {
+    const byDate = new Map();
+    arr.forEach((x) => {
+      if (!byDate.has(x.date)) byDate.set(x.date, []);
+      byDate.get(x.date).push(x.idx);
+    });
+    byDate.forEach((indices) => {
+      if (indices.length > 1) indices.forEach((i) => {
+        warningIdxSet.add(i);
+        warnings.push({ index: i, type: 'sameGroupDay', message: 'У групи кілька подій в один день' });
+      });
     });
   });
 
@@ -100,6 +124,8 @@ self.onmessage = function (e) {
     rowIds,
     conflictIndices: Array.from(idxSet),
     overloadIndices: Array.from(overloadIdxSet),
+    warningIndices: Array.from(warningIdxSet),
+    warnings,
     quality: { missingDate, missingTime, missingRoom, missingTeacher, teacherAliases, duplicateRows }
   });
 };

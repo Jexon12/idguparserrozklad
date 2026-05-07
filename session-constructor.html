@@ -142,9 +142,9 @@
 
             <div class="grid grid-cols-1 md:grid-cols-7 gap-2">
                 <input id="searchInput" type="text" placeholder="Пошук по предмету/групі/викладачу..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm md:col-span-2">
-                <select id="groupFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
-                <select id="teacherFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
-                <select id="controlTypeFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+                <select id="groupFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="teacherFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="controlTypeFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
                     <option value="">Усі форми</option>
                     <option value="залік">залік</option>
                     <option value="іспит">іспит</option>
@@ -154,7 +154,39 @@
                 <button id="filterConflictsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">🚨 Конфлікти</button>
                 <button id="filterMissingBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">⚠️ Без дат/часу</button>
             </div>
-            <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm w-fit mt-2">Записів: <span id="countLabel" class="font-bold">0</span></div>
+            <div class="grid grid-cols-1 md:grid-cols-7 gap-2">
+                <select id="disciplineFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="dateFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="timeFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="roomFilter" multiple size="1" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="emptyFieldFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+                    <option value="">Усі заповненість</option>
+                    <option value="teacher">Без викладача</option>
+                    <option value="date">Без дати</option>
+                    <option value="time">Без часу</option>
+                    <option value="room">Без аудиторії</option>
+                </select>
+                <select id="groupBySelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+                    <option value="">Без групування</option>
+                    <option value="date">Групувати за датою</option>
+                    <option value="group">Групувати за групою</option>
+                    <option value="teacher">Групувати за викладачем</option>
+                    <option value="controlType">Групувати за формою</option>
+                </select>
+                <button id="clearFiltersBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Скинути фільтри</button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="presetExamsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Тільки іспити</button>
+                <button id="presetTodayBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Сьогодні</button>
+                <button id="presetWeekBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Цей тиждень</button>
+                <button id="presetMissingRoomBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Без аудиторії</button>
+                <button id="presetTeacherConflictsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Конфлікти викладачів</button>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center mt-2 text-sm">
+                <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700">Показано: <span id="shownCountLabel" class="font-bold">0</span> / <span id="totalCountLabel" class="font-bold">0</span></div>
+                <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700">Активні фільтри: <span id="activeFiltersLabel" class="font-bold">0</span></div>
+                <div class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700">Записів: <span id="countLabel" class="font-bold">0</span></div>
+            </div>
             <div id="proPanel" class="space-y-2">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <input id="zalikStartDate" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700" placeholder="Початок заліків">
@@ -195,12 +227,33 @@
                             <th class="px-2 py-2 text-left" data-sort="discipline">Предмет<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="group">Група<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="teachers">Викладач 1<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left">Викладач 2</th>
+                            <th class="px-2 py-2 text-left" data-sort="teacher2">Викладач 2<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="controlType">Форма контролю<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="date">Дата<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="time">Час<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="room">Аудиторія<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left">Дія</th>
+                        </tr>
+                        <tr class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                            <th class="px-2 py-1"></th>
+                            <th class="px-2 py-1"></th>
+                            <th class="px-2 py-1"><input data-table-filter="discipline" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Фільтр"></th>
+                            <th class="px-2 py-1"><input data-table-filter="group" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Група"></th>
+                            <th class="px-2 py-1"><input data-table-filter="teacher1" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Викл. 1"></th>
+                            <th class="px-2 py-1"><input data-table-filter="teacher2" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Викл. 2"></th>
+                            <th class="px-2 py-1">
+                                <select data-table-filter="controlType" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs">
+                                    <option value="">Усі</option>
+                                    <option value="залік">залік</option>
+                                    <option value="іспит">іспит</option>
+                                    <option value="захист">захист</option>
+                                    <option value="диф.залік">диф.залік</option>
+                                </select>
+                            </th>
+                            <th class="px-2 py-1"><input data-table-filter="date" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs"></th>
+                            <th class="px-2 py-1"><input data-table-filter="time" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs"></th>
+                            <th class="px-2 py-1"><input data-table-filter="room" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Ауд."></th>
+                            <th class="px-2 py-1"></th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
