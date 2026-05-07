@@ -23,6 +23,11 @@
       th[data-sort] { cursor: pointer; user-select: none; }
       th[data-sort]:hover { background: rgba(139,92,246,0.1); }
       .sort-arrow { font-size: 10px; opacity: 0.7; }
+      .sticky-col-1 { position: sticky; left: 0; z-index: 5; }
+      .sticky-col-2 { position: sticky; left: 42px; z-index: 5; }
+      .sticky-col-3 { position: sticky; left: 82px; z-index: 5; }
+      tbody .sticky-col-1, tbody .sticky-col-2, tbody .sticky-col-3 { background: inherit; }
+      thead .sticky-col-1, thead .sticky-col-2, thead .sticky-col-3 { background: inherit; z-index: 15; }
       @media print {
         header, section:first-of-type, .no-print { display: none !important; }
         table { font-size: 10pt !important; }
@@ -160,6 +165,37 @@
                 <button id="filterMissingBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">⚠️ Без дат/часу</button>
                 <button id="clearFiltersBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Скинути фільтри</button>
             </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                <button id="problemFilterBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Тільки проблеми</button>
+                <input id="dateFromFilter" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm" title="Дата від">
+                <input id="dateToFilter" type="date" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm" title="Дата до">
+                <button id="selectFilteredBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Виділити відфільтровані</button>
+                <select id="exportScope" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+                    <option value="filtered">Експорт: відфільтровані</option>
+                    <option value="all">Експорт: усі</option>
+                    <option value="selected">Експорт: вибрані</option>
+                </select>
+                <button id="toggleToolsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Інструменти</button>
+            </div>
+            <div id="advancedToolsPanel" class="hidden p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 space-y-3">
+                <div id="columnToggles" class="flex flex-wrap gap-3 text-xs">
+                    <label><input type="checkbox" data-col-toggle="teacher2" checked> Викладач 2</label>
+                    <label><input type="checkbox" data-col-toggle="controlType" checked> Форма</label>
+                    <label><input type="checkbox" data-col-toggle="date" checked> Дата</label>
+                    <label><input type="checkbox" data-col-toggle="time" checked> Час</label>
+                    <label><input type="checkbox" data-col-toggle="room" checked> Аудиторія</label>
+                    <label><input type="checkbox" data-col-toggle="action" checked> Дія</label>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button id="tableViewBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Таблиця</button>
+                    <button id="calendarViewBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Календар</button>
+                    <button id="normalizeTeachersBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Нормалізувати викладачів</button>
+                    <button id="compareApiBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Порівняти з API</button>
+                    <button id="snapshotBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Знімок версії</button>
+                    <select id="snapshotSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                    <button id="restoreSnapshotBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Відновити знімок</button>
+                </div>
+            </div>
             <div class="flex flex-wrap gap-2">
                 <button id="presetExamsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Тільки іспити</button>
                 <button id="presetTodayBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">Сьогодні</button>
@@ -200,6 +236,9 @@
             <div id="progressText" class="text-xs text-gray-500">Готово</div>
             <div id="status" class="text-sm text-gray-600 dark:text-gray-300"></div>
             <div id="errorBox" class="hidden p-2 rounded bg-red-100 text-red-700 text-sm"></div>
+            <div id="daySummaryPanel" class="p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 text-sm"></div>
+            <div id="calendarPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700"></div>
+            <div id="rowDetailPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm"></div>
         </section>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
@@ -207,26 +246,26 @@
                 <table class="min-w-full text-sm">
                     <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-700 shadow-sm shadow-gray-200 dark:shadow-gray-800">
                         <tr>
-                            <th class="px-2 py-2 text-left"><input type="checkbox" id="selectAllRows"></th>
-                            <th class="px-2 py-2 text-left">№</th>
-                            <th class="px-2 py-2 text-left" data-sort="discipline">Предмет<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="group">Група<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="teachers">Викладач 1<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="teacher2">Викладач 2<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="controlType">Форма контролю<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="date">Дата<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="time">Час<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="room">Аудиторія<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left">Дія</th>
+                            <th data-col-key="select" class="px-2 py-2 text-left sticky-col-1"><input type="checkbox" id="selectAllRows"></th>
+                            <th data-col-key="number" class="px-2 py-2 text-left sticky-col-2">№</th>
+                            <th data-col-key="discipline" class="px-2 py-2 text-left sticky-col-3" data-sort="discipline">Предмет<span class="sort-arrow"></span></th>
+                            <th data-col-key="group" class="px-2 py-2 text-left" data-sort="group">Група<span class="sort-arrow"></span></th>
+                            <th data-col-key="teacher1" class="px-2 py-2 text-left" data-sort="teachers">Викладач 1<span class="sort-arrow"></span></th>
+                            <th data-col-key="teacher2" class="px-2 py-2 text-left" data-sort="teacher2">Викладач 2<span class="sort-arrow"></span></th>
+                            <th data-col-key="controlType" class="px-2 py-2 text-left" data-sort="controlType">Форма контролю<span class="sort-arrow"></span></th>
+                            <th data-col-key="date" class="px-2 py-2 text-left" data-sort="date">Дата<span class="sort-arrow"></span></th>
+                            <th data-col-key="time" class="px-2 py-2 text-left" data-sort="time">Час<span class="sort-arrow"></span></th>
+                            <th data-col-key="room" class="px-2 py-2 text-left" data-sort="room">Аудиторія<span class="sort-arrow"></span></th>
+                            <th data-col-key="action" class="px-2 py-2 text-left">Дія</th>
                         </tr>
                         <tr class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                            <th class="px-2 py-1"></th>
-                            <th class="px-2 py-1"></th>
-                            <th class="px-2 py-1"><input data-table-filter="discipline" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Фільтр"></th>
-                            <th class="px-2 py-1"><input data-table-filter="group" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Група"></th>
-                            <th class="px-2 py-1"><input data-table-filter="teacher1" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Викл. 1"></th>
-                            <th class="px-2 py-1"><input data-table-filter="teacher2" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Викл. 2"></th>
-                            <th class="px-2 py-1">
+                            <th data-col-key="select" class="px-2 py-1 sticky-col-1"></th>
+                            <th data-col-key="number" class="px-2 py-1 sticky-col-2"></th>
+                            <th data-col-key="discipline" class="px-2 py-1 sticky-col-3"><input data-table-filter="discipline" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Фільтр"></th>
+                            <th data-col-key="group" class="px-2 py-1"><input data-table-filter="group" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Група"></th>
+                            <th data-col-key="teacher1" class="px-2 py-1"><input data-table-filter="teacher1" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Викл. 1"></th>
+                            <th data-col-key="teacher2" class="px-2 py-1"><input data-table-filter="teacher2" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Викл. 2"></th>
+                            <th data-col-key="controlType" class="px-2 py-1">
                                 <select data-table-filter="controlType" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs">
                                     <option value="">Усі</option>
                                     <option value="залік">залік</option>
@@ -235,10 +274,10 @@
                                     <option value="диф.залік">диф.залік</option>
                                 </select>
                             </th>
-                            <th class="px-2 py-1"><input data-table-filter="date" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs"></th>
-                            <th class="px-2 py-1"><input data-table-filter="time" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs"></th>
-                            <th class="px-2 py-1"><input data-table-filter="room" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Ауд."></th>
-                            <th class="px-2 py-1"></th>
+                            <th data-col-key="date" class="px-2 py-1"><input data-table-filter="date" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs"></th>
+                            <th data-col-key="time" class="px-2 py-1"><input data-table-filter="time" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs"></th>
+                            <th data-col-key="room" class="px-2 py-1"><input data-table-filter="room" type="search" class="w-full rounded border p-1 bg-white dark:bg-gray-700 text-xs" placeholder="Ауд."></th>
+                            <th data-col-key="action" class="px-2 py-1"></th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>

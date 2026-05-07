@@ -11,6 +11,7 @@
   };
   const DRAFT_KEY = 'session_constructor_draft_v1';
   const VIEW_STATE_KEY = 'session_constructor_view_state_v1';
+  const SNAPSHOT_KEY = 'session_constructor_snapshots_v1';
 
   const els = {
     adminPassword: document.getElementById('adminPassword'),
@@ -53,6 +54,21 @@
     roomFilter: document.getElementById('roomFilter'),
     emptyFieldFilter: document.getElementById('emptyFieldFilter'),
     groupBySelect: document.getElementById('groupBySelect'),
+    problemFilterBtn: document.getElementById('problemFilterBtn'),
+    dateFromFilter: document.getElementById('dateFromFilter'),
+    dateToFilter: document.getElementById('dateToFilter'),
+    selectFilteredBtn: document.getElementById('selectFilteredBtn'),
+    exportScope: document.getElementById('exportScope'),
+    toggleToolsBtn: document.getElementById('toggleToolsBtn'),
+    advancedToolsPanel: document.getElementById('advancedToolsPanel'),
+    columnToggles: document.getElementById('columnToggles'),
+    tableViewBtn: document.getElementById('tableViewBtn'),
+    calendarViewBtn: document.getElementById('calendarViewBtn'),
+    normalizeTeachersBtn: document.getElementById('normalizeTeachersBtn'),
+    compareApiBtn: document.getElementById('compareApiBtn'),
+    snapshotBtn: document.getElementById('snapshotBtn'),
+    snapshotSelect: document.getElementById('snapshotSelect'),
+    restoreSnapshotBtn: document.getElementById('restoreSnapshotBtn'),
     activeFiltersLabel: document.getElementById('activeFiltersLabel'),
     shownCountLabel: document.getElementById('shownCountLabel'),
     totalCountLabel: document.getElementById('totalCountLabel'),
@@ -96,7 +112,10 @@
     validateOnlyBtn: document.getElementById('validateOnlyBtn'),
     qualityPanel: document.getElementById('qualityPanel'),
     clearDraftBtn: document.getElementById('clearDraftBtn'),
-    renderInfo: document.getElementById('renderInfo')
+    renderInfo: document.getElementById('renderInfo'),
+    daySummaryPanel: document.getElementById('daySummaryPanel'),
+    calendarPanel: document.getElementById('calendarPanel'),
+    rowDetailPanel: document.getElementById('rowDetailPanel')
   };
 
   const state = {
@@ -124,6 +143,9 @@
     groupBy: '',
     quickDateFrom: '',
     quickDateTo: '',
+    problemsOnly: false,
+    viewMode: 'table',
+    hiddenColumns: new Set(),
     lastControlTypeFilter: ''
   };
   let conflictsWorker = null;
@@ -142,6 +164,17 @@
     const d = iso ? new Date(`${iso}T00:00:00`) : new Date();
     d.setDate(d.getDate() + days);
     return d.toISOString().slice(0, 10);
+  };
+  const rowProblemFlags = (r) => {
+    const idx = state.rows.findIndex((x) => String(x.id) === String(r.id));
+    const isExam = clean(r.controlType).toLowerCase() === 'іспит';
+    return {
+      conflict: state.conflictIndices.has(idx),
+      overload: state.overloadIndices.has(idx),
+      warning: state.warningIndices.has(idx),
+      missing: !clean(r.date) || !clean(r.teachers?.join('')) || (isExam && (!clean(r.time) || !clean(r.room))),
+      duplicate: isDuplicateRow(r)
+    };
   };
 
   function showError(msg) {
@@ -388,17 +421,17 @@
       tr.draggable = true;
       tr.dataset.id = r.id;
       tr.innerHTML = `
-        <td class="px-2 py-2"><input type="checkbox" data-act="select-row" data-id="${r.id}" ${checked}></td>
-        <td class="px-2 py-2">${i + 1}</td>
-        <td class="px-2 py-2"><input data-f="discipline" data-id="${r.id}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="group" data-id="${r.id}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="teachers1" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[0] ? r.teachers[0] : '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="teachers2" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[1] ? r.teachers[1] : '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><select data-f="controlType" data-id="${r.id}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
-        <td class="px-2 py-2"><input data-f="date" data-id="${r.id}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="time" data-id="${r.id}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="room" data-id="${r.id}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.room || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><button data-act="del" data-id="${r.id}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
+        <td data-col-key="select" class="px-2 py-2 sticky-col-1"><input type="checkbox" data-act="select-row" data-id="${r.id}" ${checked}></td>
+        <td data-col-key="number" class="px-2 py-2 sticky-col-2">${i + 1}</td>
+        <td data-col-key="discipline" class="px-2 py-2 sticky-col-3"><input data-f="discipline" data-id="${r.id}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="group" class="px-2 py-2"><input data-f="group" data-id="${r.id}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="teacher1" class="px-2 py-2"><input data-f="teachers1" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[0] ? r.teachers[0] : '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="teacher2" class="px-2 py-2"><input data-f="teachers2" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[1] ? r.teachers[1] : '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="controlType" class="px-2 py-2"><select data-f="controlType" data-id="${r.id}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
+        <td data-col-key="date" class="px-2 py-2"><input data-f="date" data-id="${r.id}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="time" class="px-2 py-2"><input data-f="time" data-id="${r.id}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="room" class="px-2 py-2"><input data-f="room" data-id="${r.id}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.room || '').replace(/"/g, '&quot;')}"></td>
+        <td data-col-key="action" class="px-2 py-2"><button data-act="del" data-id="${r.id}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
       const globalIdx = state.rows.findIndex(x => x.id === r.id);
       if (state.conflictIndices.has(globalIdx)) {
@@ -488,6 +521,8 @@
     if (state.filterMissingOnly) count += 1;
     if (state.qualityFilter) count += 1;
     if (state.quickDateFrom || state.quickDateTo) count += 1;
+    if (clean(els.dateFromFilter?.value) || clean(els.dateToFilter?.value)) count += 1;
+    if (state.problemsOnly) count += 1;
     const tableFilters = getTableFilters();
     count += Object.values(tableFilters).filter(Boolean).length;
     return count;
@@ -507,8 +542,14 @@
         room: selectValues(els.roomFilter),
         emptyField: clean(els.emptyFieldFilter?.value),
         groupBy: clean(els.groupBySelect?.value),
+        dateFrom: clean(els.dateFromFilter?.value),
+        dateTo: clean(els.dateToFilter?.value),
+        exportScope: clean(els.exportScope?.value),
         quickDateFrom: state.quickDateFrom,
         quickDateTo: state.quickDateTo,
+        problemsOnly: state.problemsOnly,
+        viewMode: state.viewMode,
+        hiddenColumns: Array.from(state.hiddenColumns),
         tableFilters,
         filterConflictsOnly: state.filterConflictsOnly,
         filterMissingOnly: state.filterMissingOnly,
@@ -536,9 +577,15 @@
       setMulti(els.roomFilter, view.room);
       if (els.emptyFieldFilter) els.emptyFieldFilter.value = view.emptyField || '';
       if (els.groupBySelect) els.groupBySelect.value = view.groupBy || '';
+      if (els.dateFromFilter) els.dateFromFilter.value = view.dateFrom || '';
+      if (els.dateToFilter) els.dateToFilter.value = view.dateTo || '';
+      if (els.exportScope && view.exportScope) els.exportScope.value = view.exportScope;
       state.groupBy = clean(view.groupBy);
       state.quickDateFrom = clean(view.quickDateFrom);
       state.quickDateTo = clean(view.quickDateTo);
+      state.problemsOnly = !!view.problemsOnly;
+      state.viewMode = clean(view.viewMode) || 'table';
+      state.hiddenColumns = new Set(Array.isArray(view.hiddenColumns) ? view.hiddenColumns : []);
       state.filterConflictsOnly = !!view.filterConflictsOnly;
       state.filterMissingOnly = !!view.filterMissingOnly;
       state.qualityFilter = clean(view.qualityFilter);
@@ -559,12 +606,15 @@
     [els.disciplineFilter, els.groupFilter, els.teacherFilter, els.controlTypeFilter, els.dateFilter, els.timeFilter, els.roomFilter]
       .forEach((el) => setSelectValues(el, []));
     if (els.emptyFieldFilter) els.emptyFieldFilter.value = '';
+    if (els.dateFromFilter) els.dateFromFilter.value = '';
+    if (els.dateToFilter) els.dateToFilter.value = '';
     document.querySelectorAll('[data-table-filter]').forEach((el) => { el.value = ''; });
     state.filterConflictsOnly = false;
     state.filterMissingOnly = false;
     state.qualityFilter = '';
     state.quickDateFrom = '';
     state.quickDateTo = '';
+    state.problemsOnly = false;
   }
   function setMode(mode) {
     state.mode = mode === 'pro' ? 'pro' : 'basic';
@@ -591,6 +641,8 @@
     const timef = selectValues(els.timeFilter);
     const roomf = selectValues(els.roomFilter);
     const emptyField = clean(els.emptyFieldFilter?.value);
+    const dateFrom = clean(els.dateFromFilter?.value);
+    const dateTo = clean(els.dateToFilter?.value);
     const tableFilters = getTableFilters();
     const controlTypeFilterKey = ctf.join('|');
     const controlTypeFilterChanged = controlTypeFilterKey !== state.lastControlTypeFilter;
@@ -604,6 +656,9 @@
       if (state.qualityFilter === 'Duplicates' && !isDuplicateRow(r)) return false;
       if (state.quickDateFrom && clean(r.date) < state.quickDateFrom) return false;
       if (state.quickDateTo && clean(r.date) > state.quickDateTo) return false;
+      if (dateFrom && clean(r.date) < dateFrom) return false;
+      if (dateTo && clean(r.date) > dateTo) return false;
+      if (state.problemsOnly && !Object.values(rowProblemFlags(r)).some(Boolean)) return false;
       if (emptyField === 'teacher' && (r.teachers || []).length) return false;
       if (emptyField === 'date' && clean(r.date)) return false;
       if (emptyField === 'time' && clean(r.time)) return false;
@@ -647,6 +702,10 @@
     }
     if (!skipConflictDetect) detectConflicts(false);
     renderTable(state.filteredRows);
+    renderDaySummary();
+    renderCalendar();
+    applyColumnVisibility();
+    updateProblemButton();
     saveViewState();
   }
 
@@ -735,6 +794,83 @@
       <span>| Найбільше/день: <b>${maxPerDay}</b> (${busiestDay})</span>
       ${busiestTeacher ? `<span>| Найзайнятіший: <b>${busiestTeacher[0].split(' ').slice(0,2).join(' ')}</b> (${busiestTeacher[1]})</span>` : ''}
     </div>`;
+  }
+
+  function renderDaySummary() {
+    if (!els.daySummaryPanel) return;
+    const byDate = new Map();
+    state.filteredRows.forEach((r) => {
+      const date = clean(r.date) || 'Без дати';
+      if (!byDate.has(date)) byDate.set(date, { total: 0, exams: 0, rooms: new Set(), problems: 0 });
+      const item = byDate.get(date);
+      item.total++;
+      if (clean(r.controlType).toLowerCase() === 'іспит') item.exams++;
+      if (clean(r.room)) item.rooms.add(clean(r.room));
+      if (Object.values(rowProblemFlags(r)).some(Boolean)) item.problems++;
+    });
+    const rows = Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0], 'uk')).slice(0, 14);
+    els.daySummaryPanel.innerHTML = rows.length
+      ? `<div class="flex gap-2 flex-wrap">${rows.map(([date, x]) => `<button data-summary-date="${escapeHtml(date)}" class="px-2 py-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700 text-xs">${escapeHtml(date)}: <b>${x.total}</b> / іспитів ${x.exams} / ауд. ${x.rooms.size}${x.problems ? ` / <span class="text-orange-600">${x.problems} проблем</span>` : ''}</button>`).join('')}</div>`
+      : '';
+  }
+
+  function renderCalendar() {
+    if (!els.calendarPanel) return;
+    els.calendarPanel.classList.toggle('hidden', state.viewMode !== 'calendar');
+    const table = document.querySelector('table');
+    if (table) table.classList.toggle('hidden', state.viewMode === 'calendar');
+    if (state.viewMode !== 'calendar') return;
+    const byDate = new Map();
+    state.filteredRows.forEach((r) => {
+      const date = clean(r.date) || 'Без дати';
+      if (!byDate.has(date)) byDate.set(date, []);
+      byDate.get(date).push(r);
+    });
+    els.calendarPanel.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">${Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0], 'uk')).map(([date, rows]) => `
+      <div class="rounded border dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-700/50">
+        <div class="font-bold text-sm mb-2">${escapeHtml(date)} (${rows.length})</div>
+        <div class="space-y-2">${rows.sort((a, b) => clean(a.time).localeCompare(clean(b.time), 'uk')).map((r) => `<button data-detail-id="${r.id}" class="block w-full text-left rounded bg-white dark:bg-gray-800 border dark:border-gray-700 p-2 text-xs">
+          <div class="font-semibold">${escapeHtml(r.time || '—')} · ${escapeHtml(r.group || '—')}</div>
+          <div>${escapeHtml(r.discipline || '')}</div>
+          <div class="text-gray-500">${escapeHtml((r.teachers || []).join('; '))} ${r.room ? `· ${escapeHtml(r.room)}` : ''}</div>
+        </button>`).join('')}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  function applyColumnVisibility() {
+    document.querySelectorAll('[data-col-toggle]').forEach((cb) => {
+      cb.checked = !state.hiddenColumns.has(cb.dataset.colToggle);
+    });
+    document.querySelectorAll('[data-col-key]').forEach((el) => {
+      el.classList.toggle('hidden', state.hiddenColumns.has(el.dataset.colKey));
+    });
+  }
+
+  function updateProblemButton() {
+    els.problemFilterBtn?.classList.toggle('bg-orange-100', state.problemsOnly);
+    els.problemFilterBtn?.classList.toggle('text-orange-700', state.problemsOnly);
+  }
+
+  function renderRowDetail(row) {
+    if (!els.rowDetailPanel || !row) return;
+    const flags = rowProblemFlags(row);
+    const idx = state.rows.findIndex((x) => String(x.id) === String(row.id));
+    const warnings = (state.warnings || []).filter((w) => w.index === idx).map((w) => w.message);
+    els.rowDetailPanel.classList.remove('hidden');
+    els.rowDetailPanel.innerHTML = `<div class="flex items-start justify-between gap-2">
+      <div>
+        <div class="font-bold">${escapeHtml(row.discipline || 'Без предмета')}</div>
+        <div class="text-gray-500">${escapeHtml(row.group || 'Без групи')} · ${escapeHtml(row.controlType || '')}</div>
+      </div>
+      <button id="closeRowDetailBtn" class="px-2 py-1 rounded border dark:border-gray-600 text-xs">Закрити</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 text-xs">
+      <div><b>Викладачі:</b> ${escapeHtml((row.teachers || []).join('; ') || '—')}</div>
+      <div><b>Дата/час:</b> ${escapeHtml(row.date || '—')} ${escapeHtml(row.time || '')}</div>
+      <div><b>Аудиторія:</b> ${escapeHtml(row.room || '—')}</div>
+    </div>
+    <div class="mt-3 text-xs">${Object.entries(flags).filter(([, v]) => v).map(([k]) => `<span class="inline-block mr-1 px-2 py-1 rounded bg-orange-100 text-orange-700">${k}</span>`).join('') || 'Проблем не позначено'}</div>
+    ${warnings.length ? `<div class="mt-2 text-xs text-orange-700">${warnings.map(escapeHtml).join('<br>')}</div>` : ''}`;
   }
 
   // --- Auto-detect control type ---
@@ -859,11 +995,14 @@
         state.quality = data.quality || {};
         if (els.conflictSummary) els.conflictSummary.innerHTML = `Конфліктів: <b>${state.conflictIndices.size}</b>${state.overloadIndices.size ? ` | Перевантажень: <b class="text-amber-600">${state.overloadIndices.size}</b>` : ''}${state.warningIndices.size ? ` | Попереджень: <b class="text-orange-600">${state.warningIndices.size}</b>` : ''}`;
         renderQualityPanel();
-        if (state.filterConflictsOnly) {
+        if (state.filterConflictsOnly || state.problemsOnly) {
           applyFilters(true);
           return;
         }
         renderTable(state.filteredRows);
+        renderDaySummary();
+        renderCalendar();
+        applyColumnVisibility();
       };
     }
     conflictRequestId += 1;
@@ -999,6 +1138,92 @@
     applyFilters();
     saveDraftDebounced();
     showDuplicateTools();
+  }
+
+  function normalizeTeacherName(name) {
+    const parts = clean(name).replace(/\./g, ' ').split(' ').filter(Boolean);
+    if (!parts.length) return '';
+    return parts.map((p, i) => i === 0 ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : p.toUpperCase()).join(' ');
+  }
+
+  function normalizeTeachersAction() {
+    syncFromGrid();
+    pushUndo();
+    state.rows.forEach((r) => {
+      r.teachers = Array.from(new Set((r.teachers || []).map(normalizeTeacherName).filter(Boolean)));
+    });
+    renderFilters(state.rows);
+    applyFilters();
+    saveDraftDebounced();
+    setStatus('Викладачів нормалізовано');
+  }
+
+  async function compareWithApi() {
+    const term = resolveSessionTerm();
+    if (!term) return showError('Оберіть або введіть назву сесії для порівняння');
+    const res = await fetch(`/api/session?term=${encodeURIComponent(term)}`);
+    const data = await res.json();
+    const apiRows = (data.sessions || []).flatMap(s => s.items || []).map((item) => ({
+      discipline: item.discipline || '',
+      group: (item.groups && item.groups[0]) || item.groupHeading || '',
+      teachers: splitTeachers(item.teacher || ''),
+      controlType: CONTROL_OPTIONS.includes(clean(item.controlType).toLowerCase()) ? clean(item.controlType).toLowerCase() : 'залік',
+      date: item.date || '',
+      time: item.time || '',
+      room: item.room || ''
+    }));
+    const localKeys = new Set(state.rows.map(duplicateKey));
+    const apiKeys = new Set(apiRows.map(duplicateKey));
+    const onlyLocal = state.rows.filter((r) => !apiKeys.has(duplicateKey(r)));
+    const onlyApi = apiRows.filter((r) => !localKeys.has(duplicateKey(r)));
+    const changed = state.rows.filter((r) => {
+      const match = apiRows.find((x) => duplicateKey(x) === duplicateKey(r));
+      return match && `${clean(match.date)} ${clean(match.time)} ${clean(match.room)}` !== `${clean(r.date)} ${clean(r.time)} ${clean(r.room)}`;
+    });
+    els.suggestionsBox.classList.remove('hidden');
+    els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Порівняння з API: ${escapeHtml(term)}</div>
+      <div class="flex gap-2 flex-wrap text-sm">
+        <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Локально нові: ${onlyLocal.length}</span>
+        <span class="px-2 py-1 rounded bg-amber-100 text-amber-700">Є тільки в API: ${onlyApi.length}</span>
+        <span class="px-2 py-1 rounded bg-blue-100 text-blue-700">Змінені слот/аудиторія: ${changed.length}</span>
+      </div>`;
+  }
+
+  function getSnapshots() {
+    try { return JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  function renderSnapshotSelect() {
+    if (!els.snapshotSelect) return;
+    const snapshots = getSnapshots();
+    els.snapshotSelect.innerHTML = '<option value="">Знімки версій</option>';
+    snapshots.forEach((s) => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = `${new Date(s.ts).toLocaleString('uk-UA')} (${s.rows?.length || 0})`;
+      els.snapshotSelect.appendChild(o);
+    });
+  }
+
+  function saveSnapshot() {
+    syncFromGrid();
+    const snapshots = getSnapshots();
+    snapshots.unshift({ id: generateId(), ts: new Date().toISOString(), rows: state.rows });
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshots.slice(0, 12)));
+    renderSnapshotSelect();
+    setStatus('Знімок версії збережено');
+  }
+
+  function restoreSnapshot() {
+    const id = clean(els.snapshotSelect?.value);
+    const snapshot = getSnapshots().find((s) => s.id === id);
+    if (!snapshot) return;
+    pushUndo();
+    state.rows = (snapshot.rows || []).map((r) => ({ ...r, id: r.id || generateId(), teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') }));
+    renderFilters(state.rows);
+    applyFilters();
+    saveDraftDebounced();
+    setStatus('Знімок версії відновлено');
   }
   function applyBulkToSelected() {
     syncFromGrid();
@@ -1356,8 +1581,9 @@
 
   function exportExcel() {
     syncFromGrid();
+    const rows = getScopedRows();
     const data = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час', 'Аудиторія']];
-    state.filteredRows.forEach((r, i) => data.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.time || '', r.room || '']));
+    rows.forEach((r, i) => data.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.time || '', r.room || '']));
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Session');
@@ -1367,11 +1593,18 @@
   function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  function getScopedRows() {
+    const scope = clean(els.exportScope?.value) || 'filtered';
+    if (scope === 'all') return state.rows.slice();
+    if (scope === 'selected') return state.rows.filter((r) => state.selectedRowKeys.has(rowKey(r)));
+    return state.filteredRows.slice();
+  }
   function exportWord() {
     syncFromGrid();
-    if (!state.filteredRows.length) return showError('Немає даних для експорту у Word');
+    const rows = getScopedRows();
+    if (!rows.length) return showError('Немає даних для експорту у Word');
     const grouped = new Map();
-    state.filteredRows.forEach((r) => {
+    rows.forEach((r) => {
       const g = clean(r.group) || '—';
       if (!grouped.has(g)) grouped.set(g, []);
       grouped.get(g).push(r);
@@ -1395,8 +1628,9 @@
 
   async function copyTable() {
     syncFromGrid();
+    const rows = getScopedRows();
     const lines = [['№', 'Предмет', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час', 'Аудиторія'].join('\t')];
-    state.filteredRows.forEach((r, i) => lines.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.time || '', r.room || ''].join('\t')));
+    rows.forEach((r, i) => lines.push([i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType || '', r.date || '', r.time || '', r.room || ''].join('\t')));
     await navigator.clipboard.writeText(lines.join('\n'));
     setStatus('Таблицю скопійовано');
   }
@@ -1575,6 +1809,43 @@
   els.roomFilter?.addEventListener('change', applyFilters);
   els.emptyFieldFilter?.addEventListener('change', applyFilters);
   els.groupBySelect?.addEventListener('change', applyFilters);
+  els.dateFromFilter?.addEventListener('change', applyFilters);
+  els.dateToFilter?.addEventListener('change', applyFilters);
+  els.exportScope?.addEventListener('change', saveViewState);
+  els.problemFilterBtn?.addEventListener('click', () => {
+    state.problemsOnly = !state.problemsOnly;
+    applyFilters();
+  });
+  els.selectFilteredBtn?.addEventListener('click', () => {
+    syncFromGrid();
+    state.filteredRows.forEach((r) => state.selectedRowKeys.add(rowKey(r)));
+    renderTable(state.filteredRows);
+    applyColumnVisibility();
+    setStatus(`Виділено ${state.filteredRows.length} відфільтрованих рядків`);
+  });
+  els.toggleToolsBtn?.addEventListener('click', () => {
+    els.advancedToolsPanel?.classList.toggle('hidden');
+  });
+  els.tableViewBtn?.addEventListener('click', () => {
+    state.viewMode = 'table';
+    applyFilters();
+  });
+  els.calendarViewBtn?.addEventListener('click', () => {
+    state.viewMode = 'calendar';
+    applyFilters();
+  });
+  els.normalizeTeachersBtn?.addEventListener('click', normalizeTeachersAction);
+  els.compareApiBtn?.addEventListener('click', () => compareWithApi().catch((e) => showError(e.message || String(e))));
+  els.snapshotBtn?.addEventListener('click', saveSnapshot);
+  els.restoreSnapshotBtn?.addEventListener('click', restoreSnapshot);
+  els.columnToggles?.addEventListener('change', (e) => {
+    const cb = e.target.closest('input[data-col-toggle]');
+    if (!cb) return;
+    if (cb.checked) state.hiddenColumns.delete(cb.dataset.colToggle);
+    else state.hiddenColumns.add(cb.dataset.colToggle);
+    applyColumnVisibility();
+    saveViewState();
+  });
   document.querySelectorAll('[data-table-filter]').forEach((el) => {
     const eventName = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(eventName, applyFilters);
@@ -1613,10 +1884,16 @@
     clearFilterControls();
     els.filterConflictsBtn?.classList.remove('bg-rose-100', 'dark:bg-rose-900', 'text-rose-700');
     els.filterMissingBtn?.classList.remove('bg-amber-100', 'dark:bg-amber-900', 'text-amber-700');
+    updateProblemButton();
     applyFilters();
   });
 
   els.tableBody.addEventListener('click', (e) => {
+    const detailTarget = e.target.closest('tr[data-id]');
+    if (detailTarget && !e.target.closest('button, input, select')) {
+      renderRowDetail(state.rows.find((r) => String(r.id) === String(detailTarget.dataset.id)));
+      return;
+    }
     const btn = e.target.closest('button[data-act="del"]');
     if (!btn) return;
     const id = btn.dataset.id;
@@ -1627,6 +1904,25 @@
     state.rows = state.rows.filter(r => String(r.id) !== idToDel);
     applyFilters();
     saveDraftDebounced();
+  });
+
+  els.daySummaryPanel?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-summary-date]');
+    if (!btn) return;
+    const el = document.querySelector('[data-table-filter="date"]');
+    if (el) el.value = btn.dataset.summaryDate === 'Без дати' ? '' : btn.dataset.summaryDate;
+    if (btn.dataset.summaryDate === 'Без дати' && els.emptyFieldFilter) els.emptyFieldFilter.value = 'date';
+    applyFilters();
+  });
+
+  els.calendarPanel?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-detail-id]');
+    if (!btn) return;
+    renderRowDetail(state.rows.find((r) => String(r.id) === String(btn.dataset.detailId)));
+  });
+
+  els.rowDetailPanel?.addEventListener('click', (e) => {
+    if (e.target.closest('#closeRowDetailBtn')) els.rowDetailPanel.classList.add('hidden');
   });
 
   els.tableBody.addEventListener('change', (e) => {
@@ -1964,6 +2260,7 @@
   setProgress(0, 1, 'Готово');
   setMode('basic');
   loadSessionTerms();
+  renderSnapshotSelect();
 
   // Restore draft FIRST, then init controls (so API failure doesn't lose data)
   restoreDraft();
