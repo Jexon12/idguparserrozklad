@@ -123,10 +123,17 @@
                 <button id="redoBtn" class="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold" title="Ctrl+Y">↪ Redo</button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+            <div class="grid grid-cols-1 md:grid-cols-7 gap-2">
                 <input id="searchInput" type="text" placeholder="Пошук по предмету/групі/викладачу..." class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm md:col-span-2">
                 <select id="groupFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
                 <select id="teacherFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"></select>
+                <select id="controlTypeFilter" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+                    <option value="">Усі форми</option>
+                    <option value="залік">залік</option>
+                    <option value="іспит">іспит</option>
+                    <option value="захист">захист</option>
+                    <option value="диф.залік">диф.залік</option>
+                </select>
                 <button id="filterConflictsBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">🚨 Конфлікти</button>
                 <button id="filterMissingBtn" class="px-3 py-2 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">⚠️ Без дат/часу</button>
             </div>
@@ -170,7 +177,8 @@
                             <th class="px-2 py-2 text-left">№</th>
                             <th class="px-2 py-2 text-left" data-sort="discipline">Предмет<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="group">Група<span class="sort-arrow"></span></th>
-                            <th class="px-2 py-2 text-left" data-sort="teachers">Викладачі<span class="sort-arrow"></span></th>
+                            <th class="px-2 py-2 text-left" data-sort="teachers">Викладач 1<span class="sort-arrow"></span></th>
+                            <th class="px-2 py-2 text-left">Викладач 2</th>
                             <th class="px-2 py-2 text-left" data-sort="controlType">Форма контролю<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="date">Дата<span class="sort-arrow"></span></th>
                             <th class="px-2 py-2 text-left" data-sort="time">Час<span class="sort-arrow"></span></th>

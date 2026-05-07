@@ -45,6 +45,7 @@
     searchInput: document.getElementById('searchInput'),
     groupFilter: document.getElementById('groupFilter'),
     teacherFilter: document.getElementById('teacherFilter'),
+    controlTypeFilter: document.getElementById('controlTypeFilter'),
     zalikStartDate: document.getElementById('zalikStartDate'),
     zalikEndDate: document.getElementById('zalikEndDate'),
     examStartDate: document.getElementById('examStartDate'),
@@ -307,7 +308,8 @@
         <td class="px-2 py-2">${i + 1}</td>
         <td class="px-2 py-2"><input data-f="discipline" data-id="${r.id}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><input data-f="group" data-id="${r.id}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
-        <td class="px-2 py-2"><input data-f="teachers" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers || []).join('; ').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="teachers1" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[0] ? r.teachers[0] : '').replace(/"/g, '&quot;')}"></td>
+        <td class="px-2 py-2"><input data-f="teachers2" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[1] ? r.teachers[1] : '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><select data-f="controlType" data-id="${r.id}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
         <td class="px-2 py-2"><input data-f="date" data-id="${r.id}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
         <td class="px-2 py-2"><input data-f="time" data-id="${r.id}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
@@ -372,14 +374,24 @@
     const q = clean(els.searchInput.value).toLowerCase();
     const gf = clean(els.groupFilter.value);
     const tf = clean(els.teacherFilter.value);
+    const ctf = clean(els.controlTypeFilter?.value);
     state.filteredRows = state.rows.filter((r, i) => {
       if (state.filterConflictsOnly && !state.conflictIndices.has(i)) return false;
       if (state.filterMissingOnly && (!r.date || (!r.time && r.controlType === 'іспит'))) return false;
       if (gf && r.group.toUpperCase() !== gf.toUpperCase()) return false;
       if (tf && !r.teachers.includes(tf)) return false;
+      if (ctf && clean(r.controlType).toLowerCase() !== ctf.toLowerCase()) return false;
       if (!q) return true;
       return `${r.discipline} ${r.group} ${r.teachers.join(' ')} ${r.controlType} ${r.date || ''} ${r.time || ''}`.toLowerCase().includes(q);
     });
+    
+    // Auto-sort by date if Exam filter is active
+    if (ctf === 'іспит') {
+      state.sortField = 'date';
+      state.sortAsc = true;
+      updateSortIndicators();
+    }
+    
     if (state.sortField) applySorting();
     detectConflicts(false);
     renderTable(state.filteredRows);
@@ -490,6 +502,8 @@
       const row = rowMap.get(id);
       if (!row) return;
       if (field === 'teachers') row.teachers = splitTeachers(inp.value);
+      else if (field === 'teachers1') { if (!Array.isArray(row.teachers)) row.teachers = []; row.teachers[0] = clean(inp.value); }
+      else if (field === 'teachers2') { if (!Array.isArray(row.teachers)) row.teachers = []; row.teachers[1] = clean(inp.value); }
       else if (field === 'discipline') row.discipline = normalizeDiscipline(inp.value);
       else if (field === 'controlType') row.controlType = clean(inp.value);
       else row[field] = clean(inp.value);
@@ -1218,6 +1232,7 @@
   els.searchInput.addEventListener('input', applyFilters);
   els.groupFilter.addEventListener('change', applyFilters);
   els.teacherFilter.addEventListener('change', applyFilters);
+  els.controlTypeFilter?.addEventListener('change', applyFilters);
 
   els.tableBody.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act="del"]');
@@ -1278,6 +1293,7 @@
       }
       syncFromGrid();
       // Auto-detect control type when discipline changes
+      const inp = e.target;
       if (inp && inp.dataset && inp.dataset.f === 'discipline') {
         const id = inp.dataset.id;
         const row = state.rows.find(x => x.id === id);
