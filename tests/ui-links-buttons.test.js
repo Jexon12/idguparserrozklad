@@ -12,6 +12,9 @@ const PAGES = [
     { page: '/builder.html', jsFile: 'js/builder.js' },
     { page: '/session.html', jsFile: 'js/session-page.js' },
     { page: '/session-admin.html', jsFile: 'js/session-admin.js' },
+    { page: '/session-constructor.html', jsFile: 'js/session-constructor.js' },
+    { page: '/session-prep.html', jsFile: 'js/session-prep.js' },
+    { page: '/course-live.html', jsFile: 'js/course-live.js' },
     { page: '/smart.html', jsFile: 'js/smart-day.js' }
 ];
 

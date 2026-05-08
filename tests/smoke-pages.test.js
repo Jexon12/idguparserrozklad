@@ -74,7 +74,17 @@ describe('Smoke pages/API', () => {
     });
 
     test('main pages return 200', async () => {
-        const pages = ['/', '/index2.html', '/builder.html', '/session.html', '/smart.html'];
+        const pages = [
+            '/',
+            '/index2.html',
+            '/builder.html',
+            '/session.html',
+            '/session-admin.html',
+            '/session-constructor.html',
+            '/session-prep.html',
+            '/course-live.html',
+            '/smart.html'
+        ];
         for (const p of pages) {
             const r = await request(p);
             expect(r.status).toBe(200);

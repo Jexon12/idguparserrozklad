@@ -153,7 +153,13 @@
 
   const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
-  const splitTeachers = (v) => Array.from(new Set(clean(v).replace(/\s*(,|\/|\|)\s*/g, '; ').replace(/\s+та\s+/giu, '; ').split(';').map(clean).filter(Boolean)));
+  const splitTeachers = (v) => Array.from(new Set(clean(v)
+    .replace(/([\p{Lu}]\.\s*[\p{Lu}]\.)(?=\s*\p{Lu}\p{Ll})/gu, '$1; ')
+    .replace(/\s*(,|\/|\|)\s*/g, '; ')
+    .replace(/\s+\u0442\u0430\s+/giu, '; ')
+    .split(';')
+    .map(clean)
+    .filter(Boolean)));
   const rowKey = (r) => String(r.id || `${clean(r.discipline)}__${clean(r.group)}__${clean(r.controlType)}`);
   const generateId = () => 'r_' + Math.random().toString(36).slice(2, 11);
   const CONTROL_PRIORITY = { 'іспит': 4, 'диф.залік': 3, 'захист': 2, 'залік': 1 };
@@ -373,7 +379,7 @@
   function updateDatalist(id, items) {
     let dl = document.getElementById(id);
     if (!dl) { dl = document.createElement('datalist'); dl.id = id; document.body.appendChild(dl); }
-    dl.innerHTML = items.map((v) => `<option value="${v.replace(/"/g, '&quot;')}">`).join('');
+    dl.innerHTML = items.map((v) => `<option value="${escapeHtml(v)}">`).join('');
   }
   async function loadSessionTerms() {
     if (!els.sessionTermSelect) return;
@@ -410,7 +416,7 @@
         const groupTr = document.createElement('tr');
         groupTr.className = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200';
         const count = rows.filter((x) => groupLabel(x) === label).length;
-        groupTr.innerHTML = `<td colspan="11" class="px-3 py-2 text-xs font-bold uppercase tracking-wide">${label} · ${count}</td>`;
+        groupTr.innerHTML = `<td colspan="11" class="px-3 py-2 text-xs font-bold uppercase tracking-wide">${escapeHtml(label)} · ${count}</td>`;
         els.tableBody.appendChild(groupTr);
       }
       const tr = document.createElement('tr');
@@ -421,17 +427,17 @@
       tr.draggable = true;
       tr.dataset.id = r.id;
       tr.innerHTML = `
-        <td data-col-key="select" class="px-2 py-2 sticky-col-1"><input type="checkbox" data-act="select-row" data-id="${r.id}" ${checked}></td>
+        <td data-col-key="select" class="px-2 py-2 sticky-col-1"><input type="checkbox" data-act="select-row" data-id="${escapeHtml(r.id)}" ${checked}></td>
         <td data-col-key="number" class="px-2 py-2 sticky-col-2">${i + 1}</td>
-        <td data-col-key="discipline" class="px-2 py-2 sticky-col-3"><input data-f="discipline" data-id="${r.id}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.discipline || '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="group" class="px-2 py-2"><input data-f="group" data-id="${r.id}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.group || '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="teacher1" class="px-2 py-2"><input data-f="teachers1" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[0] ? r.teachers[0] : '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="teacher2" class="px-2 py-2"><input data-f="teachers2" data-id="${r.id}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.teachers && r.teachers[1] ? r.teachers[1] : '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="controlType" class="px-2 py-2"><select data-f="controlType" data-id="${r.id}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${o}" ${currentControl === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
-        <td data-col-key="date" class="px-2 py-2"><input data-f="date" data-id="${r.id}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.date || '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="time" class="px-2 py-2"><input data-f="time" data-id="${r.id}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.time || '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="room" class="px-2 py-2"><input data-f="room" data-id="${r.id}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${(r.room || '').replace(/"/g, '&quot;')}"></td>
-        <td data-col-key="action" class="px-2 py-2"><button data-act="del" data-id="${r.id}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
+        <td data-col-key="discipline" class="px-2 py-2 sticky-col-3"><input data-f="discipline" data-id="${escapeHtml(r.id)}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.discipline || '')}"></td>
+        <td data-col-key="group" class="px-2 py-2"><input data-f="group" data-id="${escapeHtml(r.id)}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.group || '')}"></td>
+        <td data-col-key="teacher1" class="px-2 py-2"><input data-f="teachers1" data-id="${escapeHtml(r.id)}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.teachers && r.teachers[0] ? r.teachers[0] : '')}"></td>
+        <td data-col-key="teacher2" class="px-2 py-2"><input data-f="teachers2" data-id="${escapeHtml(r.id)}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.teachers && r.teachers[1] ? r.teachers[1] : '')}"></td>
+        <td data-col-key="controlType" class="px-2 py-2"><select data-f="controlType" data-id="${escapeHtml(r.id)}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${escapeHtml(o)}" ${currentControl === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select></td>
+        <td data-col-key="date" class="px-2 py-2"><input data-f="date" data-id="${escapeHtml(r.id)}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.date || '')}"></td>
+        <td data-col-key="time" class="px-2 py-2"><input data-f="time" data-id="${escapeHtml(r.id)}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.time || '')}"></td>
+        <td data-col-key="room" class="px-2 py-2"><input data-f="room" data-id="${escapeHtml(r.id)}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.room || '')}"></td>
+        <td data-col-key="action" class="px-2 py-2"><button data-act="del" data-id="${escapeHtml(r.id)}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
       const globalIdx = state.rows.findIndex(x => x.id === r.id);
       if (state.conflictIndices.has(globalIdx)) {
@@ -1089,7 +1095,7 @@
       els.suggestionsBox.textContent = 'Автопокращень не знайдено в заданому діапазоні дат.';
       return;
     }
-    els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Рекомендації:</div><ul class="list-disc pl-5">${suggestions.slice(0, 20).map((s) => `<li>${s.text}</li>`).join('')}</ul>`;
+    els.suggestionsBox.innerHTML = `<div class="font-bold mb-2">Рекомендації:</div><ul class="list-disc pl-5">${suggestions.slice(0, 20).map((s) => `<li>${escapeHtml(s.text)}</li>`).join('')}</ul>`;
   }
 
   function duplicateGroups() {
@@ -1472,7 +1478,8 @@
     showError('');
     syncFromGrid();
     applyFilters();
-    if (!state.filteredRows.length) {
+    const rowsToUpload = state.rows.slice();
+    if (!rowsToUpload.length) {
       if (!confirm('У таблиці немає записів. Ви впевнені, що хочете завантажити ПОРОЖНЮ сесію в API? Це може призвести до очищення даних на сервері.')) return;
     }
     const password = clean(els.adminPassword.value);
@@ -1486,7 +1493,7 @@
         generatedAt: new Date().toISOString(),
         term: resolveSessionTerm(),
         studyForm: clean(els.studyForm.value),
-        items: state.filteredRows.map((r) => ({
+        items: rowsToUpload.map((r) => ({
           groupHeading: r.group,
           groups: [r.group],
           speciality: '',
