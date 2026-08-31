@@ -29,10 +29,18 @@ const CACHE_TTL = {
 };
 const MAX_CACHE_SIZE = 500; // Max entries to prevent memory leak
 const rateLimitStore = new Map();
+const mutationTails = new Map();
 const RATE_LIMITS = {
     adminPost: { windowMs: 60 * 1000, max: 20 },
-    proxy: { windowMs: 60 * 1000, max: 120 }
+    proxy: { windowMs: 60 * 1000, max: 120 },
+    report: { windowMs: 60 * 1000, max: 2 },
+    telemetry: { windowMs: 60 * 1000, max: 30 },
+    occupancyWrite: { windowMs: 60 * 1000, max: 10 }
 };
+const MAX_REPORT_MONTHS = 24;
+const MAX_REPORT_QUEUE = 20;
+const MAX_API_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_SESSION_ITEMS = 20000;
 const reportQueue = new JobQueue({ concurrency: 2 });
 
 function getClientIp(req) {
@@ -47,6 +55,15 @@ function checkRateLimit(bucket, key, config) {
     const existing = rateLimitStore.get(storeKey);
     const resetAt = now + config.windowMs;
 
+    // Opportunistic cleanup keeps spoofed/one-off client keys bounded.
+    if (rateLimitStore.size > 2000) {
+        for (const [entryKey, entry] of rateLimitStore) {
+            if (now > entry.resetAt) rateLimitStore.delete(entryKey);
+        }
+        while (rateLimitStore.size >= 5000) {
+            rateLimitStore.delete(rateLimitStore.keys().next().value);
+        }
+    }
     if (!existing || now > existing.resetAt) {
         rateLimitStore.set(storeKey, { count: 1, resetAt });
         return { allowed: true, remaining: config.max - 1, resetAt };
@@ -160,19 +177,73 @@ const getLocalDb = () => {
 };
 
 const saveLocalDb = (data) => {
+    const tempFile = `${DB_FILE}.${process.pid}.${Date.now()}.tmp`;
     try {
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+        fs.renameSync(tempFile, DB_FILE);
         return true;
     } catch (e) {
+        try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (_) { }
         console.error("Local DB Write Error", e);
         return false;
     }
 };
 
+async function withMutationLock(key, fn) {
+    const previous = mutationTails.get(key) || Promise.resolve();
+    let release;
+    const tail = new Promise((resolve) => { release = resolve; });
+    mutationTails.set(key, tail);
+    await previous.catch(() => {});
+    try {
+        return await fn();
+    } finally {
+        release();
+        if (mutationTails.get(key) === tail) mutationTails.delete(key);
+    }
+}
+
+async function withStorageMutationLock(db, key, fn) {
+    if (!db) return withMutationLock(key, fn);
+    const lockKey = `lock:${key}`;
+    const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    let acquired = false;
+    for (let attempt = 0; attempt < 20 && !acquired; attempt++) {
+        const result = db.type === 'redis'
+            ? await db.client.set(lockKey, token, { NX: true, PX: 30000 })
+            : await db.client.set(lockKey, token, { nx: true, px: 30000 });
+        acquired = result === 'OK' || result === true;
+        if (!acquired) await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!acquired) {
+        const error = new Error('Concurrent update in progress; retry the request');
+        error.statusCode = 409;
+        throw error;
+    }
+    try {
+        return await fn();
+    } finally {
+        try {
+            const currentToken = await db.client.get(lockKey);
+            if (currentToken === token) await db.client.del(lockKey);
+        } catch (error) {
+            console.error('Storage lock release error', error);
+        }
+    }
+}
+
 // Global DB Clients (Lazy init) needed for Serverless function cold starts
 let kvClient = null;
 let redisClient = null;
-let redisConnecting = false; // #8 guard against race condition
+let redisConnectPromise = null;
+let redisUnavailableUntil = 0;
+const REDIS_CONNECT_TIMEOUT_MS = 3000;
+const REDIS_RETRY_COOLDOWN_MS = 30000;
+
+function logRedisFailure(prefix, error) {
+    const detail = error && (error.code || error.message);
+    console.error(`${prefix}${detail ? `: ${detail}` : ''}`);
+}
 
 const getDb = async () => {
     // 1. Vercel KV (@vercel/kv) - HTTP based
@@ -187,21 +258,63 @@ const getDb = async () => {
 
     // 2. Standard Redis (redis package) - TCP based
     if (process.env.REDIS_URL) {
-        if (!redisClient && !redisConnecting) {
-            redisConnecting = true;
-            try {
-                const { createClient } = require('redis');
-                redisClient = createClient({ url: process.env.REDIS_URL });
-                redisClient.on('error', (err) => console.error('Redis Client Error', err));
-                await redisClient.connect();
-            } catch (e) {
-                console.error("Redis init error", e);
-                redisClient = null;
-            } finally {
-                redisConnecting = false;
-            }
+        if (redisClient && redisClient.isReady) return { type: 'redis', client: redisClient };
+
+        // A remote Redis may be temporarily unreachable during local/offline work.
+        // Fail open to the local store instead of keeping every API request waiting
+        // in the client's automatic reconnect loop.
+        if (Date.now() < redisUnavailableUntil) return null;
+
+        if (redisClient && !redisClient.isOpen) {
+            try { redisClient.destroy(); } catch (_) { /* already closed */ }
+            redisClient = null;
         }
-        if (redisClient && redisClient.isOpen) return { type: 'redis', client: redisClient };
+
+        if (!redisConnectPromise) {
+            redisConnectPromise = (async () => {
+                let candidate = null;
+                let connectionSettled = false;
+                let failureLogged = false;
+                try {
+                    const { createClient } = require('redis');
+                    candidate = createClient({
+                        url: process.env.REDIS_URL,
+                        socket: {
+                            connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+                            reconnectStrategy: () => false
+                        }
+                    });
+                    candidate.on('error', (error) => {
+                        redisUnavailableUntil = Date.now() + REDIS_RETRY_COOLDOWN_MS;
+                        // connect() rejects with the same initial error, so let the
+                        // catch block report it once. Later disconnects are reported here.
+                        if (connectionSettled && !failureLogged) {
+                            failureLogged = true;
+                            logRedisFailure('Redis unavailable; using fallback storage', error);
+                        }
+                    });
+                    await candidate.connect();
+                    connectionSettled = true;
+                    redisClient = candidate;
+                    redisUnavailableUntil = 0;
+                } catch (error) {
+                    connectionSettled = true;
+                    redisUnavailableUntil = Date.now() + REDIS_RETRY_COOLDOWN_MS;
+                    if (!failureLogged) {
+                        failureLogged = true;
+                        logRedisFailure('Redis connection failed; using fallback storage', error);
+                    }
+                    if (candidate) {
+                        try { candidate.destroy(); } catch (_) { /* already closed */ }
+                    }
+                    redisClient = null;
+                } finally {
+                    redisConnectPromise = null;
+                }
+            })();
+        }
+        await redisConnectPromise;
+        if (redisClient && redisClient.isReady) return { type: 'redis', client: redisClient };
     }
 
     return null;
@@ -212,6 +325,29 @@ function safeStringify(obj) {
         return JSON.stringify(obj);
     } catch (e) {
         return JSON.stringify({ error: 'stringify-failed' });
+    }
+}
+
+function parseReportMonthRange(monthStart, monthEnd) {
+    const pattern = /^(\d{4})-(0[1-9]|1[0-2])$/;
+    const startMatch = String(monthStart || '').match(pattern);
+    const endMatch = String(monthEnd || '').match(pattern);
+    if (!startMatch || !endMatch) return null;
+    const startIndex = Number(startMatch[1]) * 12 + Number(startMatch[2]) - 1;
+    const endIndex = Number(endMatch[1]) * 12 + Number(endMatch[2]) - 1;
+    const count = endIndex - startIndex + 1;
+    if (count < 1 || count > MAX_REPORT_MONTHS) return null;
+    return { count };
+}
+
+async function fetchWithTimeout(targetUrl, options = {}, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    timer.unref?.();
+    try {
+        return await fetchImpl(targetUrl, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -264,18 +400,17 @@ async function writeJsonKey(db, key, value) {
 async function appendAuditEvent(req, action, scope, meta = {}) {
     try {
         const db = await getDb();
-        const events = await readJsonKey(db, 'audit_log', []);
-        const list = Array.isArray(events) ? events : [];
-        list.push({
-            ts: new Date().toISOString(),
-            action,
-            scope,
-            ip: getClientIp(req),
-            userAgent: String(req.headers['user-agent'] || '').slice(0, 180),
-            meta: sanitizePayloadForLog(meta)
+        return await withStorageMutationLock(db, 'audit_log', async () => {
+            const events = await readJsonKey(db, 'audit_log', []);
+            const list = Array.isArray(events) ? events : [];
+            list.push({
+                ts: new Date().toISOString(), action, scope, ip: getClientIp(req),
+                userAgent: String(req.headers['user-agent'] || '').slice(0, 180),
+                meta: sanitizePayloadForLog(meta)
+            });
+            while (list.length > AUDIT_LOG_LIMIT) list.shift();
+            await writeJsonKey(db, 'audit_log', list);
         });
-        while (list.length > AUDIT_LOG_LIMIT) list.shift();
-        await writeJsonKey(db, 'audit_log', list);
     } catch (e) {
         console.error('appendAuditEvent error', e);
     }
@@ -285,18 +420,17 @@ async function saveVersion(scope, payload, extra = {}) {
     try {
         const db = await getDb();
         const key = `versions:${scope}`;
-        const versions = await readJsonKey(db, key, []);
-        const list = Array.isArray(versions) ? versions : [];
-        const json = safeStringify(payload);
-        list.push({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            ts: new Date().toISOString(),
-            hash: hashString(json),
-            size: json.length,
-            extra
+        return await withStorageMutationLock(db, key, async () => {
+            const versions = await readJsonKey(db, key, []);
+            const list = Array.isArray(versions) ? versions : [];
+            const json = safeStringify(payload);
+            list.push({
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                ts: new Date().toISOString(), hash: hashString(json), size: json.length, extra
+            });
+            while (list.length > VERSION_LIMIT) list.shift();
+            await writeJsonKey(db, key, list);
         });
-        while (list.length > VERSION_LIMIT) list.shift();
-        await writeJsonKey(db, key, list);
     } catch (e) {
         console.error('saveVersion error', e);
     }
@@ -305,15 +439,13 @@ async function saveVersion(scope, payload, extra = {}) {
 async function appendMonitorEvent(type, payload) {
     try {
         const db = await getDb();
-        const events = await readJsonKey(db, 'monitor:events', []);
-        const list = Array.isArray(events) ? events : [];
-        list.push({
-            ts: new Date().toISOString(),
-            type,
-            payload: sanitizePayloadForLog(payload)
+        return await withStorageMutationLock(db, 'monitor:events', async () => {
+            const events = await readJsonKey(db, 'monitor:events', []);
+            const list = Array.isArray(events) ? events : [];
+            list.push({ ts: new Date().toISOString(), type, payload: sanitizePayloadForLog(payload) });
+            while (list.length > MONITOR_EVENTS_LIMIT) list.shift();
+            await writeJsonKey(db, 'monitor:events', list);
         });
-        while (list.length > MONITOR_EVENTS_LIMIT) list.shift();
-        await writeJsonKey(db, 'monitor:events', list);
     } catch (e) {
         console.error('appendMonitorEvent error', e);
     }
@@ -321,7 +453,18 @@ async function appendMonitorEvent(type, payload) {
 
 const apiHandler = async (req, res) => {
     if (req.method === 'OPTIONS') {
+        const requestOrigin = req.headers.origin || '*';
+        res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token');
         res.status(204).end();
+        return;
+    }
+
+    const declaredLength = Number(req.headers['content-length'] || 0);
+    if (declaredLength > MAX_API_BODY_BYTES || (req.body && Buffer.byteLength(safeStringify(req.body)) > MAX_API_BODY_BYTES)) {
+        res.status(413).json({ error: 'Request body too large' });
         return;
     }
 
@@ -351,7 +494,7 @@ const apiHandler = async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token');
 
     console.log(`[Vercel API] Method: ${req.method} Path: ${pathname}`);
 
@@ -383,7 +526,11 @@ const apiHandler = async (req, res) => {
             },
             lastEventsCount: last.length,
             byType,
-            recent: last
+            recent: last.map((event) => {
+                const payload = { ...(event.payload || {}) };
+                if (payload.ip) payload.ip = hashString(payload.ip);
+                return { ...event, payload };
+            })
         });
         return;
     }
@@ -392,7 +539,12 @@ const apiHandler = async (req, res) => {
     // ROUTE: Monitor ingest (/api/monitor/log)
     // =========================================================
     if (pathname === '/api/monitor/log' && req.method === 'POST') {
+        if (!enforceRateLimit(req, res, 'monitor-log', RATE_LIMITS.telemetry)) return;
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
+        if (Buffer.byteLength(safeStringify(body)) > 16 * 1024) {
+            res.status(413).json({ error: 'Monitor payload too large' });
+            return;
+        }
         await appendMonitorEvent(body.type || 'frontend', {
             ...body,
             ip: getClientIp(req)
@@ -408,7 +560,11 @@ const apiHandler = async (req, res) => {
         const db = await getDb();
         const limit = Math.max(1, Math.min(parseInt(urlObj.searchParams.get('limit') || '200', 10), 1000));
         const events = await readJsonKey(db, 'audit_log', []);
-        const list = Array.isArray(events) ? events.slice(-limit).reverse() : [];
+        const list = Array.isArray(events) ? events.slice(-limit).reverse().map((event) => ({
+            ...event,
+            ip: event.ip ? hashString(event.ip) : '',
+            userAgent: undefined
+        })) : [];
         res.status(200).json({ items: list, count: list.length });
         return;
     }
@@ -418,7 +574,8 @@ const apiHandler = async (req, res) => {
     // =========================================================
     if (pathname === '/api/versions' && req.method === 'GET') {
         const db = await getDb();
-        const scope = String(urlObj.searchParams.get('scope') || 'session');
+        const requestedScope = String(urlObj.searchParams.get('scope') || 'session');
+        const scope = ['session', 'times', 'links'].includes(requestedScope) ? requestedScope : 'session';
         const key = `versions:${scope}`;
         const versions = await readJsonKey(db, key, []);
         const list = Array.isArray(versions) ? versions.slice().reverse() : [];
@@ -528,8 +685,15 @@ const apiHandler = async (req, res) => {
                 res.status(200).json({ success: true, message: 'Password valid' });
                 return;
             }
+            if (!times || typeof times !== 'object' || Array.isArray(times) || Object.keys(times).length > 20 ||
+                Object.values(times).some((slot) => !slot || typeof slot !== 'object' ||
+                    !/^\d{2}:\d{2}$/.test(String(slot.start || '')) || !/^\d{2}:\d{2}$/.test(String(slot.end || '')))) {
+                res.status(400).json({ error: 'Invalid times payload' });
+                return;
+            }
 
             try {
+                await withStorageMutationLock(db, 'times', async () => {
                 if (useLocal) {
                     const data = getLocalDb();
                     data.times = times;
@@ -548,9 +712,10 @@ const apiHandler = async (req, res) => {
                     keys: Object.keys(times || {}).length
                 });
                 res.status(200).json({ success: true });
+                });
             } catch (e) {
                 console.error("DB Save Error:", e);
-                res.status(500).json({ error: 'Database error: ' + e.message });
+                res.status(e.statusCode || 500).json({ error: 'Database error: ' + e.message });
             }
             return;
         }
@@ -576,8 +741,9 @@ const apiHandler = async (req, res) => {
                             try { dataObj = JSON.parse(remoteStr); } catch (e) { }
                         }
                     }
+                } else {
+                    dataObj = getLocalDb().links || {};
                 }
-                // Note: No local file fallback in Vercel environment (read-only FS usually)
                 res.status(200).json(dataObj);
                 return;
             }
@@ -597,14 +763,40 @@ const apiHandler = async (req, res) => {
                     return;
                 }
 
-                const { password, key, value } = payload;
+                const { password, key } = payload;
+                let { value } = payload;
 
                 if (password !== ADMIN_PASSWORD) {
                     await appendAuditEvent(req, 'admin_auth_failed', 'links', { reason: 'wrong_password' });
                     res.status(403).json({ error: 'Wrong password' });
                     return;
                 }
+                if (typeof key !== 'string' || !key.trim() || key.length > 200 || ['__proto__', 'prototype', 'constructor'].includes(key)) {
+                    res.status(400).json({ error: 'Invalid link key' });
+                    return;
+                }
+                if (value !== null) {
+                    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                        res.status(400).json({ error: 'Invalid link value' });
+                        return;
+                    }
+                    const validateUrl = (raw) => {
+                        const text = String(raw || '').trim();
+                        if (!text) return '';
+                        if (text.length > 2048) throw new Error('Link URL is too long');
+                        const parsed = new URL(text);
+                        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Only http/https links are allowed');
+                        return parsed.toString();
+                    };
+                    try {
+                        value = { courseUrl: validateUrl(value.courseUrl), onlineUrl: validateUrl(value.onlineUrl) };
+                    } catch (error) {
+                        res.status(400).json({ error: error.message || 'Invalid link URL' });
+                        return;
+                    }
+                }
 
+                await withStorageMutationLock(db, 'links', async () => {
                 // READ OLD
                 let links = {};
                 if (db) {
@@ -616,6 +808,8 @@ const apiHandler = async (req, res) => {
                         str = await db.client.get('links');
                         try { links = str ? JSON.parse(str) : {}; } catch (e) { }
                     }
+                } else {
+                    links = getLocalDb().links || {};
                 }
 
                 // UPDATE
@@ -636,14 +830,20 @@ const apiHandler = async (req, res) => {
                     await appendAuditEvent(req, 'update', 'links', { key, op: value === null ? 'delete' : 'upsert' });
                     res.status(200).json({ success: true, storage: db.type });
                 } else {
-                    res.status(500).json({ error: 'No database connection available on Vercel' });
+                    const local = getLocalDb();
+                    local.links = links;
+                    if (!saveLocalDb(local)) throw new Error('Failed to write local links');
+                    await saveVersion('links', links, { updatedByIp: getClientIp(req), key, op: value === null ? 'delete' : 'upsert' });
+                    await appendAuditEvent(req, 'update', 'links', { key, op: value === null ? 'delete' : 'upsert' });
+                    res.status(200).json({ success: true, storage: 'local-db' });
                 }
+                });
                 return;
             }
 
         } catch (e) {
             console.error("Vercel API DB Error:", e);
-            res.status(500).json({ error: e.message });
+            res.status(e.statusCode || 500).json({ error: e.message });
             return;
         }
     }
@@ -654,11 +854,14 @@ const apiHandler = async (req, res) => {
     if (pathname === '/api/session') {
         try {
             if (req.method === 'GET') {
+                await withMutationLock('session_data', async () => {
                 const loaded = await loadSessionData();
                 const store = ensureSessionStore(loaded.data);
                 const stats = buildSessionStats(store);
                 const snapshotMeta = (store.snapshots || []).map((s) => ({ id: s.id, at: s.at, reason: s.reason, by: s.by })).reverse();
                 res.status(200).json({ ...store, snapshots: snapshotMeta, storage: loaded.storage, stats });
+                return;
+                });
                 return;
             }
 
@@ -688,7 +891,7 @@ const apiHandler = async (req, res) => {
                 const action = payload.action || '';
                 const actor = String(payload.actor || 'unknown').replace(/\s+/g, ' ').trim();
                 if (action === 'validateOnly') {
-                    if (!data || !Array.isArray(data.items)) {
+                    if (!data || !Array.isArray(data.items) || data.items.length > MAX_SESSION_ITEMS) {
                         res.status(400).json({ error: 'Invalid session payload (items[])' });
                         return;
                     }
@@ -702,6 +905,7 @@ const apiHandler = async (req, res) => {
                     res.status(403).json({ error: 'Wrong password' });
                     return;
                 }
+                await withStorageMutationLock(dbForSession, 'session_data', async () => {
                 const loaded = await loadSessionData();
                 const store = ensureSessionStore(loaded.data);
 
@@ -723,7 +927,7 @@ const apiHandler = async (req, res) => {
                     return;
                 }
 
-                if (!data || !Array.isArray(data.items)) {
+                if (!data || !Array.isArray(data.items) || data.items.length > MAX_SESSION_ITEMS) {
                     res.status(400).json({ error: 'Invalid session payload (items[])' });
                     return;
                 }
@@ -734,6 +938,15 @@ const apiHandler = async (req, res) => {
                     term: item.term || term,
                     studyForm: item.studyForm || studyForm
                 }));
+                const validation = computeValidationStats(incomingItems);
+                const blockingIssues = validation.conflictsCount + validation.quality.missingDate +
+                    validation.quality.missingTime + validation.quality.missingRoom;
+                if (blockingIssues > 0 && payload.force !== true) {
+                    const error = new Error('Session validation failed before publication');
+                    error.statusCode = 422;
+                    error.validation = validation;
+                    throw error;
+                }
 
                 const normalizedTerm = normalizeSessionTerm(term);
                 let session = store.sessions.find((s) => normalizeSessionTerm(s.term) === normalizedTerm);
@@ -798,10 +1011,12 @@ const apiHandler = async (req, res) => {
                 await appendAuditEvent(req, 'update', 'session', { term, added, total });
                 res.status(200).json({ success: true, storage, added, count: total, term });
                 return;
+                });
+                return;
             }
         } catch (e) {
             console.error('Session API error', e);
-            res.status(500).json({ error: e.message });
+            res.status(e.statusCode || 500).json({ error: e.message, ...(e.validation ? { validation: e.validation } : {}) });
             return;
         }
     }
@@ -868,6 +1083,11 @@ const apiHandler = async (req, res) => {
     // ROUTE: Report Start (POST) — two-phase with progress
     // =========================================================
     if (pathname === '/api/report/start' && req.method === 'POST') {
+        if (!enforceRateLimit(req, res, 'report-start', RATE_LIMITS.report)) return;
+        if (process.env.NODE_ENV === 'production') {
+            res.status(409).json({ error: 'Background report jobs are unavailable in serverless mode; use /api/report/download' });
+            return;
+        }
         // #2 fix: declare payload with let
         let payload;
         try { payload = (req.body && typeof req.body === 'object') ? req.body : (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : {}); } catch (e) { payload = {}; }
@@ -876,13 +1096,24 @@ const apiHandler = async (req, res) => {
             res.status(400).json({ error: 'Missing teacherId, monthStart or monthEnd' });
             return;
         }
+        if (!parseReportMonthRange(monthStart, monthEnd)) {
+            res.status(400).json({ error: `Invalid report range (1-${MAX_REPORT_MONTHS} months required)` });
+            return;
+        }
+        if (reportQueue.pendingCount >= MAX_REPORT_QUEUE) {
+            res.status(503).json({ error: 'Report queue is full' });
+            return;
+        }
         const jobId = 'r' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
         const job = { status: 'running', current: 0, total: 0, progress: '0/0', done: false, error: null, allSemLessons: [], params: { facultyName, departmentName, teacherName, monthStart, monthEnd }, createdAt: Date.now() };
         reportJobs.set(jobId, job);
-        setTimeout(() => { if (reportJobs.has(jobId)) reportJobs.delete(jobId); }, REPORT_JOB_TTL);
+        const expiryTimer = setTimeout(() => { if (reportJobs.has(jobId)) reportJobs.delete(jobId); }, REPORT_JOB_TTL);
+        expiryTimer.unref?.();
+        await Promise.all([
+            appendAuditEvent(req, 'start', 'report', { jobId, teacherId, monthStart, monthEnd }),
+            appendMonitorEvent('report_start', { jobId })
+        ]);
         res.status(200).json({ jobId });
-        appendAuditEvent(req, 'start', 'report', { jobId, teacherId, monthStart, monthEnd }).catch(() => {});
-        appendMonitorEvent('report_start', { jobId }).catch(() => {});
         reportQueue.enqueue(async () => {
             const getMonthDate = (str) => { const [y, m] = str.split('-').map(Number); return new Date(y, m - 1, 1); };
             const formatDate = (d) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
@@ -899,28 +1130,27 @@ const apiHandler = async (req, res) => {
                 job.current = i; job.progress = `${i + 1}/${months.length} місяців`;
                 try {
                     const u = `${API_URL}?aVuzID=${VUZ_ID}&aEmployeeID="${teacherId}"&aStartDate="${m.apiStart}"&aEndDate="${m.apiEnd}"&aStudyTypeID=&aGiveStudyTimes=true`;
-                    const controller = new AbortController();
-                    const tid = setTimeout(() => controller.abort(), 15000);
-                    const apiRes = await fetchImpl(u, { signal: controller.signal });
-                    clearTimeout(tid);
+                    const apiRes = await fetchWithTimeout(u, {}, 15000);
+                    if (apiRes.ok === false) throw new Error(`Status ${apiRes.status}`);
                     const raw = await apiRes.json();
                     const lessons = Array.isArray(raw.d) ? raw.d : (Array.isArray(raw) ? raw : []);
                     lessons.forEach(l => job.allSemLessons.push({ ...l, monthObj: new Date(m.year, m.month, 1) }));
                 } catch (err) {
                     job.status = 'error';
                     job.error = err.message;
-                    job.done = true;
                     await appendMonitorEvent('report_error', { jobId, error: err.message });
+                    job.done = true;
                     return;
                 }
             }
-            job.status = 'done'; job.done = true; job.progress = `${months.length}/${months.length} місяців`;
+            job.status = 'done'; job.progress = `${months.length}/${months.length} місяців`;
             await appendMonitorEvent('report_done', { jobId, months: months.length, lessons: job.allSemLessons.length });
+            job.done = true;
         }).catch(async (err) => {
             job.status = 'error';
             job.error = err.message;
-            job.done = true;
             await appendMonitorEvent('report_error', { jobId, error: err.message, phase: 'queue' });
+            job.done = true;
         });
         return;
     }
@@ -950,6 +1180,7 @@ const apiHandler = async (req, res) => {
     // =========================================================
     if (pathname === '/api/report/download' && req.method === 'GET') {
         try {
+            if (!enforceRateLimit(req, res, 'report-download', RATE_LIMITS.report)) return;
             const jobId = urlObj.searchParams.get('jobId');
             if (jobId) {
                 const job = reportJobs.get(jobId);
@@ -987,6 +1218,10 @@ const apiHandler = async (req, res) => {
 
             if (!teacherId || !monthStartStr || !monthEndStr) {
                 res.status(400).json({ error: 'Missing teacherId or date range' });
+                return;
+            }
+            if (!parseReportMonthRange(monthStartStr, monthEndStr)) {
+                res.status(400).json({ error: `Invalid report range (1-${MAX_REPORT_MONTHS} months required)` });
                 return;
             }
 
@@ -1035,10 +1270,7 @@ const apiHandler = async (req, res) => {
                     console.log(`[Report] Fetching ${mSheetName}...`);
                     try {
                         // #16: use AbortController instead of unsupported timeout option
-                        const controller = new AbortController();
-                        const tid = setTimeout(() => controller.abort(), 15000);
-                        const apiRes = await fetchImpl(apiUrlWithParams, { signal: controller.signal });
-                        clearTimeout(tid);
+                        const apiRes = await fetchWithTimeout(apiUrlWithParams, {}, 15000);
                         if (!apiRes.ok) throw new Error(`Status ${apiRes.status}`);
                         const rawData = await apiRes.json();
                         const data = Array.isArray(rawData.d) ? rawData.d : (Array.isArray(rawData) ? rawData : []);
@@ -1064,6 +1296,14 @@ const apiHandler = async (req, res) => {
             // 2. Execute Parallel Fetches
             console.log(`[Report] Starting ${requests.length} parallel requests...`);
             const results = await Promise.all(requests);
+            const failedMonths = results.filter((result) => !result.success);
+            if (failedMonths.length) {
+                res.status(502).json({
+                    error: 'Failed to load one or more report months',
+                    months: failedMonths.map((result) => result.sheetName)
+                });
+                return;
+            }
 
             // 3. Process Results & Generate Sheets
             const allSemLessons = [];
@@ -1424,12 +1664,27 @@ const apiHandler = async (req, res) => {
         }
 
         if (req.method === 'POST') {
+            if (!enforceRateLimit(req, res, 'occupancy-write', RATE_LIMITS.occupancyWrite)) return;
+            const cacheToken = process.env.OCCUPANCY_CACHE_TOKEN || '';
+            const providedToken = String(req.headers['x-occupancy-cache-token'] || '');
+            if (!cacheToken) {
+                res.status(503).json({ error: 'Shared occupancy cache writes are disabled' });
+                return;
+            }
+            if (providedToken !== cacheToken) {
+                res.status(403).json({ error: 'Invalid occupancy cache token' });
+                return;
+            }
             const payload = req.body || {};
             const results = payload.results;
             const postDate = payload.date || date;
 
             if (!postDate || !Array.isArray(results)) {
                 res.status(400).json({ error: 'Missing date or invalid results (array expected)' });
+                return;
+            }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(postDate)) || results.length > 5000 || Buffer.byteLength(safeStringify(results)) > 1024 * 1024) {
+                res.status(413).json({ error: 'Occupancy payload is invalid or too large' });
                 return;
             }
 
@@ -1462,8 +1717,12 @@ const apiHandler = async (req, res) => {
     // Remove trailing slash if present
     const cleanPath = pathname.replace(/\/$/, '');
     const action = cleanPath.split('/').pop();
+    const allowedProxyActions = new Set([
+        'getstudentschedulefiltersdata', 'getstudygroups', 'getemployeechairs',
+        'getemployees', 'getscheduledatax', 'getscheduledataemp'
+    ]);
 
-    if (action.startsWith('links') || action.startsWith('report')) {
+    if (req.method !== 'GET' || !allowedProxyActions.has(action.toLowerCase())) {
         res.status(404).json({ error: 'Endpoint not found' });
         return;
     }
@@ -1491,17 +1750,13 @@ const apiHandler = async (req, res) => {
     // #16: node-fetch v2 ignores `timeout` option — use AbortController
     try {
         const proxyResult = await getOrCreateInFlightProxy(cacheKeyNorm, async () => {
-            const proxyController = new AbortController();
-            const proxyTimeoutId = setTimeout(() => proxyController.abort(), 10000);
-            const apiRes = await fetchImpl(targetUrl, {
+            const apiRes = await fetchWithTimeout(targetUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Referer': 'http://wp-fuaid.zzz.com.ua/',
                     'Content-Type': 'application/json'
-                },
-                signal: proxyController.signal
-            });
-            clearTimeout(proxyTimeoutId);
+                }
+            }, 10000);
 
             const data = await apiRes.text();
             if (apiRes.status === 200 && data.length > 0) {
@@ -1531,6 +1786,7 @@ apiHandler.__resetInternalsForTests = () => {
     reportJobs.clear();
     proxyCache.clear();
     inFlightProxyRequests.clear();
+    mutationTails.clear();
 };
 
 const readFallbackSessionFile = () => {
@@ -1625,7 +1881,7 @@ const appendSessionSnapshot = (store, reason, actor) => {
         trash: JSON.parse(JSON.stringify(store.trash || [])),
         history: JSON.parse(JSON.stringify(store.history || []))
     });
-    while (list.length > 30) list.shift();
+    while (list.length > 10) list.shift();
     store.snapshots = list;
     return list[list.length - 1];
 };
@@ -1867,7 +2123,7 @@ const normalizeSessionTerm = (value) => String(value || '')
     .toLowerCase();
 
 const normalizeSessionItem = (item) => {
-    const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+    const clean = (v, max = 1000) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
     const teachers = clean(item.teacher || '')
         .replace(/\s*(,|\/|\|)\s*/g, '; ')
         .replace(/\s+та\s+/giu, '; ')
@@ -1875,17 +2131,21 @@ const normalizeSessionItem = (item) => {
         .map((t) => clean(t))
         .filter(Boolean);
     return {
-        ...item,
         term: clean(item.term || ''),
         studyForm: clean(item.studyForm || ''),
         groupHeading: clean(item.groupHeading || ''),
         groups: Array.isArray(item.groups) ? item.groups.map((g) => clean(g).toLowerCase()).filter(Boolean) : [],
         controlType: clean(item.controlType || 'залік').toLowerCase(),
         discipline: clean(item.discipline || ''),
+        speciality: clean(item.speciality || ''),
+        program: clean(item.program || ''),
+        examForm: clean(item.examForm || ''),
         teacher: teachers.join('; '),
         date: clean(item.date || ''),
         time: clean(item.time || ''),
-        room: clean(item.room || '')
+        room: clean(item.room || ''),
+        sourceTable: Number.isFinite(Number(item.sourceTable)) ? Number(item.sourceTable) : 0,
+        sourceFile: clean(item.sourceFile || '', 255)
     };
 };
 

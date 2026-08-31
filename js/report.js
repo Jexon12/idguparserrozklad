@@ -31,7 +31,7 @@ const reportMethods = {
     openReportModal() {
         reportState.showReportModal = true;
         const now = new Date();
-        const currentMonth = now.toISOString().slice(0, 7);
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         if (!reportState.reportForm.monthStart) reportState.reportForm.monthStart = currentMonth;
         if (!reportState.reportForm.monthEnd) reportState.reportForm.monthEnd = currentMonth;
     },
@@ -75,62 +75,43 @@ const reportMethods = {
         reportState.reportProgress = { current: 0, total: 0, progress: '0/0 місяців', done: false, error: null };
 
         try {
-            const apiBase = SA.API_PROXY.startsWith('/') ? (window.location.origin + SA.API_PROXY.replace(/\/$/, '')) : (window.location.origin + '/api');
-            const startRes = await fetch(apiBase + '/report/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    facultyName: reportState.reportForm.faculty.Value,
-                    departmentName: reportState.reportForm.chair.Value,
-                    teacherName: reportState.reportForm.teacher.Value,
-                    teacherId: reportState.reportForm.teacher.Key,
-                    monthStart: reportState.reportForm.monthStart,
-                    monthEnd: reportState.reportForm.monthEnd
-                })
-            });
-            if (!startRes.ok) {
-                const text = await startRes.text();
-                throw new Error(`HTTP ${startRes.status}: ${text || 'Помилка запуску звіту'}`);
+            const [sy, sm] = reportState.reportForm.monthStart.split('-').map(Number);
+            const [ey, em] = reportState.reportForm.monthEnd.split('-').map(Number);
+            const monthCount = (ey - sy) * 12 + em - sm + 1;
+            if (!Number.isInteger(monthCount) || monthCount < 1 || monthCount > 24) {
+                throw new Error('Діапазон звіту має містити від 1 до 24 місяців');
             }
-            const { jobId } = await startRes.json();
-            if (!jobId) throw new Error('Не вдалося розпочати генерацію');
-
-            const statusUrl = apiBase + '/report/status?jobId=' + jobId;
-            const poll = async () => {
-                const r = await fetch(statusUrl);
-                if (!r.ok) {
-                    const t = await r.text();
-                    throw new Error(`HTTP ${r.status}: ${t || 'Помилка отримання статусу'}`);
-                }
-                const s = await r.json();
-                reportState.reportProgress = {
-                    current: s.current || 0,
-                    total: s.total || 0,
-                    progress: s.progress || '',
-                    done: !!s.done,
-                    error: s.error || null
-                };
-
-                if (s.error) {
-                    reportState.isDownloadingReport = false;
-                    reportState.reportError = s.error;
-                    setTimeout(() => { reportState.reportError = ''; }, 5000);
-                    return;
-                }
-
-                if (s.done && s.downloadUrl) {
-                    const baseUrl = window.location.origin;
-                    const downloadUrl = (s.downloadUrl.startsWith('/') ? baseUrl : baseUrl + '/') + s.downloadUrl;
-                    window.location.href = downloadUrl;
-                    reportState.isDownloadingReport = false;
-                    reportState.showReportModal = false;
-                    return;
-                }
-
-                setTimeout(poll, 500);
-            };
-
-            poll();
+            const apiBase = SA.API_PROXY.startsWith('/') ? (window.location.origin + SA.API_PROXY.replace(/\/$/, '')) : (window.location.origin + '/api');
+            const params = new URLSearchParams({
+                faculty: reportState.reportForm.faculty.Value,
+                department: reportState.reportForm.chair.Value,
+                teacherName: reportState.reportForm.teacher.Value,
+                teacherId: reportState.reportForm.teacher.Key,
+                monthStart: reportState.reportForm.monthStart,
+                monthEnd: reportState.reportForm.monthEnd
+            });
+            // Generate and stream the file in one request. This works across
+            // serverless instances; no in-memory job state is required.
+            const response = await fetch(`${apiBase}/report/download?${params.toString()}`);
+            if (!response.ok) {
+                const raw = await response.text();
+                let message = raw || `HTTP ${response.status}`;
+                try { message = JSON.parse(raw).error || message; } catch (_) { }
+                throw new Error(message);
+            }
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = objectUrl;
+            const safeTeacher = String(reportState.reportForm.teacher.Value || 'Викладач').replace(/[\\/:*?"<>|]/g, '_');
+            anchor.download = `Звіт_${safeTeacher}_${reportState.reportForm.monthStart}_${reportState.reportForm.monthEnd}.xlsx`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(objectUrl);
+            reportState.reportProgress = { current: monthCount, total: monthCount, progress: 'Завантаження розпочато', done: true, error: null };
+            reportState.isDownloadingReport = false;
+            reportState.showReportModal = false;
         } catch (e) {
             reportState.reportError = 'Помилка: ' + e.message;
             reportState.isDownloadingReport = false;

@@ -1,6 +1,9 @@
 window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
+    const escapeHtml = SA.escapeHtml || ((value) => String(value ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
     const PAIR_TIMES = SA.defaultTimes || {
         1: { start: '08:30', end: '09:50' },
         2: { start: '10:00', end: '11:20' },
@@ -306,7 +309,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     function stableMapForToday(lessons) {
         const out = new Map();
-        const today = toDmyFromIso(new Date().toISOString().slice(0, 10));
+        const today = toDmyFromIso(SA.toLocalIsoDate(new Date()));
         lessons.filter((l) => l.date === today).forEach((l) => {
             const stable = [l.date, l.discipline, l.teacher, l.group, l.type].join('||');
             out.set(stable, { pair: l.pair, room: l.room, label: `${l.displayTime} · ${l.discipline}` });
@@ -354,7 +357,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         state.liveBoardEvents.forEach((e) => {
             const div = document.createElement('div');
             div.className = 'board-card rounded-xl border dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700';
-            div.innerHTML = `<div class="text-xs text-gray-500">${e.at} · ${e.type}</div><div class="text-sm font-semibold">${e.text}</div>`;
+            div.innerHTML = `<div class="text-xs text-gray-500">${escapeHtml(e.at)} · ${escapeHtml(e.type)}</div><div class="text-sm font-semibold">${escapeHtml(e.text)}</div>`;
             els.liveBoard.appendChild(div);
         });
     }
@@ -615,8 +618,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         const now = new Date();
         const next = new Date(now);
         next.setDate(now.getDate() + 7);
-        els.dateStart.value = now.toISOString().slice(0, 10);
-        els.dateEnd.value = next.toISOString().slice(0, 10);
+        els.dateStart.value = SA.toLocalIsoDate(now);
+        els.dateEnd.value = SA.toLocalIsoDate(next);
     }
 
     function bind() {

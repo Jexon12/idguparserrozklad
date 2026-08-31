@@ -75,14 +75,14 @@ try {
             const today = new Date();
             const nextWeek = new Date(today);
             nextWeek.setDate(today.getDate() + 7);
-            const dateStart = ref(today.toISOString().split('T')[0]);
-            const dateEnd = ref(nextWeek.toISOString().split('T')[0]);
+            const dateStart = ref(SA.toLocalIsoDate(today));
+            const dateEnd = ref(SA.toLocalIsoDate(nextWeek));
 
             // Active entities (multi-entity display)
             const activeEntities = ref([]);
 
             // Occupancy
-            const occupancyDate = ref(today.toISOString().split('T')[0]);
+            const occupancyDate = ref(SA.toLocalIsoDate(today));
             const occupancyResults = ref([]);
             const isScanning = ref(false);
             const stopScan = ref(false);
@@ -149,6 +149,7 @@ try {
             const autoRefreshInterval = ref(parseInt(localStorage.getItem('schedule_autoRefreshInterval') || '10'));
             const lastRefreshTime = ref(null);
             let autoRefreshTimer = null;
+            let refreshInProgress = false;
 
             // Local Notifications
             const notificationsEnabled = ref(localStorage.getItem('schedule_notifications') === 'true');
@@ -588,6 +589,37 @@ try {
                 };
             });
 
+            const smartSimulationIndex = ref('');
+            const smartSimulationDelta = ref(1);
+            const smartLessonOptions = computed(() => activeEntities.value.flatMap((entity) =>
+                (entity.scheduleData || []).map((lesson) => ({
+                    ...SA.ScheduleModel.normalizeLesson(lesson, { times: customTimes.value, source: entity.name }),
+                    entityName: entity.name
+                }))
+            ).filter((lesson) => lesson.date && lesson.pair));
+            const smartDayInsights = computed(() => {
+                if (!SA.ScheduleAnalytics) return { score: 0, windows: 0, latePairs: 0, moves: 0 };
+                return SA.ScheduleAnalytics.comfortScore(smartLessonOptions.value);
+            });
+            const smartHeatmap = computed(() => {
+                if (!SA.ScheduleAnalytics) return [];
+                const counts = SA.ScheduleAnalytics.heatmap(smartLessonOptions.value);
+                const dates = Array.from(new Set(smartLessonOptions.value.map((lesson) => lesson.date))).filter(Boolean).sort().slice(0, 7);
+                return dates.map((date) => ({
+                    date,
+                    dateDmy: SA.ScheduleModel.isoToDmy(date),
+                    pairs: Array.from({ length: 7 }, (_, offset) => counts.get(`${date}|${offset + 1}`) || 0)
+                }));
+            });
+            const smartSimulationResult = computed(() => {
+                const index = Number(smartSimulationIndex.value);
+                if (!Number.isInteger(index) || index < 0 || !smartLessonOptions.value[index]) return null;
+                const copy = smartLessonOptions.value.map((lesson) => ({ ...lesson }));
+                copy[index].pair = Math.max(1, Math.min(7, copy[index].pair + Number(smartSimulationDelta.value || 0)));
+                const after = SA.ScheduleAnalytics.comfortScore(copy);
+                return { before: smartDayInsights.value.score, after: after.score, delta: after.score - smartDayInsights.value.score };
+            });
+
             const currentPairNow = computed(() => {
                 const now = new Date();
                 const mins = now.getHours() * 60 + now.getMinutes();
@@ -814,15 +846,23 @@ try {
 
             // Auto-Refresh Logic
             const refreshAllSchedules = async () => {
-                if (activeEntities.value.length === 0) return;
+                if (activeEntities.value.length === 0 || refreshInProgress) return;
+                refreshInProgress = true;
+                try {
                 let changesDetected = 0;
                 const changeEvents = [];
                 for (const entity of activeEntities.value) {
                     const { action, payload } = SA.buildSchedulePayload(entity, scheduleRefs);
                     const newData = await fetchApi(action, payload, { silent: true });
                     if (!newData) continue;
-                    const oldFingerprint = JSON.stringify(entity.scheduleData?.map(l => l.discipline + l.study_time + l.full_date).sort());
-                    const newFingerprint = JSON.stringify(newData.map(l => l.discipline + l.study_time + l.full_date).sort());
+                    if (!Array.isArray(newData)) continue;
+                    const fingerprint = (items) => JSON.stringify((items || []).map((l) => [
+                        l.full_date || '', l.study_time || '', l.study_time_begin || '', l.study_time_end || '',
+                        l.discipline || '', l.teacher || l.employee || '', l.group || '',
+                        l.cabinet || '', l.type || l.study_type || ''
+                    ].join('||')).sort());
+                    const oldFingerprint = fingerprint(entity.scheduleData);
+                    const newFingerprint = fingerprint(newData);
                     if (oldFingerprint !== newFingerprint) {
                         changeEvents.push(...collectScheduleChanges(entity.scheduleData || [], newData, entity));
                         entity.scheduleData = newData;
@@ -838,6 +878,9 @@ try {
                             body: `Виявлено ${changesDetected} змін(и) у розкладі.`
                         });
                     }
+                }
+                } finally {
+                    refreshInProgress = false;
                 }
             };
 
@@ -1214,9 +1257,6 @@ try {
                 SA.loadGlobalLinks(adminRefs);
                 SA.loadGlobalTimes(adminRefs);
 
-                // Auto refresh every 5 minutes
-                setInterval(refreshAllSchedules, 5 * 60 * 1000);
-
                 // Next lesson countdown timer handled by updateTimeBasedInfo
 
                 // Keyboard shortcuts
@@ -1297,7 +1337,7 @@ try {
             const setTomorrowRange = () => {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
-                const iso = tomorrow.toISOString().split('T')[0];
+                const iso = SA.toLocalIsoDate(tomorrow);
                 dateStart.value = iso;
                 dateEnd.value = iso;
                 datePreset.value = 'tomorrow';
@@ -1314,21 +1354,21 @@ try {
                 monday.setHours(0, 0, 0, 0);
 
                 if (preset === 'today') {
-                    dateStart.value = now.toISOString().split('T')[0];
-                    dateEnd.value = now.toISOString().split('T')[0];
+                    dateStart.value = SA.toLocalIsoDate(now);
+                    dateEnd.value = SA.toLocalIsoDate(now);
                 } else if (preset === 'thisWeek') {
                     const sun = new Date(monday); sun.setDate(monday.getDate() + 6);
-                    dateStart.value = monday.toISOString().split('T')[0];
-                    dateEnd.value = sun.toISOString().split('T')[0];
+                    dateStart.value = SA.toLocalIsoDate(monday);
+                    dateEnd.value = SA.toLocalIsoDate(sun);
                 } else if (preset === 'nextWeek') {
                     const nextMon = new Date(monday); nextMon.setDate(monday.getDate() + 7);
                     const nextSun = new Date(nextMon); nextSun.setDate(nextMon.getDate() + 6);
-                    dateStart.value = nextMon.toISOString().split('T')[0];
-                    dateEnd.value = nextSun.toISOString().split('T')[0];
+                    dateStart.value = SA.toLocalIsoDate(nextMon);
+                    dateEnd.value = SA.toLocalIsoDate(nextSun);
                 } else if (preset === 'twoWeeks') {
                     const twoSun = new Date(monday); twoSun.setDate(monday.getDate() + 13);
-                    dateStart.value = monday.toISOString().split('T')[0];
-                    dateEnd.value = twoSun.toISOString().split('T')[0];
+                    dateStart.value = SA.toLocalIsoDate(monday);
+                    dateEnd.value = SA.toLocalIsoDate(twoSun);
                 }
                 if (activeEntities.value.length > 0) refreshAllSchedules();
             };
@@ -1336,12 +1376,12 @@ try {
             // Week navigation  
             const shiftWeek = (direction) => {
                 const shift = direction * 7;
-                const newStart = new Date(dateStart.value);
-                const newEnd = new Date(dateEnd.value);
+                const newStart = new Date(`${dateStart.value}T12:00:00`);
+                const newEnd = new Date(`${dateEnd.value}T12:00:00`);
                 newStart.setDate(newStart.getDate() + shift);
                 newEnd.setDate(newEnd.getDate() + shift);
-                dateStart.value = newStart.toISOString().split('T')[0];
-                dateEnd.value = newEnd.toISOString().split('T')[0];
+                dateStart.value = SA.toLocalIsoDate(newStart);
+                dateEnd.value = SA.toLocalIsoDate(newEnd);
                 datePreset.value = '';
                 if (activeEntities.value.length > 0) refreshAllSchedules();
             };
@@ -1553,7 +1593,7 @@ try {
             } catch (e) { }
 
             const openFreeRoomsNow = async () => {
-                const todayIso = new Date().toISOString().split('T')[0];
+                const todayIso = SA.toLocalIsoDate(new Date());
                 mode.value = 'occupancy';
                 showFreeNowOnly.value = true;
 
@@ -1696,7 +1736,7 @@ try {
 
                 for (const dayData of gs) {
                     for (const slot of dayData.slots) {
-                        if (!slot.start || !slot.end) continue;
+                        if (!slot.start || !slot.end || !slot.lessons.length) continue;
 
                         const parts = dayData.date.split('.');
                         if (parts.length !== 3) continue;
@@ -1857,6 +1897,7 @@ try {
                 exportICal, shareSchedule, showToast,
                 shareFavoritesSet, openNextLessonInGoogleCalendar,
                 conflictSlots, advancedAnalytics,
+                smartDayInsights, smartHeatmap, smartLessonOptions, smartSimulationIndex, smartSimulationDelta, smartSimulationResult,
                 aliasesList, aliasSource, aliasTarget, aliasType, addAlias, removeAlias,
                 getDisplayDiscipline, getDisplayTeacher,
                 showFreeNowOnly, openFreeRoomsNow, currentPairNow, freeRoomsNow,

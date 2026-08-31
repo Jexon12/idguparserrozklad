@@ -6,9 +6,9 @@ const exts = new Set(['.js', '.html', '.css', '.md', '.json', '.yml', '.yaml']);
 const ignoreDirs = new Set(['node_modules', '.git']);
 const ignoreFiles = new Set([
     path.resolve(__filename),
-    path.join(ROOT, 'schedule.min.js'),
-    path.join(ROOT, 'schedule-loader.js'),
-    path.join(ROOT, 'page.html')
+    path.join(ROOT, 'legacy', 'external-widget', 'schedule.min.js'),
+    path.join(ROOT, 'legacy', 'external-widget', 'schedule-loader.js'),
+    path.join(ROOT, 'legacy', 'external-widget', 'page.html')
 ]);
 
 const badPatterns = [

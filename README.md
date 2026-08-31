@@ -118,11 +118,11 @@
 - `GET /api/search?q=...` — серверний пошук (кешований).
 - `GET /api/session` — отримати актуальні дані сесії.
 - `POST /api/session` — зберегти нові дані сесії (admin).
-- `POST /api/report/start` — старт генерації Excel-звіту.
+- `POST /api/report/start` — локальний legacy-режим фонової генерації Excel-звіту.
 - `GET /api/report/status?jobId=...` — статус генерації.
-- `GET /api/report/download?jobId=...` — завантажити файл звіту.
+- `GET /api/report/download?...` — синхронно згенерувати/завантажити файл звіту (production/serverless).
 - `GET /api/occupancy?date=YYYY-MM-DD` — читання кешу зайнятості.
-- `POST /api/occupancy` — запис кешу зайнятості.
+- `POST /api/occupancy` — запис кешу зайнятості, якщо налаштований `OCCUPANCY_CACHE_TOKEN`.
 - `GET /api/<action>` — proxy до зовнішнього API (з кешем і rate-limit).
 
 ## Змінні середовища
@@ -133,6 +133,7 @@
 - `VUZ_ID` — ID закладу (за замовчуванням `11927`).
 - `REDIS_URL` — Redis для серверного кешу (optional).
 - `KV_REST_API_URL`, `KV_REST_API_TOKEN` — Vercel KV (optional).
+- `OCCUPANCY_CACHE_TOKEN` — секрет для дозволу запису спільного кешу зайнятості (optional).
 - `NODE_ENV` — `production`/`development`.
 
 ## Локальний запуск
@@ -198,7 +199,7 @@ npm run lint:encoding
 ### Швидка перевірка після деплою
 1. `GET /api/health` має повертати `status: ok`.
 2. `GET /api/monitor` — перевірити, що `reportQueue.active/queued` в адекватних межах.
-3. Відкрити `index.html`, `index2.html`, `builder.html`, `session.html`, `smart.html`.
+3. Відкрити `index.html`, `index2.html`, `builder.html`, `course-live.html`, `session.html` і `session-constructor.html`.
 4. Зробити hard reload (`Ctrl+F5`) при підозрі на старий JS/SW кеш.
 
 ### Якщо admin-збереження не працює

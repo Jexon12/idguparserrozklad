@@ -69,9 +69,15 @@ window.ScheduleApp = window.ScheduleApp || {};
     SA.saveAdminLinks = async (refs) => {
         const key = refs.adminTargetKey.value;
         const val = { ...refs.adminForm.value };
-
-        if (!refs.globalLinks.value[key]) refs.globalLinks.value[key] = {};
-        refs.globalLinks.value[key] = val;
+        const isAllowedUrl = (raw) => {
+            const text = String(raw || '').trim();
+            if (!text) return true;
+            try { return ['http:', 'https:'].includes(new URL(text).protocol); } catch (_) { return false; }
+        };
+        if (!isAllowedUrl(val.courseUrl) || !isAllowedUrl(val.onlineUrl)) {
+            alert('Дозволені лише повні посилання http:// або https://');
+            return;
+        }
 
         try {
             const res = await fetch('/api/links', {
@@ -92,6 +98,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             if (!res.ok) {
                 alert(`Помилка збереження (${res.status}): ${data.error || JSON.stringify(data)}`);
             } else {
+                refs.globalLinks.value[key] = val;
                 alert('Збережено успішно');
             }
         } catch (e) {

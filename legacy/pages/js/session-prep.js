@@ -1,7 +1,13 @@
 /* Session Prep Builder: subject + group + teachers table */
 (function () {
+    const SA = window.ScheduleApp || {};
+    const Catalog = SA.ScheduleCatalog;
+    const Model = SA.ScheduleModel;
     const API_PROXY = '/api/';
     const VUZ_ID = 11927;
+    const escapeHtml = SA.escapeHtml || ((v) => String(v ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
 
     const state = {
         faculties: [],
@@ -54,6 +60,7 @@
     }
 
     function normalizeText(v) {
+        if (Model?.cleanText) return Model.cleanText(v);
         return String(v || '')
             .replace(/<[^>]*>/g, ' ')
             .replace(/[\u0000-\u001F]+/g, ' ')
@@ -63,6 +70,7 @@
     }
 
     function normalizeDiscipline(v) {
+        if (Model?.normalizeDiscipline) return Model.normalizeDiscipline(v);
         return normalizeText(v)
             .replace(/^[\d\.\-\)\(]+\s*/g, '')
             .replace(/[;:,]+$/g, '')
@@ -70,6 +78,7 @@
     }
 
     function splitTeachers(raw) {
+        if (Model?.splitTeachers) return Model.splitTeachers(raw);
         const source = normalizeText(raw)
             .replace(/\s*;\s*/g, ',')
             .replace(/\s*\/\s*/g, ',')
@@ -85,6 +94,11 @@
     }
 
     async function fetchApi(action, params = {}) {
+        if (typeof SA.fetchApi === 'function') {
+            const data = await SA.fetchApi(action, params, { useCache: true });
+            if (data === null) throw new Error('Не вдалося отримати дані API');
+            return data;
+        }
         const url = new URL(API_PROXY + action, window.location.origin);
         url.searchParams.append('aVuzID', VUZ_ID);
         if (action === 'GetStudyGroups') {
@@ -113,6 +127,13 @@
 
     /* Required: load faculties/forms/courses */
     async function loadFacultiesFormsCourses() {
+        if (Catalog) {
+            const data = await Catalog.loadStudentFilters();
+            state.faculties = data.faculties;
+            state.eduForms = data.educForms;
+            state.courses = data.courses;
+            return;
+        }
         const data = await fetchApi('GetStudentScheduleFiltersData');
         state.faculties = Array.isArray(data?.faculties) ? data.faculties : [];
         state.eduForms = Array.isArray(data?.educForms) ? data.educForms : [];
@@ -131,6 +152,13 @@
         }
 
         setLoading(true, 'Завантаження груп...');
+        if (Catalog) {
+            state.groups = (await Catalog.loadGroups(faculty, form, selectedCourses))
+                .map((item) => ({ key: String(item.Key), value: normalizeText(item.Value) }));
+            renderCheckboxes(el.groupsBox, state.groups, 'group');
+            setLoading(false);
+            return;
+        }
         const list = [];
         for (const course of selectedCourses) {
             const res = await fetchApi('GetStudyGroups', {
@@ -196,7 +224,7 @@
             const id = `${kind}_${idx}_${String(it.key || it.Key || '')}`;
             const label = document.createElement('label');
             label.className = 'flex items-start gap-2 text-sm break-words';
-            label.innerHTML = `<input type="checkbox" class="mt-0.5 shrink-0" data-kind="${kind}" value="${String(it.key || it.Key || '')}" checked> <span class="leading-5 break-words">${String(it.value || it.Value || '')}</span>`;
+            label.innerHTML = `<input type="checkbox" class="mt-0.5 shrink-0" data-kind="${escapeHtml(kind)}" value="${escapeHtml(it.key || it.Key || '')}" checked> <span class="leading-5 break-words">${escapeHtml(it.value || it.Value || '')}</span>`;
             label.querySelector('input').id = id;
             container.appendChild(label);
         });
@@ -264,9 +292,9 @@
             tr.className = idx % 2 ? 'bg-gray-50 dark:bg-gray-800/50' : '';
             tr.innerHTML = `
                 <td class="px-3 py-2">${idx + 1}</td>
-                <td class="px-3 py-2">${r.subject}</td>
-                <td class="px-3 py-2">${r.group}</td>
-                <td class="px-3 py-2">${r.teachers.join(', ')}</td>
+                <td class="px-3 py-2">${escapeHtml(r.subject)}</td>
+                <td class="px-3 py-2">${escapeHtml(r.group)}</td>
+                <td class="px-3 py-2">${escapeHtml(r.teachers.join(', '))}</td>
             `;
             el.tableBody.appendChild(tr);
         });
@@ -373,7 +401,7 @@
         const m = now.getMonth();
         const first = new Date(y, m, 1);
         const last = new Date(y, m + 1, 0);
-        const toIso = (d) => d.toISOString().slice(0, 10);
+        const toIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         el.startDate.value = toIso(first);
         el.endDate.value = toIso(last);
     }

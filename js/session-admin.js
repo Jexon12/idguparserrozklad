@@ -37,7 +37,9 @@
   };
 
   const state = { filesParsed: [], items: [], sessions: [], trash: [], history: [], snapshots: [], storage: 'unknown' };
-  const clean = (v) => String(v || '').replace(/[\u200e\u200f]/g, '').replace(/\s+/g, ' ').trim();
+  const SharedModel = window.ScheduleApp?.ScheduleModel;
+  const SharedImport = window.ScheduleApp?.SessionImport;
+  const clean = SharedModel?.cleanText || ((v) => String(v || '').replace(/[\u200e\u200f]/g, '').replace(/\s+/g, ' ').trim());
   const normalizeTerm = (v) => clean(v).toLowerCase();
 
   const setStatus = (msg, isError) => {
@@ -58,9 +60,11 @@
     let json = null;
     try { json = raw ? JSON.parse(raw) : null; } catch (e) {}
     if (!res.ok) {
+      window.ScheduleApp?.DataFreshness?.mark(navigator.onLine ? 'error' : 'offline');
       const serverMsg = (json && (json.error || json.message)) ? (json.error || json.message) : (raw || 'Request failed');
       throw new Error(`HTTP ${res.status}: ${serverMsg}`);
     }
+    window.ScheduleApp?.DataFreshness?.mark('api');
     return json || {};
   };
 
@@ -81,13 +85,13 @@
     return '';
   };
 
-  const extractTeacherNames = (value) => {
+  const extractTeacherNames = SharedModel?.splitTeachers || ((value) => {
     const raw = clean(value);
     if (!raw) return [];
     return Array.from(new Set(raw.replace(/\s*(,|\/|\|)\s*/g, '; ').replace(/\s+та\s+/giu, '; ').split(';').map(clean).filter(Boolean)));
-  };
+  });
 
-  const parseGroups = (heading) => {
+  const parseGroups = SharedImport?.parseGroups || ((heading) => {
     const raw = clean(heading);
     const out = [];
     const re = /(\d{1,3})\s*([\p{L}])?/gu;
@@ -97,7 +101,7 @@
       if (g && !out.includes(g)) out.push(g);
     }
     return out;
-  };
+  });
 
   const getElementText = (el) => {
     const nodes = el.getElementsByTagNameNS(WORD_NS, 't');
@@ -146,7 +150,15 @@
         if (nonEmpty.length === 1 && vals[1]) { controlType = vals[1]; continue; }
         if (!vals[1]) continue;
 
-        items.push({
+        const sharedItem = SharedImport?.fromCells(vals, {
+          map: { discipline: 1, examForm: 2, teachers: 3, date: 4, time: 5, room: 6 },
+          groups,
+          groupHeading: heading,
+          controlType,
+          sourceTable: tableIdx,
+          sourceFile: file.name
+        });
+        items.push(sharedItem || {
           groupHeading: heading,
           groups,
           speciality: '',

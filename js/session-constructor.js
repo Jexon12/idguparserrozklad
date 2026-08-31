@@ -113,6 +113,8 @@
     qualityPanel: document.getElementById('qualityPanel'),
     clearDraftBtn: document.getElementById('clearDraftBtn'),
     renderInfo: document.getElementById('renderInfo'),
+    prevRowsPage: document.getElementById('prevRowsPage'),
+    nextRowsPage: document.getElementById('nextRowsPage'),
     daySummaryPanel: document.getElementById('daySummaryPanel'),
     calendarPanel: document.getElementById('calendarPanel'),
     rowDetailPanel: document.getElementById('rowDetailPanel')
@@ -129,6 +131,7 @@
     mode: 'basic',
     quality: { missingDate: 0, missingTime: 0, missingRoom: 0, missingTeacher: 0, teacherAliases: 0, duplicateRows: 0 },
     renderLimit: 500,
+    renderPage: 0,
     sortField: null,
     sortAsc: true,
     undoStack: [],
@@ -151,25 +154,27 @@
   let conflictsWorker = null;
   let conflictRequestId = 0;
 
-  const clean = (v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  const normalizeDiscipline = (v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim();
-  const splitTeachers = (v) => Array.from(new Set(clean(v)
+  const SharedModel = window.ScheduleApp?.ScheduleModel;
+  const SharedImport = window.ScheduleApp?.SessionImport;
+  const clean = SharedModel?.cleanText || ((v) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+  const normalizeDiscipline = SharedModel?.normalizeDiscipline || ((v) => clean(v).replace(/^[\d\.\-\)\(]+\s*/g, '').replace(/[;:,]+$/g, '').trim());
+  const splitTeachers = SharedModel?.splitTeachers || ((v) => Array.from(new Set(clean(v)
     .replace(/([\p{Lu}]\.\s*[\p{Lu}]\.)(?=\s*\p{Lu}\p{Ll})/gu, '$1; ')
     .replace(/\s*(,|\/|\|)\s*/g, '; ')
     .replace(/\s+\u0442\u0430\s+/giu, '; ')
     .split(';')
     .map(clean)
-    .filter(Boolean)));
+    .filter(Boolean))));
   const rowKey = (r) => String(r.id || `${clean(r.discipline)}__${clean(r.group)}__${clean(r.controlType)}`);
   const generateId = () => 'r_' + Math.random().toString(36).slice(2, 11);
   const CONTROL_PRIORITY = { 'іспит': 4, 'диф.залік': 3, 'захист': 2, 'залік': 1 };
   const selectValues = (el) => el ? Array.from(el.selectedOptions || []).map((o) => clean(o.value)).filter(Boolean) : [];
   const matchesAny = (values, actual, normalizer = clean) => !values.length || values.some((value) => normalizer(actual) === normalizer(value));
-  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const todayIso = () => isoLocal(new Date());
   const addDaysIso = (iso, days) => {
     const d = iso ? new Date(`${iso}T00:00:00`) : new Date();
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    return isoLocal(d);
   };
   const rowProblemFlags = (r) => {
     const idx = state.rows.findIndex((x) => String(x.id) === String(r.id));
@@ -203,7 +208,11 @@
   }
 
   function renderSelect(el, items, placeholder) {
-    el.innerHTML = `<option value="">${placeholder}</option>`;
+    el.innerHTML = '';
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = String(placeholder || '');
+    el.appendChild(first);
     items.forEach((it) => {
       const o = document.createElement('option');
       o.value = String(it.Key || it.key || '');
@@ -224,8 +233,15 @@
       const val = String(it.Value || it.value || '');
       const row = document.createElement('label');
       row.className = 'flex items-center gap-2 text-sm';
-      row.innerHTML = `<input type="checkbox" data-kind="${kind}" value="${key}" checked><span>${val}</span>`;
-      row.querySelector('input').id = `${kind}_${idx}_${key}`;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.kind = kind;
+      input.value = key;
+      input.checked = true;
+      input.id = `${kind}_${idx}_${key}`;
+      const span = document.createElement('span');
+      span.textContent = val;
+      row.append(input, span);
       container.appendChild(row);
     });
   }
@@ -258,6 +274,9 @@
   }
 
   async function fetchApi(action, params = {}) {
+    if (typeof window.ScheduleApp?.fetchApi === 'function') {
+      return window.ScheduleApp.fetchApi(action, params);
+    }
     const url = new URL(API_PROXY + action, window.location.origin);
     url.searchParams.append('aVuzID', VUZ_ID);
     if (action === 'GetStudyGroups') url.searchParams.append('aGiveStudyTimes', 'false');
@@ -270,8 +289,13 @@
     });
     const res = await fetch(url);
     const text = await res.text();
+    if (!res.ok) {
+      window.ScheduleApp?.DataFreshness?.mark(navigator.onLine ? 'error' : 'offline');
+      throw new Error(`HTTP ${res.status}: ${text || 'API request failed'}`);
+    }
     const jsonpMatch = text.match(/^[a-zA-Z0-9_]+\(([\s\S]*)\);?\s*$/);
     const json = jsonpMatch ? JSON.parse(jsonpMatch[1]) : JSON.parse(text);
+    window.ScheduleApp?.DataFreshness?.mark('api');
     return json.d || json;
   }
 
@@ -407,7 +431,10 @@
 
   function renderTable(rows) {
     els.tableBody.innerHTML = '';
-    const visibleRows = rows.slice(0, state.renderLimit);
+    const maxPage = Math.max(0, Math.ceil(rows.length / state.renderLimit) - 1);
+    state.renderPage = Math.min(Math.max(0, state.renderPage), maxPage);
+    const pageStart = state.renderPage * state.renderLimit;
+    const visibleRows = rows.slice(pageStart, pageStart + state.renderLimit);
     let currentGroup = null;
     visibleRows.forEach((r, i) => {
       const label = groupLabel(r);
@@ -428,7 +455,7 @@
       tr.dataset.id = r.id;
       tr.innerHTML = `
         <td data-col-key="select" class="px-2 py-2 sticky-col-1"><input type="checkbox" data-act="select-row" data-id="${escapeHtml(r.id)}" ${checked}></td>
-        <td data-col-key="number" class="px-2 py-2 sticky-col-2">${i + 1}</td>
+        <td data-col-key="number" class="px-2 py-2 sticky-col-2">${pageStart + i + 1}</td>
         <td data-col-key="discipline" class="px-2 py-2 sticky-col-3"><input data-f="discipline" data-id="${escapeHtml(r.id)}" list="dl-disciplines" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.discipline || '')}"></td>
         <td data-col-key="group" class="px-2 py-2"><input data-f="group" data-id="${escapeHtml(r.id)}" list="dl-groups" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.group || '')}"></td>
         <td data-col-key="teacher1" class="px-2 py-2"><input data-f="teachers1" data-id="${escapeHtml(r.id)}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.teachers && r.teachers[0] ? r.teachers[0] : '')}"></td>
@@ -468,9 +495,11 @@
     if (els.totalCountLabel) els.totalCountLabel.textContent = String(state.rows.length);
     if (els.activeFiltersLabel) els.activeFiltersLabel.textContent = String(getActiveFilterCount());
     if (els.renderInfo) {
-      if (rows.length > state.renderLimit) els.renderInfo.textContent = `Показано ${state.renderLimit} з ${rows.length} / всього ${state.rows.length} (для швидкості)`;
+      if (rows.length > state.renderLimit) els.renderInfo.textContent = `Сторінка ${state.renderPage + 1}/${maxPage + 1} · рядки ${pageStart + 1}–${Math.min(pageStart + state.renderLimit, rows.length)} з ${rows.length}`;
       else els.renderInfo.textContent = `Показано ${rows.length} з ${state.rows.length}`;
     }
+    if (els.prevRowsPage) els.prevRowsPage.disabled = state.renderPage <= 0;
+    if (els.nextRowsPage) els.nextRowsPage.disabled = state.renderPage >= maxPage;
     els.uploadBtn.disabled = false;
     els.uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
     // Update discipline datalist
@@ -797,8 +826,8 @@
     const colorDot = (type) => `<span class="w-2 h-2 rounded-full inline-block" style="background:${{'залік':'#10b981','іспит':'#3b82f6','захист':'#f59e0b','диф.залік':'#8b5cf6'}[type] || '#ccc'}"></span>`;
     el.innerHTML = `<div class="flex gap-4 flex-wrap items-center text-xs">
       ${CONTROL_OPTIONS.map((t) => `<span class="flex items-center gap-1">${colorDot(t)} ${t}: <b>${byType[t]}</b></span>`).join('')}
-      <span>| Найбільше/день: <b>${maxPerDay}</b> (${busiestDay})</span>
-      ${busiestTeacher ? `<span>| Найзайнятіший: <b>${busiestTeacher[0].split(' ').slice(0,2).join(' ')}</b> (${busiestTeacher[1]})</span>` : ''}
+      <span>| Найбільше/день: <b>${maxPerDay}</b> (${escapeHtml(busiestDay)})</span>
+      ${busiestTeacher ? `<span>| Найзайнятіший: <b>${escapeHtml(busiestTeacher[0].split(' ').slice(0,2).join(' '))}</b> (${busiestTeacher[1]})</span>` : ''}
     </div>`;
   }
 
@@ -835,7 +864,7 @@
     els.calendarPanel.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">${Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0], 'uk')).map(([date, rows]) => `
       <div class="rounded border dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-700/50">
         <div class="font-bold text-sm mb-2">${escapeHtml(date)} (${rows.length})</div>
-        <div class="space-y-2">${rows.sort((a, b) => clean(a.time).localeCompare(clean(b.time), 'uk')).map((r) => `<button data-detail-id="${r.id}" class="block w-full text-left rounded bg-white dark:bg-gray-800 border dark:border-gray-700 p-2 text-xs">
+        <div class="space-y-2">${rows.sort((a, b) => clean(a.time).localeCompare(clean(b.time), 'uk')).map((r) => `<button data-detail-id="${escapeHtml(r.id)}" class="block w-full text-left rounded bg-white dark:bg-gray-800 border dark:border-gray-700 p-2 text-xs">
           <div class="font-semibold">${escapeHtml(r.time || '—')} · ${escapeHtml(r.group || '—')}</div>
           <div>${escapeHtml(r.discipline || '')}</div>
           <div class="text-gray-500">${escapeHtml((r.teachers || []).join('; '))} ${r.room ? `· ${escapeHtml(r.room)}` : ''}</div>
@@ -1260,7 +1289,7 @@
       const d = new Date(r.date);
       if (Number.isNaN(d.getTime())) return;
       d.setDate(d.getDate() + days);
-      r.date = d.toISOString().slice(0, 10);
+      r.date = isoLocal(d);
       shiftedCount++;
     });
     applyFilters();
@@ -1356,16 +1385,23 @@
     if (!selectedCourses.length) throw new Error('Оберіть хоча б один курс');
     if (!startDate || !endDate) throw new Error('Оберіть період дат');
 
-    const filters = await fetchApi('GetStudentScheduleFiltersData');
+    const catalog = window.ScheduleApp?.ScheduleCatalog;
+    const filters = catalog ? await catalog.loadStudentFilters() : await fetchApi('GetStudentScheduleFiltersData');
     const forms = Array.isArray(filters?.educForms) ? filters.educForms : [];
     const isZaochna = clean(els.studyForm.value).toLowerCase().includes('заочн');
     const selectedForm = forms.find((x) => clean(x.Value).toLowerCase().includes(isZaochna ? 'заочн' : 'денн')) || forms[0];
 
-    const groups = [];
-    for (let i = 0; i < selectedCourses.length; i++) {
-      setProgress(i, selectedCourses.length, `Групи: ${i}/${selectedCourses.length}`);
-      const res = await fetchApi('GetStudyGroups', { aFacultyID: selectedFaculty, aEducationForm: selectedForm?.Key || '', aCourse: selectedCourses[i] });
-      (res?.studyGroups || []).forEach((g) => groups.push({ key: String(g.Key), value: clean(g.Value) }));
+    let groups = [];
+    if (catalog) {
+      setProgress(0, selectedCourses.length, 'Завантаження груп...');
+      groups = (await catalog.loadGroups(selectedFaculty, selectedForm?.Key || '', selectedCourses))
+        .map((g) => ({ key: String(g.Key), value: clean(g.Value) }));
+    } else {
+      for (let i = 0; i < selectedCourses.length; i++) {
+        setProgress(i, selectedCourses.length, `Групи: ${i}/${selectedCourses.length}`);
+        const res = await fetchApi('GetStudyGroups', { aFacultyID: selectedFaculty, aEducationForm: selectedForm?.Key || '', aCourse: selectedCourses[i] });
+        (res?.studyGroups || []).forEach((g) => groups.push({ key: String(g.Key), value: clean(g.Value) }));
+      }
     }
     state.groups = Array.from(new Map(groups.map((g) => [g.key, g])).values()).filter((g) => !selectedGroups.length || selectedGroups.includes(g.key));
     if (!state.groups.length) throw new Error('Не знайдено груп');
@@ -1511,6 +1547,20 @@
       }
     };
 
+    const validationRes = await fetch(API_SESSION, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'validateOnly', data: payload.data })
+    });
+    const validation = await validationRes.json();
+    if (!validationRes.ok) throw new Error(validation.error || `Validation HTTP ${validationRes.status}`);
+    const quality = validation.quality || {};
+    const blockingIssues = Number(validation.conflictsCount || 0) + Number(quality.missingDate || 0) +
+      Number(quality.missingTime || 0) + Number(quality.missingRoom || 0);
+    if (blockingIssues > 0) {
+      throw new Error(`Публікацію зупинено: конфлікти ${validation.conflictsCount || 0}, без дати ${quality.missingDate || 0}, без часу ${quality.missingTime || 0}, без аудиторії ${quality.missingRoom || 0}`);
+    }
+
     const res = await fetch(API_SESSION, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const raw = await res.text();
     let json = null; try { json = raw ? JSON.parse(raw) : null; } catch (e) {}
@@ -1644,7 +1694,8 @@
 
   async function initControls() {
     applySemesterPreset(clean(els.semesterPreset.value) || 'custom');
-    const base = await fetchApi('GetStudentScheduleFiltersData');
+    const catalog = window.ScheduleApp?.ScheduleCatalog;
+    const base = catalog ? await catalog.loadStudentFilters() : await fetchApi('GetStudentScheduleFiltersData');
     state.faculties = Array.isArray(base?.faculties) ? base.faculties : [];
     state.courses = Array.isArray(base?.courses) ? base.courses : [];
     renderSelect(els.facultySelect, state.faculties, 'Оберіть факультет');
@@ -1653,15 +1704,20 @@
     const refreshGroups = async () => {
       const fac = clean(els.facultySelect.value);
       if (!fac) return renderCheckboxes(els.groupsBox, [], 'group');
-      const base2 = await fetchApi('GetStudentScheduleFiltersData');
+      const base2 = catalog ? await catalog.loadStudentFilters() : await fetchApi('GetStudentScheduleFiltersData');
       const forms = Array.isArray(base2?.educForms) ? base2.educForms : [];
       const isZaochna = clean(els.studyForm.value).toLowerCase().includes('заочн');
       const selectedForm = forms.find((x) => clean(x.Value).toLowerCase().includes(isZaochna ? 'заочн' : 'денн')) || forms[0];
       const selectedCourses = getChecked('course');
-      const arr = [];
-      for (let i = 0; i < selectedCourses.length; i++) {
-        const res = await fetchApi('GetStudyGroups', { aFacultyID: fac, aEducationForm: selectedForm?.Key || '', aCourse: selectedCourses[i] });
-        (res?.studyGroups || []).forEach((g) => arr.push({ key: String(g.Key), value: clean(g.Value) }));
+      let arr = [];
+      if (catalog) {
+        arr = (await catalog.loadGroups(fac, selectedForm?.Key || '', selectedCourses))
+          .map((g) => ({ key: String(g.Key), value: clean(g.Value) }));
+      } else {
+        for (let i = 0; i < selectedCourses.length; i++) {
+          const res = await fetchApi('GetStudyGroups', { aFacultyID: fac, aEducationForm: selectedForm?.Key || '', aCourse: selectedCourses[i] });
+          (res?.studyGroups || []).forEach((g) => arr.push({ key: String(g.Key), value: clean(g.Value) }));
+        }
       }
       const unique = Array.from(new Map(arr.map((x) => [x.key, x])).values()).sort((a, b) => a.value.localeCompare(b.value, 'uk'));
       renderCheckboxes(els.groupsBox, unique, 'group');
@@ -1689,7 +1745,7 @@
     const a = document.createElement('a');
     a.href = url;
     const termSlug = (resolveSessionTerm() || 'session').replace(/[^a-zA-Z0-9а-яА-ЯіІїЇєЄґҐ]+/giu, '_').slice(0, 40);
-    a.download = `session_${termSlug}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `session_${termSlug}_${isoLocal(new Date())}.json`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     setStatus('Сесію збережено у файл');
   }
@@ -2097,6 +2153,16 @@
     renderTable(state.filteredRows);
     saveDraftDebounced();
   });
+  els.prevRowsPage?.addEventListener('click', () => {
+    syncFromGrid();
+    state.renderPage = Math.max(0, state.renderPage - 1);
+    renderTable(state.filteredRows);
+  });
+  els.nextRowsPage?.addEventListener('click', () => {
+    syncFromGrid();
+    state.renderPage += 1;
+    renderTable(state.filteredRows);
+  });
   els.modeBasicBtn?.addEventListener('click', () => setMode('basic'));
   els.modeProBtn?.addEventListener('click', () => setMode('pro'));
   els.presetWinterBtn?.addEventListener('click', () => applyDatePreset('winter'));
@@ -2154,16 +2220,19 @@
               const cells = Array.from(tr.querySelectorAll('td')).map((td) => clean(td.textContent));
               if (cells.length < 2) return;
               // Try to extract: discipline, group, teachers, controlType, date, time, room
-              const discipline = normalizeDiscipline(cells[1] || cells[0] || '');
-              const group = clean(cells[2] || cells[3] || '');
-              const teachers = splitTeachers(cells[3] || cells[4] || '');
-              let controlType = clean(cells[4] || cells[5] || '').toLowerCase();
-              if (!CONTROL_OPTIONS.includes(controlType)) controlType = 'залік';
-              const date = clean(cells[5] || cells[6] || '');
-              const time = clean(cells[6] || cells[7] || '');
-              const room = clean(cells[7] || cells[8] || '');
-              if (discipline) {
-                parsed.push({ discipline, group, teachers, controlType, date, time, room });
+              const imported = SharedImport?.fromCells(cells);
+              if (imported) {
+                parsed.push(imported);
+              } else {
+                const discipline = normalizeDiscipline(cells[1] || cells[0] || '');
+                const group = clean(cells[2] || cells[3] || '');
+                const teachers = splitTeachers(cells[3] || cells[4] || '');
+                let controlType = clean(cells[4] || cells[5] || '').toLowerCase();
+                if (!CONTROL_OPTIONS.includes(controlType)) controlType = 'залік';
+                const date = clean(cells[5] || cells[6] || '');
+                const time = clean(cells[6] || cells[7] || '');
+                const room = clean(cells[7] || cells[8] || '');
+                if (discipline) parsed.push({ discipline, group, teachers, controlType, date, time, room });
               }
             });
           });
@@ -2208,16 +2277,19 @@
           for (let ri = 1; ri < data.length; ri++) {
             const cells = (data[ri] || []).map((c) => clean(String(c || '')));
             if (cells.length < 2) continue;
-            const discipline = normalizeDiscipline(cells[1] || cells[0] || '');
-            const group = clean(cells[2] || cells[3] || '');
-            const teachers = splitTeachers(cells[3] || cells[4] || '');
-            let controlType = clean(cells[4] || cells[5] || '').toLowerCase();
-            if (!CONTROL_OPTIONS.includes(controlType)) controlType = 'залік';
-            const date = clean(cells[5] || cells[6] || '');
-            const time = clean(cells[6] || cells[7] || '');
-            const room = clean(cells[7] || cells[8] || '');
-            if (discipline) {
-              parsed.push({ discipline, group, teachers, controlType, date, time, room });
+            const imported = SharedImport?.fromCells(cells);
+            if (imported) {
+              parsed.push(imported);
+            } else {
+              const discipline = normalizeDiscipline(cells[1] || cells[0] || '');
+              const group = clean(cells[2] || cells[3] || '');
+              const teachers = splitTeachers(cells[3] || cells[4] || '');
+              let controlType = clean(cells[4] || cells[5] || '').toLowerCase();
+              if (!CONTROL_OPTIONS.includes(controlType)) controlType = 'залік';
+              const date = clean(cells[5] || cells[6] || '');
+              const time = clean(cells[6] || cells[7] || '');
+              const room = clean(cells[7] || cells[8] || '');
+              if (discipline) parsed.push({ discipline, group, teachers, controlType, date, time, room });
             }
           }
         });
@@ -2278,6 +2350,9 @@
       renderFilters(state.rows);
       restoreViewState();
       applyFilters();
+      if (new URLSearchParams(location.search).get('source') === 'schedule') {
+        document.getElementById('step-source')?.scrollIntoView({ block: 'start' });
+      }
     })
     .catch((e) => {
       showError('API недоступний, але чернетка відновлена: ' + (e.message || String(e)));

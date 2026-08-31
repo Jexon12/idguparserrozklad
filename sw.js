@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'schedule-v31';
+const CACHE_NAME = 'schedule-v33';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -8,6 +8,11 @@ const STATIC_ASSETS = [
     '/css/tailwind.generated.css',
     '/css/styles.css',
     '/js/utils.js',
+    '/js/app-shell.js',
+    '/js/schedule-model.js',
+    '/js/schedule-analytics.js',
+    '/js/session-import.js',
+    '/js/schedule-catalog.js',
     '/js/api.js',
     '/js/search.js',
     '/js/occupancy.js',
@@ -20,65 +25,39 @@ const STATIC_ASSETS = [
     '/data/session-2025-26.json'
 ];
 
-// Install - cache static assets, then activate immediately
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(STATIC_ASSETS))
-            .then(() => self.skipWaiting()) // #18: skipWaiting only after assets cached
+            .then((cache) => cache.addAll(STATIC_ASSETS))
+            .then(() => self.skipWaiting())
     );
 });
 
-// Activate - clean old caches
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then(keys =>
-            Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-        ).then(() => self.clients.claim()) // #23: clients.claim inside waitUntil
+        caches.keys()
+            .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+            .then(() => self.clients.claim())
     );
 });
 
-// Fetch - Network-first for everything (ensures latest files are always served)
+// Network-first only for known same-origin static assets. API responses and
+// generated downloads must never accumulate in Cache Storage.
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return;
-    }
+    if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
+    const isStatic = STATIC_ASSETS.includes(url.pathname) || url.pathname.startsWith('/css/') || url.pathname.startsWith('/js/');
+    if (!isStatic) return;
 
     event.respondWith(
         fetch(event.request)
-            .then(response => {
-                // Cache successful GET responses
-                if (event.request.method === 'GET' && response.ok) {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            .then(async (response) => {
+                if (response.ok) {
+                    const cache = await caches.open(CACHE_NAME);
+                    await cache.put(url.pathname, response.clone());
                 }
                 return response;
             })
-            .catch(() => caches.match(event.request))
+            .catch(() => caches.match(url.pathname))
     );
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -49,6 +49,15 @@
       ]
     }
   ],
+  "redirects": [
+    { "source": "/page.html", "destination": "/legacy/external-widget/page.html", "permanent": false },
+    { "source": "/schedule-loader.js", "destination": "/legacy/external-widget/schedule-loader.js", "permanent": false },
+    { "source": "/schedule.min.js", "destination": "/legacy/external-widget/schedule.min.js", "permanent": false },
+    { "source": "/schedule.min.clean.js", "destination": "/legacy/external-widget/schedule.min.clean.js", "permanent": false },
+    { "source": "/USER_GUIDE_PDF.html", "destination": "/docs/print/USER_GUIDE_PDF.html", "permanent": false },
+    { "source": "/TECHNICAL_MANUAL_FULL_PDF.html", "destination": "/docs/print/TECHNICAL_MANUAL_FULL_PDF.html", "permanent": false },
+    { "source": "/TECHNICAL_MANUAL_ULTRA_PDF.html", "destination": "/docs/print/TECHNICAL_MANUAL_ULTRA_PDF.html", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" }
   ]

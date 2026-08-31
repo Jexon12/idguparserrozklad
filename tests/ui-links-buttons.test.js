@@ -13,9 +13,9 @@ const PAGES = [
     { page: '/session.html', jsFile: 'js/session-page.js' },
     { page: '/session-admin.html', jsFile: 'js/session-admin.js' },
     { page: '/session-constructor.html', jsFile: 'js/session-constructor.js' },
-    { page: '/session-prep.html', jsFile: 'js/session-prep.js' },
+    { page: '/session-prep.html', jsFile: null },
     { page: '/course-live.html', jsFile: 'js/course-live.js' },
-    { page: '/smart.html', jsFile: 'js/smart-day.js' }
+    { page: '/smart.html', jsFile: null }
 ];
 
 function request(pathname) {
@@ -154,6 +154,7 @@ describe('UI links/buttons regression', () => {
         const failures = [];
 
         for (const entry of PAGES) {
+            if (!entry.jsFile) continue;
             const htmlPath = path.resolve(__dirname, '..', entry.page.replace(/^\//, ''));
             const jsPath = path.resolve(__dirname, '..', entry.jsFile);
             const html = fs.readFileSync(htmlPath, 'utf8');
@@ -176,6 +177,7 @@ describe('UI links/buttons regression', () => {
         const failures = [];
 
         for (const entry of PAGES) {
+            if (!entry.jsFile) continue;
             const htmlPath = path.resolve(__dirname, '..', entry.page.replace(/^\//, ''));
             const jsPath = path.resolve(__dirname, '..', entry.jsFile);
             const html = fs.readFileSync(htmlPath, 'utf8');

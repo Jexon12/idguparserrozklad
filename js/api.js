@@ -8,6 +8,7 @@ window.ScheduleApp = window.ScheduleApp || {};
     const inflight = new Map();
     const memoryCache = new Map();
     const CACHE_TTL_MS = 60 * 1000;
+    const MAX_CACHE_ENTRIES = 200;
 
     const getCacheKey = (urlObj) => urlObj.toString().replace(/([?&])_=\d+/, '$1_=');
 
@@ -22,6 +23,9 @@ window.ScheduleApp = window.ScheduleApp || {};
     };
 
     const setCached = (key, value) => {
+        while (memoryCache.size >= MAX_CACHE_ENTRIES) {
+            memoryCache.delete(memoryCache.keys().next().value);
+        }
         memoryCache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
     };
 
@@ -60,7 +64,10 @@ window.ScheduleApp = window.ScheduleApp || {};
         const dedupeKey = getCacheKey(url);
         if (options.useCache !== false) {
             const cached = getCached(dedupeKey);
-            if (cached !== null) return cached;
+            if (cached !== null) {
+                SA.DataFreshness?.mark('cache');
+                return cached;
+            }
         }
 
         const runRequest = async () => {
@@ -69,6 +76,17 @@ window.ScheduleApp = window.ScheduleApp || {};
             try {
                 const res = await fetch(url, { signal: controller.signal });
                 const text = await res.text();
+
+                if (!res.ok) {
+                    let message = text || `HTTP ${res.status}`;
+                    try {
+                        const errorBody = JSON.parse(text);
+                        message = errorBody.error || message;
+                    } catch (_) { /* keep response text */ }
+                    const error = new Error(message);
+                    error.status = res.status;
+                    throw error;
+                }
 
                 // Parse potential JSONP wrapper: callbackName( { ... } )
                 let json;
@@ -79,10 +97,11 @@ window.ScheduleApp = window.ScheduleApp || {};
                     json = JSON.parse(text);
                 }
 
-                const data = json.d || json;
+                const data = Object.prototype.hasOwnProperty.call(json || {}, 'd') ? json.d : json;
                 if (options.useCache !== false) {
                     setCached(dedupeKey, data);
                 }
+                SA.DataFreshness?.mark('api');
                 return data;
             } finally {
                 clearTimeout(timeoutId);
@@ -98,6 +117,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             inflight.set(dedupeKey, p);
             return await p;
         } catch (e) {
+            SA.DataFreshness?.mark(navigator.onLine ? 'error' : 'offline');
             if (!options.silent) {
                 console.error('API Error:', action, e);
                 // Use a global error handler if provided

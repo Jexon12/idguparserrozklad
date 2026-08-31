@@ -32,7 +32,7 @@
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                     <h1 class="text-2xl md:text-3xl font-black text-emerald-700 dark:text-emerald-300">🛠 Session Admin</h1>
-                    <p class="text-xs text-gray-500 mt-1">Завантаження DOCX, керування сесіями, кошиком та історією дій</p>
+                    <p class="text-xs text-gray-500 mt-1">Серверні версії, кошик, backup та історія дій</p>
                 </div>
                 <div class="flex gap-2">
                     <a href="/session.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">До таблиці сесії</a>
@@ -42,8 +42,9 @@
             </div>
         </header>
 
-        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
-            <h2 class="font-bold">Завантаження файлів</h2>
+        <details class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+            <summary class="font-bold cursor-pointer">Сумісний DOCX-імпорт (рекомендовано використовувати Constructor)</summary>
+            <p class="text-xs text-gray-500 mt-2">Новий основний процес імпорту, перевірки та публікації знаходиться у Session Constructor. Цей блок тимчасово залишено для пакетного DOCX.</p>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <input id="adminActor" type="text" placeholder="Ваше ім'я (для логу)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
@@ -65,7 +66,7 @@
                 <button id="exportBackup" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">Експорт JSON (backup)</button>
             </div>
             <p id="adminStatus" class="text-sm text-gray-600 dark:text-gray-300"></p>
-        </section>
+        </details>
 
         <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-2">
             <h2 class="font-bold">Підсумок парсингу</h2>
@@ -117,7 +118,10 @@
         </section>
     </div>
 
-    <script src="js/session-admin.js?v=20260430-1"></script>
+    <script src="js/app-shell.js?v=20260831-1"></script>
+    <script src="js/schedule-model.js?v=20260831-1"></script>
+    <script src="js/session-import.js?v=20260831-1"></script>
+    <script src="js/session-admin.js?v=20260831-1"></script>
     <script src="js/i18n.js?v=20260412-1"></script>
     <script>window.ScheduleI18n && window.ScheduleI18n.applyI18n();</script>
     <script src="js/monitor.js?v=20260412-1"></script>

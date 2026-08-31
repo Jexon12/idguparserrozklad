@@ -23,6 +23,19 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     // --- Pure Functions ---
     SA.stripHtml = (str) => (str || '').replace(/<[^>]*>?/gm, '');
+    SA.escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    // Format a local calendar date without converting it to UTC first.
+    SA.toLocalIsoDate = (value = new Date()) => {
+        const d = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(d.getTime())) return '';
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
 
     SA.getColorClass = (id) => {
         const colors = [

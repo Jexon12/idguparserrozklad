@@ -12,6 +12,7 @@ const zlib = require('zlib');
 const apiHandler = require('./api/index');
 
 const PORT = parseInt(process.env.PORT, 10) || 3001;
+const MAX_API_BODY_BYTES = 2 * 1024 * 1024;
 
 // MIME types for static files
 const MIME_TYPES = {
@@ -121,9 +122,22 @@ const server = http.createServer(async (req, res) => {
         // 2. Body Parsing (if POST/PUT)
         if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
             let body = '';
-            req.on('data', chunk => body += chunk.toString());
+            let bodyBytes = 0;
+            let bodyTooLarge = false;
+            req.on('data', chunk => {
+                bodyBytes += chunk.length;
+                if (bodyBytes > MAX_API_BODY_BYTES) {
+                    bodyTooLarge = true;
+                    return;
+                }
+                body += chunk.toString();
+            });
             req.on('end', async () => {
                 try {
+                    if (bodyTooLarge) {
+                        res.status(413).json({ error: 'Request body too large' });
+                        return;
+                    }
                     if (body.trim().startsWith('{') || body.trim().startsWith('[')) {
                         try {
                             req.body = JSON.parse(body);
@@ -153,12 +167,27 @@ const server = http.createServer(async (req, res) => {
     // =========================================================
     // STATIC FILES — with caching, ETags, and gzip
     // =========================================================
+    const legacyRedirects = {
+        '/page.html': '/legacy/external-widget/page.html',
+        '/schedule-loader.js': '/legacy/external-widget/schedule-loader.js',
+        '/schedule.min.js': '/legacy/external-widget/schedule.min.js',
+        '/schedule.min.clean.js': '/legacy/external-widget/schedule.min.clean.js',
+        '/USER_GUIDE_PDF.html': '/docs/print/USER_GUIDE_PDF.html',
+        '/TECHNICAL_MANUAL_FULL_PDF.html': '/docs/print/TECHNICAL_MANUAL_FULL_PDF.html',
+        '/TECHNICAL_MANUAL_ULTRA_PDF.html': '/docs/print/TECHNICAL_MANUAL_ULTRA_PDF.html'
+    };
+    if (legacyRedirects[pathname]) {
+        res.writeHead(302, { Location: legacyRedirects[pathname], 'Cache-Control': 'no-store' });
+        res.end();
+        return;
+    }
     let filePath = pathname === '/' ? '/index.html' : pathname;
     filePath = path.join(__dirname, filePath);
 
     // #5: Path traversal protection — ensure resolved path is inside project root
     const resolvedPath = path.resolve(filePath);
-    if (!resolvedPath.startsWith(path.resolve(__dirname))) {
+    const projectRoot = path.resolve(__dirname);
+    if (resolvedPath !== projectRoot && !resolvedPath.startsWith(projectRoot + path.sep)) {
         res.writeHead(403);
         res.end('Forbidden');
         return;

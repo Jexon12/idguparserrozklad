@@ -1,13 +1,18 @@
 (function () {
+  const Analytics = window.ScheduleApp?.ScheduleAnalytics;
   const VUZ_ID = 11927;
   const PRESETS_KEY = 'course_live_presets_v1';
   const JOURNAL_KEY = 'course_live_journal_v1';
+  const escapeHtml = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const state = {
     faculties: [], forms: [], courses: [], groups: [], lessons: [],
     isDirty: false,
     loadedSelection: { courses: [] },
     compareLessons: [],
-    changesOnlyKeys: new Set()
+    changesOnlyKeys: new Set(),
+    displayLimit: 500
   };
 
   const els = {
@@ -37,6 +42,7 @@
     onlyOffline: document.getElementById('onlyOffline'),
     onlyChanges: document.getElementById('onlyChanges'),
     meta: document.getElementById('meta'),
+    showMoreRows: document.getElementById('showMoreRows'),
     pairStats: document.getElementById('pairStats'),
     heatmap: document.getElementById('heatmap'),
     roomConflicts: document.getElementById('roomConflicts'),
@@ -79,7 +85,7 @@
       els.journalPanel.textContent = 'Поки що без записів';
       return;
     }
-    els.journalPanel.innerHTML = arr.slice(0, 20).map((x) => `<div class="py-1 border-b dark:border-gray-700"><b>${new Date(x.at).toLocaleString('uk-UA')}</b> · ${clean(x.action)} · ${clean(x.details || '')}</div>`).join('');
+    els.journalPanel.innerHTML = arr.slice(0, 20).map((x) => `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(new Date(x.at).toLocaleString('uk-UA'))}</b> · ${escapeHtml(clean(x.action))} · ${escapeHtml(clean(x.details || ''))}</div>`).join('');
   }
 
   function checkboxList(container, items, name) {
@@ -87,7 +93,7 @@
     items.forEach((it, idx) => {
       const row = document.createElement('label');
       row.className = 'flex items-center gap-2 text-sm rounded px-1 py-0.5 hover:bg-gray-50 dark:hover:bg-gray-700';
-      row.innerHTML = `<input type="checkbox" data-name="${name}" value="${it.Key}" id="${name}_${idx}" checked><span>${it.Value}</span>`;
+      row.innerHTML = `<input type="checkbox" data-name="${escapeHtml(name)}" value="${escapeHtml(it.Key)}" id="${escapeHtml(name)}_${idx}" checked><span>${escapeHtml(it.Value)}</span>`;
       container.appendChild(row);
     });
   }
@@ -103,8 +109,13 @@
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v == null ? '' : (String(v).startsWith('"') ? v : `"${v}"`)));
     const res = await fetch(url);
     const text = await res.text();
+    if (!res.ok) {
+      window.ScheduleApp?.DataFreshness?.mark(navigator.onLine ? 'error' : 'offline');
+      throw new Error(`HTTP ${res.status}: ${text || 'API request failed'}`);
+    }
     const match = text.match(/^[a-zA-Z0-9_]+\(([\s\S]*)\);?\s*$/);
     const json = match ? JSON.parse(match[1]) : JSON.parse(text);
+    window.ScheduleApp?.DataFreshness?.mark('api');
     return json.d || json;
   }
 
@@ -178,6 +189,7 @@
         try {
           const arr = await fetchApi('GetScheduleDataX', { aStudyGroupID: g.Key, aStartDate: apiDate, aEndDate: apiDate, aStudyTypeID: '' });
           return (Array.isArray(arr) ? arr : []).map((l) => ({
+            date: dateIso,
             group: clean(g.Value),
             discipline: clean(l.discipline),
             teacher: clean(l.employee_short || l.employee),
@@ -223,7 +235,7 @@
     els.changesPanel.innerHTML = [
       `<div>Додано: <b>${added.length}</b></div>`,
       `<div>Прибрано: <b>${removed.length}</b></div>`,
-      removed.slice(0, 8).map((x) => `<div class="text-xs">- ${x.group} · ${x.discipline} · ${x.label}</div>`).join('')
+      removed.slice(0, 8).map((x) => `<div class="text-xs">- ${escapeHtml(x.group)} · ${escapeHtml(x.discipline)} · ${escapeHtml(x.label)}</div>`).join('')
     ].join('');
     renderSuggestions(added, removed);
     appendJournal('Порівняння', `З ${d}: +${added.length}/-${removed.length}`);
@@ -255,7 +267,7 @@
       map.set(key, (map.get(key) || 0) + 1);
     });
     const list = Array.from(map.entries()).sort((a, b) => Number(a[0]) - Number(b[0]));
-    els.pairStats.innerHTML = list.map(([k, v]) => `<span class="px-2 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-bold">${k}: ${v}</span>`).join('');
+    els.pairStats.innerHTML = list.map(([k, v]) => `<span class="px-2 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-bold">${escapeHtml(k)}: ${v}</span>`).join('');
   }
 
   function renderCards(items) {
@@ -275,12 +287,12 @@
     Array.from(byPair.entries()).sort((a, b) => Number(a[0]) - Number(b[0])).forEach(([pair, list]) => {
       const sec = document.createElement('section');
       sec.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow p-3';
-      sec.innerHTML = `<div class="flex items-center justify-between mb-2"><div class="font-bold text-sky-700 dark:text-sky-300">${pair}</div><div class="text-xs text-gray-500">${list.length} записів</div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-slot></div>`;
+      sec.innerHTML = `<div class="flex items-center justify-between mb-2"><div class="font-bold text-sky-700 dark:text-sky-300">${escapeHtml(pair)}</div><div class="text-xs text-gray-500">${list.length} записів</div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-slot></div>`;
       const slot = sec.querySelector('[data-slot]');
       list.forEach((l) => {
         const card = document.createElement('article');
         card.className = 'rounded-xl border dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/30';
-        card.innerHTML = `<div class="flex items-center justify-between gap-2"><div class="text-sm font-black text-gray-900 dark:text-gray-100">${l.group}</div><span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">${l.label}</span></div><div class="font-bold text-sm mt-1">${l.discipline || '—'}</div><div class="text-xs text-gray-600 dark:text-gray-300 mt-1">👨‍🏫 ${l.teacher || '—'}</div><div class="text-xs text-gray-500 mt-1">🏫 ${l.room || '—'}</div>`;
+        card.innerHTML = `<div class="flex items-center justify-between gap-2"><div class="text-sm font-black text-gray-900 dark:text-gray-100">${escapeHtml(l.group)}</div><span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">${escapeHtml(l.label)}</span></div><div class="font-bold text-sm mt-1">${escapeHtml(l.discipline || '—')}</div><div class="text-xs text-gray-600 dark:text-gray-300 mt-1">👨‍🏫 ${escapeHtml(l.teacher || '—')}</div><div class="text-xs text-gray-500 mt-1">🏫 ${escapeHtml(l.room || '—')}</div>`;
         slot.appendChild(card);
       });
       frag.appendChild(sec);
@@ -298,7 +310,7 @@
     items.forEach((l) => {
       const tr = document.createElement('tr');
       tr.className = 'border-b dark:border-gray-700';
-      tr.innerHTML = `<td class="px-2 py-2 font-bold">${l.group}</td><td class="px-2 py-2">${l.discipline || '—'}</td><td class="px-2 py-2">${l.teacher || '—'}</td><td class="px-2 py-2">${l.room || '—'}</td><td class="px-2 py-2">${l.label}</td>`;
+      tr.innerHTML = `<td class="px-2 py-2 font-bold">${escapeHtml(l.group)}</td><td class="px-2 py-2">${escapeHtml(l.discipline || '—')}</td><td class="px-2 py-2">${escapeHtml(l.teacher || '—')}</td><td class="px-2 py-2">${escapeHtml(l.room || '—')}</td><td class="px-2 py-2">${escapeHtml(l.label)}</td>`;
       frag.appendChild(tr);
     });
     els.tableBody.appendChild(frag);
@@ -348,13 +360,25 @@
       }).join('');
       const legendCol = idx === 0 ? `<div class="row-span-full text-xs pl-2 space-y-1">${legend.join('')}</div>` : '<div></div>';
       return `<div class="grid items-center" style="grid-template-columns:160px repeat(7,minmax(54px,1fr)) 120px;gap:1px;">
-        <div class="text-xs font-semibold pr-2 truncate">${g}</div>${cells}${legendCol}
+        <div class="text-xs font-semibold pr-2 truncate">${escapeHtml(g)}</div>${cells}${legendCol}
       </div>`;
     }).join('');
     els.heatmap.innerHTML = `<div class="overflow-x-auto">${head}<div class="space-y-1 mt-1">${rows}</div></div>`;
   }
 
   function renderRoomConflicts(items) {
+    if (Analytics) {
+      const bad = Analytics.conflicts(items).filter((item) => item.type === 'room');
+      if (!bad.length) {
+        els.roomConflicts.textContent = 'Конфліктів аудиторій не знайдено';
+        return;
+      }
+      els.roomConflicts.innerHTML = bad.slice(0, 20).map((item) => {
+        const groups = Array.from(new Set(item.indices.map((index) => items[index]?.group).filter(Boolean))).join(', ');
+        return `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(item.pair)} пара · ${escapeHtml(item.value)}</b>: ${escapeHtml(groups)}</div>`;
+      }).join('');
+      return;
+    }
     const bucket = new Map();
     items.forEach((l) => {
       if (!l.room) return;
@@ -370,7 +394,7 @@
     els.roomConflicts.innerHTML = bad.slice(0, 20).map(([k, arr]) => {
       const [pair, room] = k.split('|');
       const groups = Array.from(new Set(arr.map((x) => x.group))).join(', ');
-      return `<div class="py-1 border-b dark:border-gray-700"><b>${pair} пара · ${room}</b>: ${groups}</div>`;
+      return `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(pair)} пара · ${escapeHtml(room)}</b>: ${escapeHtml(groups)}</div>`;
     }).join('');
   }
 
@@ -390,10 +414,19 @@
       els.teacherLoad.textContent = 'Немає даних';
       return;
     }
-    els.teacherLoad.innerHTML = rows.map(([t, v]) => `<div class="py-1 border-b dark:border-gray-700"><b>${t}</b>: ${v.count} пар · груп ${v.groups.size}</div>`).join('');
+    els.teacherLoad.innerHTML = rows.map(([t, v]) => `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(t)}</b>: ${v.count} пар · груп ${v.groups.size}</div>`).join('');
   }
 
   function renderTeacherWindows(items) {
+    if (Analytics) {
+      const windows = Analytics.windows(items, 'teacher');
+      if (!windows.length) {
+        els.teacherWindows.textContent = 'Окон викладачів не знайдено';
+        return;
+      }
+      els.teacherWindows.innerHTML = windows.slice(0, 20).map((item) => `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(item.entity)}</b>: ${escapeHtml(item.missing.join(', '))}</div>`).join('');
+      return;
+    }
     const byTeacher = new Map();
     items.forEach((l) => {
       const t = clean(l.teacher);
@@ -415,7 +448,7 @@
       els.teacherWindows.textContent = 'Окон викладачів не знайдено';
       return;
     }
-    els.teacherWindows.innerHTML = windows.slice(0, 20).map((w) => `<div class="py-1 border-b dark:border-gray-700"><b>${w.t}</b>: ${w.missing.join(', ')}</div>`).join('');
+    els.teacherWindows.innerHTML = windows.slice(0, 20).map((w) => `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(w.t)}</b>: ${escapeHtml(w.missing.join(', '))}</div>`).join('');
   }
 
   function renderQuality(items) {
@@ -456,7 +489,7 @@
     els.liveBoard.innerHTML = [
       `<div>Зараз: <b>${curPair ? `${curPair} пара` : 'немає активної пари'}</b> · записів ${nowList.length}</div>`,
       `<div>Наступна: <b>${nextPair ? `${nextPair} пара` : '—'}</b> · записів ${nextList.length}</div>`,
-      nowList.slice(0, 6).map((x) => `<div class="text-xs">${x.group} · ${x.discipline} · ${x.room || '—'}</div>`).join('')
+      nowList.slice(0, 6).map((x) => `<div class="text-xs">${escapeHtml(x.group)} · ${escapeHtml(x.discipline)} · ${escapeHtml(x.room || '—')}</div>`).join('')
     ].join('');
   }
 
@@ -481,7 +514,7 @@
       els.campusTransitions.textContent = 'Критичних переходів між корпусами не знайдено';
       return;
     }
-    els.campusTransitions.innerHTML = rows.sort((a, b) => b.moves - a.moves).slice(0, 20).map((x) => `<div class="py-1 border-b dark:border-gray-700"><b>${x.g}</b>: переходів ${x.moves}</div>`).join('');
+    els.campusTransitions.innerHTML = rows.sort((a, b) => b.moves - a.moves).slice(0, 20).map((x) => `<div class="py-1 border-b dark:border-gray-700"><b>${escapeHtml(x.g)}</b>: переходів ${x.moves}</div>`).join('');
   }
 
   function renderSuggestions(added, removed) {
@@ -498,11 +531,12 @@
       const y = removed[0];
       tips.push(`Зникло ${y.group} · ${y.discipline} (${y.label}) — перевірте чи це планова заміна.`);
     }
-    els.suggestionsPanel.innerHTML = tips.map((t) => `<div class="py-1">${t}</div>`).join('');
+    els.suggestionsPanel.innerHTML = tips.map((t) => `<div class="py-1">${escapeHtml(t)}</div>`).join('');
   }
 
   function render() {
     const items = filterLessons();
+    const visibleItems = items.slice(0, state.displayLimit);
     renderPairStats(items);
     renderHeatmap(items);
     renderRoomConflicts(items);
@@ -514,16 +548,20 @@
     if (els.viewMode.value === 'cards') {
       els.cardsGrouped.classList.remove('hidden');
       els.tableWrap.classList.add('hidden');
-      renderCards(items);
+      renderCards(visibleItems);
     } else {
       els.cardsGrouped.classList.add('hidden');
       els.tableWrap.classList.remove('hidden');
-      renderTable(items);
+      renderTable(visibleItems);
     }
     const pairInfo = clean(els.pairFilter.value) ? ` · фільтр: ${els.pairFilter.value} пара` : '';
     const coursesLoaded = state.loadedSelection.courses.length ? state.loadedSelection.courses.join(',') : '—';
     const dirtyInfo = state.isDirty ? ' · є незастосовані зміни' : '';
     els.meta.textContent = `Груп: ${state.groups.length} · записів: ${items.length}${pairInfo} · завантажені курси: ${coursesLoaded}${dirtyInfo}`;
+    if (els.showMoreRows) {
+      els.showMoreRows.classList.toggle('hidden', items.length <= state.displayLimit);
+      els.showMoreRows.textContent = `Показати ще 500 (${Math.min(state.displayLimit, items.length)}/${items.length})`;
+    }
   }
 
   function findWindows() {
@@ -566,7 +604,7 @@
   function loadPresetOptions() {
     const raw = localStorage.getItem(PRESETS_KEY);
     const arr = raw ? JSON.parse(raw) : [];
-    els.presetSelect.innerHTML = '<option value="">Пресет: —</option>' + arr.map((p, i) => `<option value="${i}">${clean(p.name)}</option>`).join('');
+    els.presetSelect.innerHTML = '<option value="">Пресет: —</option>' + arr.map((p, i) => `<option value="${i}">${escapeHtml(clean(p.name))}</option>`).join('');
   }
 
   function savePreset() {
@@ -656,6 +694,7 @@
     els.onlyNow.addEventListener('change', render);
     els.onlyOffline.addEventListener('change', render);
     els.onlyChanges.addEventListener('change', render);
+    els.showMoreRows?.addEventListener('click', () => { state.displayLimit += 500; render(); });
 
     els.date.addEventListener('change', () => markDirty('Дата змінена.'));
     els.compareDate.addEventListener('change', () => appendJournal('Порівняння', `Обрано дату ${els.compareDate.value}`));

@@ -24,17 +24,34 @@
   };
 
   const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+  const escapeHtml = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const norm = (v) => clean(v).toLowerCase();
   const uniqSorted = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
   const normRoom = (v) => clean(v).replace(/\s+/g, '').toLowerCase();
 
-  const parseSessionDate = (dateValue) => {
+  const parseSessionDate = (item) => {
+    const dateValue = item && typeof item === 'object' ? item.date : item;
     const parts = String(dateValue || '').split('.');
     if (parts.length < 2) return Number.MAX_SAFE_INTEGER;
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10);
     if (!day || !month) return Number.MAX_SAFE_INTEGER;
-    const year = month <= 2 ? 2026 : 2025;
+    let year = parseInt(parts[2], 10);
+    if (!year) {
+      const termMatch = String(item?.term || '').match(/(20\d{2})\D+(?:20)?(\d{2,4})/);
+      if (termMatch) {
+        const firstYear = Number(termMatch[1]);
+        const rawSecond = Number(termMatch[2]);
+        const secondYear = rawSecond < 100 ? Math.floor(firstYear / 100) * 100 + rawSecond : rawSecond;
+        year = month >= 8 ? firstYear : secondYear;
+      } else {
+        const now = new Date();
+        const academicStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+        year = month >= 8 ? academicStart : academicStart + 1;
+      }
+    }
     return new Date(year, month - 1, day).getTime();
   };
 
@@ -166,21 +183,21 @@
     const frag = document.createDocumentFragment();
     state.filtered.forEach((item) => {
       const teacherCell = (item.teacherNames || []).length
-        ? `<div class="flex flex-wrap gap-1">${item.teacherNames.map((n) => `<span class="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-semibold">${n}</span>`).join('')}</div>`
+        ? `<div class="flex flex-wrap gap-1">${item.teacherNames.map((n) => `<span class="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-semibold">${escapeHtml(n)}</span>`).join('')}</div>`
         : '—';
 
       const tr = document.createElement('tr');
       tr.className = 'border-b border-gray-100 dark:border-gray-700';
       tr.innerHTML = `
         <td class="px-3 py-2 align-top text-xs">${teacherCell}</td>
-        <td class="px-3 py-2 align-top text-sm">${item.discipline || '—'}</td>
-        <td class="px-3 py-2 align-top text-xs">${item.controlType || '—'}</td>
-        <td class="px-3 py-2 align-top text-xs">${item.examForm || '—'}</td>
-        <td class="px-3 py-2 align-top text-xs font-semibold">${(item.groups || []).join(', ') || item.groupHeading || '—'}</td>
-        <td class="px-3 py-2 align-top text-xs">${item.date || '—'}</td>
-        <td class="px-3 py-2 align-top text-xs">${item.time || '—'}</td>
-        <td class="px-3 py-2 align-top text-xs">${item.room || '—'}</td>
-        <td class="px-3 py-2 align-top text-[11px] text-gray-500 dark:text-gray-400">${item.speciality || '—'}</td>
+        <td class="px-3 py-2 align-top text-sm">${escapeHtml(item.discipline || '—')}</td>
+        <td class="px-3 py-2 align-top text-xs">${escapeHtml(item.controlType || '—')}</td>
+        <td class="px-3 py-2 align-top text-xs">${escapeHtml(item.examForm || '—')}</td>
+        <td class="px-3 py-2 align-top text-xs font-semibold">${escapeHtml((item.groups || []).join(', ') || item.groupHeading || '—')}</td>
+        <td class="px-3 py-2 align-top text-xs">${escapeHtml(item.date || '—')}</td>
+        <td class="px-3 py-2 align-top text-xs">${escapeHtml(item.time || '—')}</td>
+        <td class="px-3 py-2 align-top text-xs">${escapeHtml(item.room || '—')}</td>
+        <td class="px-3 py-2 align-top text-[11px] text-gray-500 dark:text-gray-400">${escapeHtml(item.speciality || '—')}</td>
       `;
       frag.appendChild(tr);
     });
@@ -211,7 +228,7 @@
       if (fDiscipline && !norm(item.discipline).includes(fDiscipline)) return false;
       if (fDate && !norm(item.date).includes(fDate)) return false;
       return true;
-    }).sort((a, b) => parseSessionDate(a.date) - parseSessionDate(b.date));
+    }).sort((a, b) => parseSessionDate(a) - parseSessionDate(b));
 
     renderRows();
   }
@@ -239,6 +256,7 @@
     const apiRes = await fetch('/api/session');
     if (!apiRes.ok) throw new Error('Не вдалося завантажити дані сесії');
     const data = await apiRes.json();
+    window.ScheduleApp?.DataFreshness?.mark('api', data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now());
 
     state.items = (Array.isArray(data.items) ? data.items : []).map((item) => {
       const teacherNames = extractTeacherNames(item.teacher);
@@ -302,7 +320,7 @@
       await loadData();
       applyFilters();
     } catch (e) {
-      els.tbody.innerHTML = `<tr><td colspan="9" class="px-3 py-5 text-center text-red-600">${e.message}</td></tr>`;
+      els.tbody.innerHTML = `<tr><td colspan="9" class="px-3 py-5 text-center text-red-600">${escapeHtml(e.message)}</td></tr>`;
     }
   }
 

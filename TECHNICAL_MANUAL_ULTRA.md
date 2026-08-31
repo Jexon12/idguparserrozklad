@@ -57,8 +57,8 @@
 - `session.html` — перегляд сесії (таблиця, фільтри, експорт).
 - `session-admin.html` — імпорт DOCX і адмін-операції над сесіями.
 - `session-constructor.html` — ручний конструктор сесії + перевірки.
-- `session-prep.html` — підготовчий збір “предмет-група-викладачі”.
-- `smart.html` — smart-аналітика (рейтинг, heatmap, what-if).
+- `session-constructor.html?source=schedule` — підготовчий збір “предмет-група-викладачі”.
+- `index.html#smart-day` — smart-аналітика (рейтинг, heatmap, what-if).
 - `builder.html` — тижневий білдер/оптимізатор.
 - `course-live.html` — денний агрегатор по курсах/факультетах.
 
@@ -592,8 +592,7 @@ P2:
 ## Додаток B: Файли документації
 
 - `USER_GUIDE.md`
-- `USER_GUIDE_PDF.html`
+- `docs/print/USER_GUIDE_PDF.html`
 - `TECHNICAL_MANUAL_FULL.md`
-- `TECHNICAL_MANUAL_FULL_PDF.html`
+- `docs/print/TECHNICAL_MANUAL_FULL_PDF.html`
 - `TECHNICAL_MANUAL_ULTRA.md` (цей документ)
-

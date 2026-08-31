@@ -43,21 +43,28 @@
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                     <h1 class="text-2xl md:text-3xl font-black text-violet-700 dark:text-violet-300">Session Constructor</h1>
-                    <p class="text-xs text-gray-500 mt-1">База: як session-prep (з розкладу) + ручне редагування</p>
+                    <p class="text-xs text-gray-500 mt-1">Єдиний процес: джерело → редагування → перевірка → публікація</p>
                 </div>
                 <div class="flex gap-2 items-center flex-wrap">
                     <div class="inline-flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
                         <button id="modeBasicBtn" class="px-3 py-2 text-xs font-bold bg-violet-600 text-white">Basic</button>
                         <button id="modeProBtn" class="px-3 py-2 text-xs font-bold bg-white dark:bg-gray-700">Pro</button>
                     </div>
-                    <a href="/session-prep.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Session Prep</a>
                     <a href="/session-admin.html" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Session Admin</a>
                     <a href="/session.html" class="px-3 py-2 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-bold">Session Table</a>
                 </div>
             </div>
         </header>
 
-        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3">
+        <nav aria-label="Етапи підготовки сесії" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+            <a href="#step-source" class="rounded-xl bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200 p-3 font-bold">1. Джерело</a>
+            <a href="#step-edit" class="rounded-xl bg-white dark:bg-gray-800 p-3 font-bold shadow">2. Редагування</a>
+            <a href="#proPanel" class="rounded-xl bg-white dark:bg-gray-800 p-3 font-bold shadow">3. Перевірка</a>
+            <a href="#step-publish" class="rounded-xl bg-white dark:bg-gray-800 p-3 font-bold shadow">4. Публікація</a>
+        </nav>
+
+        <section id="step-source" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3 scroll-mt-4">
+            <h2 class="font-black text-lg">1. Виберіть джерело та сформуйте чернетку</h2>
             <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
                 <input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD (для API upload)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                 <input id="adminActor" type="text" placeholder="Ваше ім'я (лог)" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
@@ -110,11 +117,11 @@
             <div class="flex flex-col gap-4">
                 <!-- Group 1: API Workflow -->
                 <div class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/50">
-                    <div class="text-[10px] font-black uppercase tracking-wider text-violet-500 mb-1 w-full opacity-60">1. Основний робочий процес</div>
+                    <div class="text-[10px] font-black uppercase tracking-wider text-violet-500 mb-1 w-full opacity-60">Чернетка та публікація</div>
                     <button id="loadApiBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#0891b2">⬇️ Відкрити з API</button>
                     <button id="parseBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#7c3aed">1) Сформувати з розкладу</button>
                     <button id="normalizeBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#2563eb">2) Нормалізувати</button>
-                    <button id="uploadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">3) Завантажити в API</button>
+                    <button id="uploadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">4) Завантажити в API</button>
                 </div>
 
                 <!-- Group 2: Session & Files -->
@@ -125,12 +132,11 @@
                     <button id="loadSessionBtn" class="px-4 py-2 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">📂 Відкрити файл</button>
                     <input id="loadSessionFile" type="file" accept=".json" class="hidden">
                     <div class="h-8 w-px bg-gray-300 dark:bg-gray-600 mx-1"></div>
-                    <button id="clearApiBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" title="Перемістити у кошик">🗑️ Видалити в API</button>
-                    <button id="purgeApiBtn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" title="Очистити НАЗАВЖДИ">🧨 Очистити НАЗАВЖДИ</button>
+                    <a href="/session-admin.html" class="px-4 py-2 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 font-bold text-sm">Версії, кошик і видалення → Admin</a>
                 </div>
 
                 <!-- Group 3: Tools & Export -->
-                <div class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/50">
+                <div id="step-publish" class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/50 scroll-mt-4">
                     <div class="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1 w-full opacity-60">3. Інструменти та Експорт</div>
                     <button id="addRowBtn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">+ Додати предмет</button>
                     <button id="clearAllBtn" class="px-4 py-2 rounded-xl bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 font-bold text-sm transition-transform active:scale-95 shadow-sm">🗑️ Очистити все</button>
@@ -304,7 +310,7 @@
             <div id="rowDetailPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm"></div>
         </section>
 
-        <section class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
+        <section id="step-edit" class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden scroll-mt-4">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-700 shadow-sm shadow-gray-200 dark:shadow-gray-800">
@@ -368,6 +374,8 @@
                 </div>
                 <div class="flex gap-2 mt-3 items-center flex-wrap">
                     <button id="clearDraftBtn" class="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border border-rose-200 dark:border-rose-700 text-sm font-bold leading-none min-h-[40px]">Очистити чернетку</button>
+                    <button id="prevRowsPage" class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold disabled:opacity-40">← 500</button>
+                    <button id="nextRowsPage" class="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold disabled:opacity-40">500 →</button>
                     <div id="renderInfo" class="text-xs text-gray-500 self-center"></div>
                 </div>
                 <div class="flex gap-3 mt-3 items-center flex-wrap text-xs">
@@ -380,7 +388,13 @@
             </div>
         </section>
     </div>
-    <script src="js/session-constructor.js?v=20260503-7"></script>
+    <script src="js/utils.js?v=20260410-1"></script>
+    <script src="js/app-shell.js?v=20260831-1"></script>
+    <script src="js/api.js?v=20260410-1"></script>
+    <script src="js/schedule-model.js?v=20260831-1"></script>
+    <script src="js/schedule-catalog.js?v=20260831-1"></script>
+    <script src="js/session-import.js?v=20260831-1"></script>
+    <script src="js/session-constructor.js?v=20260831-1"></script>
 </body>
 </html>
 

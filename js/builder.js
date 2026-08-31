@@ -1,6 +1,9 @@
 window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
+    const escapeHtml = SA.escapeHtml || ((v) => String(v ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
     const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
     const PAIRS = [1, 2, 3, 4, 5, 6, 7];
     const PAIR_TIMES = SA.defaultTimes || {};
@@ -310,7 +313,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         const trHead = document.createElement('tr');
         trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${
-            state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${d.label}</th>`).join('')
+            state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${escapeHtml(d.label)}</th>`).join('')
         }`;
         els.tableHead.appendChild(trHead);
 
@@ -381,9 +384,9 @@ window.ScheduleApp = window.ScheduleApp || {};
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
                     return `
                         <div class="lesson-chip ${items.length > 1 ? 'lesson-conflict' : ''} bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
-                            <div class="font-semibold">${it.discipline || 'Без назви'}</div>
-                            <div class="text-xs text-gray-500">${subtitle}</div>
-                            <div class="text-xs text-gray-500">${it.type || 'Тип не вказано'} · ${it.room || '—'} ${timeText ? `· ${timeText}` : ''}</div>
+                            <div class="font-semibold">${escapeHtml(it.discipline || 'Без назви')}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(subtitle)}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(it.type || 'Тип не вказано')} · ${escapeHtml(it.room || '—')} ${timeText ? `· ${escapeHtml(timeText)}` : ''}</div>
                         </div>
                     `;
                 }).join('');
@@ -454,7 +457,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.optimizedTableBody.innerHTML = '';
         const trHead = document.createElement('tr');
         trHead.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Pair</th>${
-            state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${d.label}</th>`).join('')
+            state.weekDays.map((d) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${escapeHtml(d.label)}</th>`).join('')
         }`;
         els.optimizedTableHead.appendChild(trHead);
 
@@ -489,9 +492,9 @@ window.ScheduleApp = window.ScheduleApp || {};
                     const timeText = (it.start && it.end) ? `${it.start}-${it.end}` : '';
                     return `
                         <div class="lesson-chip ${it.hasMoved ? 'lesson-chip-moved' : ''} bg-gray-50 dark:bg-gray-700 rounded p-2 mb-2 last:mb-0">
-                            <div class="font-semibold">${it.discipline || 'No title'}</div>
-                            <div class="text-xs text-gray-500">${subtitle}</div>
-                            <div class="text-xs text-gray-500">${it.type || 'Type n/a'} | ${it.room || '-'} ${timeText ? `| ${timeText}` : ''}</div>
+                            <div class="font-semibold">${escapeHtml(it.discipline || 'No title')}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(subtitle)}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(it.type || 'Type n/a')} | ${escapeHtml(it.room || '-')} ${timeText ? `| ${escapeHtml(timeText)}` : ''}</div>
                         </div>
                     `;
                 }).join('');
@@ -660,7 +663,7 @@ window.ScheduleApp = window.ScheduleApp || {};
         els.groupsTableHead.innerHTML = '';
         els.groupsTableBody.innerHTML = '';
         const th = document.createElement('tr');
-        th.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${trimmed.map((g) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${g}</th>`).join('')}`;
+        th.innerHTML = `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">Пара</th>${trimmed.map((g) => `<th class="p-2 border dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-left">${escapeHtml(g)}</th>`).join('')}`;
         els.groupsTableHead.appendChild(th);
 
         PAIRS.forEach((pair) => {
@@ -669,7 +672,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             trimmed.forEach((g) => {
                 const cell = matrix.get(`${pair}||${g}`) || [];
                 const text = cell.map((x) => `${x.discipline || '—'}${x.room ? ` (${x.room})` : ''}`).join(' / ');
-                row += `<td class="p-2 border dark:border-gray-700 text-xs">${text || '—'}</td>`;
+                row += `<td class="p-2 border dark:border-gray-700 text-xs">${escapeHtml(text || '—')}</td>`;
             });
             tr.innerHTML = row;
             els.groupsTableBody.appendChild(tr);
@@ -820,11 +823,11 @@ window.ScheduleApp = window.ScheduleApp || {};
         stats.slice(0, 40).forEach((x) => {
             const tr = document.createElement('tr');
             tr.innerHTML =
-                `<td class="p-2 border dark:border-gray-700 font-semibold">${x.group}</td>` +
+                `<td class="p-2 border dark:border-gray-700 font-semibold">${escapeHtml(x.group)}</td>` +
                 `<td class="p-2 border dark:border-gray-700">${x.windowsWeek}</td>` +
                 `<td class="p-2 border dark:border-gray-700">${x.noFirstPairDays}</td>` +
                 `<td class="p-2 border dark:border-gray-700">${x.avgStart}</td>` +
-                `<td class="p-2 border dark:border-gray-700 text-xs">${x.suggestion}</td>`;
+                `<td class="p-2 border dark:border-gray-700 text-xs">${escapeHtml(x.suggestion)}</td>`;
             els.optTableBody.appendChild(tr);
         });
 

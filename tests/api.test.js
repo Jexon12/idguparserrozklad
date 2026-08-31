@@ -126,6 +126,43 @@ describe('API routing', () => {
         expect(res.json).not.toBeNull();
     });
 
+    test('compatibility handler maps /api/session.js to /api/session', async () => {
+        const compatibilityHandler = require('../api/session.js');
+        const req = {
+            method: 'GET',
+            url: '/api/session.js?compat=1',
+            headers: {},
+            socket: { remoteAddress: '127.0.0.1' }
+        };
+        let payload;
+        const res = {
+            statusCode: 200,
+            setHeader: jest.fn(),
+            status(code) {
+                this.statusCode = code;
+                return this;
+            },
+            json(value) {
+                payload = value;
+                return this;
+            },
+            send(value) {
+                payload = value;
+                return this;
+            },
+            end(value) {
+                payload = value;
+                return this;
+            }
+        };
+
+        await compatibilityHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(payload).toBeTruthy();
+        expect(req.url).toBe('/api/session.js?compat=1');
+    });
+
     test('POST /api/times without password returns auth error', async () => {
         const res = await makeRequest('/api/times', {
             method: 'POST',
@@ -148,6 +185,21 @@ describe('API routing', () => {
         const res = await makeRequest('/api/links');
         expect(res.status).toBe(200);
         expect(res.json).not.toBeNull();
+    });
+
+    test('session validateOnly reports blocking publication issues', async () => {
+        const res = await makeRequest('/api/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: {
+                action: 'validateOnly',
+                data: { items: [{ groups: ['12а'], discipline: 'Test', controlType: 'іспит', teacher: 'Teacher' }] }
+            }
+        });
+        expect(res.status).toBe(200);
+        expect(res.json.quality.missingDate).toBe(1);
+        expect(res.json.quality.missingTime).toBe(1);
+        expect(res.json.quality.missingRoom).toBe(1);
     });
 
     test('GET /api/search without q returns 400', async () => {
@@ -203,13 +255,43 @@ describe('API routing', () => {
         expect(res.status).toBe(204);
     });
 
-    test('POST /api/occupancy accepts empty results array', async () => {
+    test('POST /api/occupancy is disabled without a cache token', async () => {
         const res = await makeRequest('/api/occupancy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: { date: '2026-04-08', results: [] }
         });
-        expect([200, 500]).toContain(res.status);
+        expect(res.status).toBe(503);
+    });
+
+    test('POST /api/report/start rejects invalid or excessive ranges', async () => {
+        const reversed = await makeRequest('/api/report/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: { teacherId: 'T1', monthStart: '2026-05', monthEnd: '2026-04' }
+        });
+        expect(reversed.status).toBe(400);
+
+        const excessive = await makeRequest('/api/report/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: { teacherId: 'T1', monthStart: '2020-01', monthEnd: '2026-04' }
+        });
+        expect(excessive.status).toBe(400);
+    });
+
+    test('unknown proxy actions are not forwarded', async () => {
+        const res = await makeRequest('/api/ArbitraryAction?q=test');
+        expect(res.status).toBe(404);
+    });
+
+    test('oversized parsed API body is rejected', async () => {
+        const res = await makeRequest('/api/monitor/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: { message: 'x'.repeat(2 * 1024 * 1024 + 1) }
+        });
+        expect(res.status).toBe(413);
     });
 
     test('POST /api/times is rate-limited after many requests', async () => {
@@ -321,5 +403,26 @@ describe('API routing', () => {
 
         const downloadRes = await makeRequest(`/api/report/download?jobId=${encodeURIComponent(jobId)}`);
         expect(downloadRes.status).toBe(404);
+    });
+
+    test('Direct report download works without in-memory job state', async () => {
+        apiHandler.__setFetchForTests(async () => ({
+            ok: true,
+            json: async () => ({
+                d: [{ full_date: '10.03.2026', study_time_begin: '10:00', discipline: 'Direct report', study_type: 'Лекції', study_hours: 2 }]
+            })
+        }));
+
+        const res = await makeRequest('/api/report/download?teacherId=T1&teacherName=Teacher&monthStart=2026-03&monthEnd=2026-03');
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        expect(res.data.length).toBeGreaterThan(100);
+    });
+
+    test('Direct report download fails instead of returning a partial workbook', async () => {
+        apiHandler.__setFetchForTests(async () => ({ ok: false, status: 503, json: async () => ({}) }));
+        const res = await makeRequest('/api/report/download?teacherId=T1&monthStart=2026-03&monthEnd=2026-03');
+        expect(res.status).toBe(502);
+        expect(res.json.error).toMatch(/Failed to load/);
     });
 });
