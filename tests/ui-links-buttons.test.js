@@ -9,6 +9,7 @@ let proc = null;
 const PAGES = [
     { page: '/index.html', jsFile: 'js/app.js' },
     { page: '/index2.html', jsFile: 'js/app.js' },
+    { page: '/staff.html', jsFile: null },
     { page: '/builder.html', jsFile: 'js/builder.js' },
     { page: '/session.html', jsFile: 'js/session-page.js' },
     { page: '/session-admin.html', jsFile: 'js/session-admin.js' },

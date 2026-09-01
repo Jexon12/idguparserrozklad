@@ -101,35 +101,11 @@
                         title="Smart Day">
                         Smart
                     </a>
-                    <a href="/builder.html"
-                        class="p-2 rounded-lg bg-sky-100 dark:bg-sky-900/30 hover:bg-sky-200 dark:hover:bg-sky-900/50 transition text-xs font-bold text-sky-700 dark:text-sky-300"
-                        title="Week Builder">
-                        Builder
-                    </a>
-                    <a href="/course-live.html"
-                        class="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 hover:bg-cyan-200 dark:hover:bg-cyan-900/50 transition text-xs font-bold text-cyan-700 dark:text-cyan-300"
-                        title="Розклад по курсах на день">
-                        Course Day
-                    </a>
                     <button @click="showSettingsModal = true"
                         class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl"
                         title="Налаштування">
                         ⚙️
                     </button>
-                </div>
-                <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
-                    <a href="/session.html"
-                        class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow">
-                        Сесія
-                    </a>
-                    <a href="/session-admin.html"
-                        class="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold shadow">
-                        Адмін сесій
-                    </a>
-                    <a href="/session-constructor.html"
-                        class="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold shadow">
-                        Конструктор сесії
-                    </a>
                 </div>
                 <p class="text-gray-600 dark:text-gray-400 hidden md:block mt-1">Оберіть декілька груп або викладачів
                     для
@@ -483,7 +459,7 @@
                                 class="text-red-600 hover:text-red-800 text-sm underline">
                                 Очистити дані
                             </button>
-                            <button v-if="!adminMode" @click="toggleAdminLogin"
+                            <button v-if="staffToolsEnabled && !adminMode" @click="toggleAdminLogin"
                                 class="text-gray-300 hover:text-gray-500 text-xs">
                                 Адмін
                             </button>
@@ -1805,7 +1781,7 @@
                     ⬅ На головну
                 </a>
                 <div>
-                    <button @click="toggleAdminLogin" class="hover:text-gray-600">Admin</button>
+                    <button v-if="staffToolsEnabled" @click="toggleAdminLogin" class="hover:text-gray-600">Admin</button>
                 </div>
             </footer>
 
@@ -1815,7 +1791,7 @@
     </div> <!-- End of #app -->
 
     <script src="js/utils.js?v=20260410-1"></script>
-    <script src="js/app-shell.js?v=20260831-1"></script>
+    <script src="js/app-shell.js?v=20260901-1"></script>
     <script src="js/schedule-model.js?v=20260831-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
     <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
@@ -1869,9 +1845,6 @@
 </body>
 
 </html>
-
-
-
 
 
 

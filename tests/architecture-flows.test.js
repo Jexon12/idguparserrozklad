@@ -27,12 +27,24 @@ describe('consolidated page architecture', () => {
         expect(read('smart.html')).toContain('/index.html?desktop=1#smart-day');
     });
 
-    test('common shell exposes role navigation and data freshness', () => {
+    test('public and staff navigation are separated', () => {
         const shell = read('js/app-shell.js');
-        expect(shell).toContain('dispatcher');
-        expect(shell).toContain('admin');
+        expect(shell).toContain('publicRoles');
+        expect(shell).toContain('student');
+        expect(shell).toContain('teacher');
+        expect(shell).toContain('staffPaths');
         expect(shell).toContain('DataFreshness');
         expect(read('index.html')).toContain('js/app-shell.js');
+        expect(read('index.html')).not.toContain('href="/builder.html"');
+        expect(read('index.html')).not.toContain('href="/course-live.html"');
+        expect(read('index.html')).not.toContain('href="/session-admin.html"');
+        expect(read('index2.html')).not.toContain('href="/session-constructor.html"');
+        expect(read('session.html')).not.toContain('href="/session-admin.html"');
+        expect(read('staff.html')).toContain('data-audience="staff"');
+        expect(read('staff.html')).toContain('href="/builder.html"');
+        expect(read('staff.html')).toContain('href="/session-admin.html"');
+        expect(read('index.html')).toContain('v-if="staffToolsEnabled"');
+        expect(read('staff.html')).toContain('staff=1');
     });
 
     test('legacy and print artifacts no longer pollute the root', () => {

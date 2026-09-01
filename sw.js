@@ -1,9 +1,10 @@
-const CACHE_NAME = 'schedule-v33';
+const CACHE_NAME = 'schedule-v34';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/index2.html',
     '/session.html',
+    '/staff.html',
     '/session-admin.html',
     '/css/tailwind.generated.css',
     '/css/styles.css',

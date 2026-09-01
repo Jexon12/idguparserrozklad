@@ -82,36 +82,19 @@
 
         <div class="px-3 pt-4 pb-4 space-y-4">
             <header class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3">
-                <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
                     <div>
                         <h1 class="text-xl font-black text-amber-700 dark:text-amber-300">📅 Гнучкий Розклад</h1>
                         <p class="text-xs text-gray-500 dark:text-gray-400">Mobile UI · швидкий доступ</p>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex flex-wrap gap-2">
                         <a href="/index.html?desktop=1" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
                         <a href="/session.html" class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-xs font-bold text-emerald-700 dark:text-emerald-300">Сесія</a>
                         <a href="#smart-day" class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">Smart</a>
-                        <a href="/builder.html" class="p-2 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-xs font-bold text-sky-700 dark:text-sky-300">Builder</a>
-                        <a href="/course-live.html" class="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 text-xs font-bold text-cyan-700 dark:text-cyan-300">Course Day</a>
                         <button @click="toggleDarkMode" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">{{ isDark ? '☀️' : '🌙' }}</button>
                         <button @click="showSettingsModal = true" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">⚙️</button>
                     </div>
                 </div>
-                <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <a href="/session.html"
-                        class="text-center px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow">
-                        Сесія
-                    </a>
-                    <a href="/session-admin.html"
-                        class="text-center px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold shadow">
-                        Адмін сесій
-                    </a>
-                    <a href="/session-constructor.html"
-                        class="text-center px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold shadow">
-                        Конструктор
-                    </a>
-                </div>
-
                 <div class="mt-3 grid grid-cols-2 gap-2 text-center">
                     <div class="bg-amber-50 dark:bg-amber-900/20 rounded-lg py-2">
                         <div class="text-xs text-gray-500 dark:text-gray-400">Сьогодні</div>
@@ -500,7 +483,7 @@
     </div>
 
     <script src="js/utils.js?v=20260410-1"></script>
-    <script src="js/app-shell.js?v=20260831-1"></script>
+    <script src="js/app-shell.js?v=20260901-1"></script>
     <script src="js/schedule-model.js?v=20260831-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
     <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
@@ -550,6 +533,3 @@
     <script src="js/monitor.js?v=20260412-1"></script>
 </body>
 </html>
-
-
-

@@ -112,6 +112,7 @@ try {
             const showSettingsModal = ref(false);
 
             // Admin
+            const staffToolsEnabled = new URLSearchParams(window.location.search).get('staff') === '1';
             const adminMode = ref(false);
             const adminPassword = ref('');
             const globalLinks = ref({});
@@ -1881,7 +1882,7 @@ try {
                 openNote, saveNote, hasNote, showAllNotesModal, allNotesList, deleteNote,
                 showSettingsModal, defaultTimes: SA.defaultTimes, customTimes,
                 resetCustomTimes, saveState, saveGlobalTimes,
-                adminMode, toggleAdminLogin, globalLinks, showAdminModal,
+                staffToolsEnabled, adminMode, toggleAdminLogin, globalLinks, showAdminModal,
                 openAdminModal, adminTargetTitle, adminTargetKey, adminForm,
                 saveAdminLinks, getGlobalLink,
                 occupancyDate, isScanning, scanProgress, stopScan,
