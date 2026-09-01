@@ -6,6 +6,16 @@ window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
     const MAX_PREFIX = 4;
+    let cacheBuildPromise = null;
+
+    function normalizeSearchText(value) {
+        return String(value || '')
+            .normalize('NFKC')
+            .toLocaleLowerCase('uk-UA')
+            .replace(/[\s()\-–—_/.,'’`]+/g, '');
+    }
+
+    SA.normalizeSearchText = normalizeSearchText;
 
     function addPrefixes(index, token, item) {
         if (!token) return;
@@ -24,6 +34,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             const lower = item._lower || '';
             addPrefixes(index, lower, item);
             lower.split(/[\s()\-_/.,]+/).forEach((token) => addPrefixes(index, token, item));
+            addPrefixes(index, item._searchKey || normalizeSearchText(lower), item);
         });
         return index;
     }
@@ -35,7 +46,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         for (let i = maxLen; i >= 1; i--) {
             const key = q.slice(0, i);
-            if (index[key] && index[key].length > 0) return index[key];
+            if (index[key] && index[key].length > 0) return Array.from(new Set(index[key]));
         }
 
         return fallback;
@@ -45,12 +56,16 @@ window.ScheduleApp = window.ScheduleApp || {};
      * Build universal search cache (groups + teachers from all faculties).
      * @param {Object} refs - Vue refs { faculties, allItemsCache, isSearching, isCacheLoaded, cacheStatus, searchPrefixIndex }
      */
-    SA.buildUniversalCache = async (refs) => {
-        if (refs.isSearching.value || refs.isCacheLoaded.value) return;
+    SA.buildUniversalCache = (refs) => {
+        if (refs.isCacheLoaded.value) return Promise.resolve();
+        if (cacheBuildPromise) return cacheBuildPromise;
+
+        cacheBuildPromise = (async () => {
 
         refs.isSearching.value = true;
         refs.allItemsCache.value = [];
         refs.searchPrefixIndex.value = {};
+        if (refs.groupCacheReady) refs.groupCacheReady.value = false;
         refs.cacheStatus.value = 'Індексація груп...';
 
         const facs = refs.faculties.value;
@@ -58,20 +73,29 @@ window.ScheduleApp = window.ScheduleApp || {};
             const data = await SA.fetchApi('GetStudentScheduleFiltersData');
             if (data) {
                 refs.faculties.value = data.faculties || [];
+                if (refs.eduForms) refs.eduForms.value = data.educForms || [];
+                if (refs.courses) refs.courses.value = data.courses || [];
             }
         }
 
         // 1. Fetch Groups
-        const CHUNK = 6;
+        const CHUNK = 8;
         const facList = refs.faculties.value;
-        for (let i = 0; i < facList.length; i += CHUNK) {
-            const chunk = facList.slice(i, i + CHUNK);
-            const chunkPromises = chunk.map(async (fac) => {
+        const educationForms = (refs.eduForms?.value || []).filter((item) => String(item.Key) !== '0');
+        const courseList = (refs.courses?.value || []).filter((item) => String(item.Key) !== '0');
+        const groupRequests = facList.flatMap((fac) => educationForms.flatMap((form) =>
+            courseList.map((course) => ({ fac, form, course }))
+        ));
+        const seenGroups = new Set();
+
+        for (let i = 0; i < groupRequests.length; i += CHUNK) {
+            const chunk = groupRequests.slice(i, i + CHUNK);
+            const chunkPromises = chunk.map(async ({ fac, form, course }) => {
                 try {
                     const res = await SA.fetchApi('GetStudyGroups', {
                         aFacultyID: fac.Key,
-                        aEducationForm: '0',
-                        aCourse: '0'
+                        aEducationForm: form.Key,
+                        aCourse: course.Key
                     }, { silent: true });
 
                     if (res && res.studyGroups) {
@@ -83,7 +107,8 @@ window.ScheduleApp = window.ScheduleApp || {};
                                 facultyId: fac.Key,
                                 facultyName: fac.Value,
                                 label,
-                                _lower: label.toLowerCase()
+                                _lower: label.toLocaleLowerCase('uk-UA'),
+                                _searchKey: normalizeSearchText(label)
                             };
                         });
                     }
@@ -95,11 +120,19 @@ window.ScheduleApp = window.ScheduleApp || {};
 
             const chunkRes = await Promise.all(chunkPromises);
             chunkRes.forEach((arr) => {
-                refs.allItemsCache.value.push(...arr);
+                arr.forEach((item) => {
+                    const key = `${item.facultyId}|${normalizeSearchText(item.value?.Value || item.label)}`;
+                    if (seenGroups.has(key)) return;
+                    seenGroups.add(key);
+                    refs.allItemsCache.value.push(item);
+                });
             });
 
             await new Promise((r) => setTimeout(r, 40));
         }
+
+        refs.searchPrefixIndex.value = buildPrefixIndex(refs.allItemsCache.value);
+        if (refs.groupCacheReady) refs.groupCacheReady.value = true;
 
         // 2. Fetch Teachers
         refs.cacheStatus.value = 'Індексація викладачів...';
@@ -123,7 +156,8 @@ window.ScheduleApp = window.ScheduleApp || {};
                                         facultyId: fac.Key,
                                         chairId: chair.Key,
                                         label,
-                                        _lower: label.toLowerCase()
+                                        _lower: label.toLocaleLowerCase('uk-UA'),
+                                        _searchKey: normalizeSearchText(label)
                                     };
                                 });
                             }
@@ -142,10 +176,15 @@ window.ScheduleApp = window.ScheduleApp || {};
             await new Promise((r) => setTimeout(r, 120));
         }
 
-        refs.searchPrefixIndex.value = buildPrefixIndex(refs.allItemsCache.value);
-        refs.isCacheLoaded.value = true;
-        refs.isSearching.value = false;
-        refs.cacheStatus.value = '';
+            refs.searchPrefixIndex.value = buildPrefixIndex(refs.allItemsCache.value);
+            refs.isCacheLoaded.value = true;
+        })().finally(() => {
+            refs.isSearching.value = false;
+            refs.cacheStatus.value = '';
+            cacheBuildPromise = null;
+        });
+
+        return cacheBuildPromise;
     };
 
     /**
@@ -156,29 +195,44 @@ window.ScheduleApp = window.ScheduleApp || {};
     SA.createSearchHandler = (refs) => {
         let timer;
         return () => {
-            if (!refs.isCacheLoaded.value && !refs.isSearching.value && refs.searchQuery.value.length > 0) {
-                SA.buildUniversalCache(refs);
-            }
-
             clearTimeout(timer);
-            timer = setTimeout(() => {
-                const q = refs.searchQuery.value.toLowerCase().trim();
+            timer = setTimeout(async () => {
+                const originalQuery = refs.searchQuery.value;
+                const q = originalQuery.toLocaleLowerCase('uk-UA').trim();
                 if (!q) {
                     refs.searchResults.value = [];
                     return;
                 }
 
+                const searchKey = normalizeSearchText(q);
+                const expectedType = refs.mode?.value === 'student'
+                    ? 'group'
+                    : (refs.mode?.value === 'teacher' ? 'teacher' : null);
+
+                if (!refs.isCacheLoaded.value) {
+                    const buildPromise = SA.buildUniversalCache(refs);
+                    if (expectedType === 'group' && refs.groupCacheReady) {
+                        while (refs.isSearching.value && !refs.groupCacheReady.value) {
+                            await new Promise((resolve) => setTimeout(resolve, 80));
+                        }
+                    } else {
+                        await buildPromise;
+                    }
+                }
+                if (originalQuery !== refs.searchQuery.value) return;
+
                 const candidates = getCandidatesByPrefix(
                     refs.searchPrefixIndex.value || {},
-                    q,
+                    searchKey || q,
                     refs.allItemsCache.value
                 );
 
                 refs.searchResults.value = candidates
-                    .filter((item) => item._lower.includes(q))
+                    .filter((item) => !expectedType || item.type === expectedType)
+                    .filter((item) => item._lower.includes(q) || (item._searchKey || normalizeSearchText(item._lower)).includes(searchKey))
                     .sort((a, b) => {
-                        const aStarts = a._lower.startsWith(q);
-                        const bStarts = b._lower.startsWith(q);
+                        const aStarts = (a._searchKey || normalizeSearchText(a._lower)).startsWith(searchKey);
+                        const bStarts = (b._searchKey || normalizeSearchText(b._lower)).startsWith(searchKey);
                         if (aStarts && !bStarts) return -1;
                         if (!aStarts && bStarts) return 1;
                         return 0;

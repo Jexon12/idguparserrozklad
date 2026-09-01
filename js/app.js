@@ -91,6 +91,7 @@ try {
             const cacheStatus = ref('');
             const allItemsCache = ref([]);
             const searchPrefixIndex = ref({});
+            const groupCacheReady = ref(false);
             const groupListQuery = ref('');
             const employeeListQuery = ref('');
             const advancedFiltersOpen = ref(false);
@@ -261,8 +262,8 @@ try {
             };
 
             const searchRefs = {
-                faculties, allItemsCache, isSearching, isCacheLoaded,
-                cacheStatus, searchQuery, searchResults, searchPrefixIndex
+                mode, faculties, eduForms, courses, allItemsCache, isSearching, isCacheLoaded,
+                groupCacheReady, cacheStatus, searchQuery, searchResults, searchPrefixIndex
             };
 
             const scanRefs = {
