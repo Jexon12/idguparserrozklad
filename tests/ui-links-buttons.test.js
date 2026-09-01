@@ -199,4 +199,17 @@ describe('UI links/buttons regression', () => {
 
         expect(failures).toEqual([]);
     });
+
+    test('schedule filters keep one responsive sidebar and explicit dependency states', () => {
+        const desktop = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const mobile = fs.readFileSync(path.resolve(__dirname, '..', 'index2.html'), 'utf8');
+
+        expect((desktop.match(/class="[^"]*desktop-sidebar/g) || [])).toHaveLength(1);
+        expect(desktop).not.toContain('sidebar-content-mobile');
+        expect(desktop).toContain('advanced-schedule-filters');
+        expect(desktop).toContain(':disabled="!selectedFaculty || !selectedEduForm"');
+        expect(mobile).toContain('⚙️ Уточнити пошук');
+        expect(mobile).toContain('filteredGroups');
+        expect(mobile).toContain('filteredEmployees');
+    });
 });

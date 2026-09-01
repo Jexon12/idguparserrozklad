@@ -91,6 +91,16 @@ try {
             const cacheStatus = ref('');
             const allItemsCache = ref([]);
             const searchPrefixIndex = ref({});
+            const groupListQuery = ref('');
+            const employeeListQuery = ref('');
+            const advancedFiltersOpen = ref(false);
+            const filterByName = (items, query) => {
+                const needle = String(query || '').trim().toLocaleLowerCase('uk-UA');
+                if (!needle) return items;
+                return items.filter((item) => String(item?.Value || '').toLocaleLowerCase('uk-UA').includes(needle));
+            };
+            const filteredGroups = computed(() => filterByName(groups.value, groupListQuery.value));
+            const filteredEmployees = computed(() => filterByName(employees.value, employeeListQuery.value));
 
             // Notes
             const notesMap = ref({});
@@ -705,6 +715,17 @@ try {
             const fetchApi = SA.fetchApi;
 
             const onFacultyChange = async () => {
+                selectedEduForm.value = '';
+                selectedCourse.value = '';
+                selectedGroup.value = '';
+                selectedChair.value = '';
+                selectedEmployee.value = '';
+                groupListQuery.value = '';
+                employeeListQuery.value = '';
+                groups.value = [];
+                chairs.value = [];
+                employees.value = [];
+                if (!selectedFaculty.value) return;
                 loadingFilters.value = true;
                 if (mode.value === 'student') {
                     await loadGroups();
@@ -715,7 +736,12 @@ try {
             };
 
             const loadGroups = async () => {
-                if (!selectedFaculty.value) return;
+                selectedGroup.value = '';
+                groupListQuery.value = '';
+                if (!selectedFaculty.value || !selectedEduForm.value || !selectedCourse.value) {
+                    groups.value = [];
+                    return;
+                }
                 loadingFilters.value = true;
                 const data = await fetchApi('GetStudyGroups', {
                     aFacultyID: selectedFaculty.value,
@@ -735,7 +761,12 @@ try {
             };
 
             const loadEmployees = async () => {
-                if (!selectedChair.value) return;
+                selectedEmployee.value = '';
+                employeeListQuery.value = '';
+                if (!selectedChair.value) {
+                    employees.value = [];
+                    return;
+                }
                 loadingFilters.value = true;
                 const data = await fetchApi('GetEmployees', {
                     aFacultyID: selectedFaculty.value,
@@ -1195,6 +1226,9 @@ try {
             watch(mode, () => {
                 selectedGroup.value = '';
                 selectedEmployee.value = '';
+                groupListQuery.value = '';
+                employeeListQuery.value = '';
+                advancedFiltersOpen.value = false;
                 if (mode.value !== 'occupancy') showFreeNowOnly.value = false;
                 if (mode.value === 'student' || mode.value === 'teacher') {
                     if (SA.UserRole) SA.UserRole.set(mode.value);
@@ -1250,6 +1284,13 @@ try {
 
                 // Keyboard shortcuts
                 document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        sidebarOpen.value = false;
+                        showNoteModal.value = false;
+                        showAllNotesModal.value = false;
+                        showSettingsModal.value = false;
+                        return;
+                    }
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
                     if (e.key === 'd' || e.key === 'в') { toggleDarkMode(); }
                     if (e.key === 't' || e.key === 'е') { viewMode.value = viewMode.value === 'cards' ? 'table' : 'cards'; localStorage.setItem('schedule_viewMode', viewMode.value); }
@@ -1858,6 +1899,7 @@ try {
                 dateStart, dateEnd, activeEntities,
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,
+                groupListQuery, employeeListQuery, filteredGroups, filteredEmployees, advancedFiltersOpen,
                 availableDisciplines, canAdd, groupedSchedule, scheduleStats,
                 onFacultyChange, loadGroups, loadChairs, loadEmployees,
                 addEntity, removeEntity, clearAll, exportExcel,

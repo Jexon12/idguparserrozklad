@@ -47,7 +47,7 @@
         };
     </script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
-    <title>Гнучкий Розклад · Mobile</title>
+    <title>Гнучкий Розклад · Мобільна версія</title>
 
     <script>
         if (localStorage.getItem('darkMode') === 'true' ||
@@ -59,8 +59,8 @@
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
-    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260901-2" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260408-15">
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260901-3" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/styles.css?v=20260901-1">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
     <style>
         .safe-bottom { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
@@ -85,12 +85,12 @@
                 <div class="flex items-center justify-between gap-2 flex-wrap">
                     <div>
                         <h1 class="text-xl font-black text-amber-700 dark:text-amber-300">📅 Гнучкий Розклад</h1>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Mobile UI · швидкий доступ</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Мобільна версія · швидкий доступ</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <a href="/index.html?desktop=1" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Desktop</a>
+                        <a href="/index.html?desktop=1" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-bold">Повна версія</a>
                         <a href="/session.html" class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-xs font-bold text-emerald-700 dark:text-emerald-300">Сесія</a>
-                        <a href="#smart-day" class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">Smart</a>
+                        <a href="#smart-day" class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">Мій день</a>
                         <button @click="toggleDarkMode" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">{{ isDark ? '☀️' : '🌙' }}</button>
                         <button @click="showSettingsModal = true" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">⚙️</button>
                     </div>
@@ -137,7 +137,7 @@
                     </div>
                 </div>
                 <div class="mt-3 grid grid-cols-2 gap-2">
-                    <button @click="openNextLessonInGoogleCalendar" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 Calendar</button>
+                    <button @click="openNextLessonInGoogleCalendar" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 У календар</button>
                     <a v-if="getGlobalLink(nextLessonInfo, 'onlineUrl')" :href="getGlobalLink(nextLessonInfo, 'onlineUrl')" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-purple-100 text-purple-700 py-2 text-xs font-bold text-center">📹 Онлайн</a>
                     <button v-else @click="showToast('Для пари не задано online-посилання')" class="rounded-xl bg-purple-100 text-purple-700 py-2 text-xs font-bold">📹 Онлайн</button>
                 </div>
@@ -151,8 +151,8 @@
                 </div>
                 <div class="grid grid-cols-3 gap-2">
                     <button @click="loadAllFavorites" class="rounded-xl bg-yellow-100 text-yellow-700 py-2 text-xs font-bold">⭐ Лише обране</button>
-                    <button @click="saveOfflineSnapshot" class="rounded-xl bg-slate-100 text-slate-700 py-2 text-xs font-bold">💾 Snapshot</button>
-                    <button @click="restoreOfflineSnapshot()" class="rounded-xl bg-slate-100 text-slate-700 py-2 text-xs font-bold">📦 Restore</button>
+                    <button @click="saveOfflineSnapshot" class="rounded-xl bg-slate-100 text-slate-700 py-2 text-xs font-bold">💾 Зберегти</button>
+                    <button @click="restoreOfflineSnapshot()" class="rounded-xl bg-slate-100 text-slate-700 py-2 text-xs font-bold">📦 Відновити</button>
                 </div>
                 <div class="text-[11px] text-gray-500 dark:text-gray-400" v-if="offlineSnapshotAt">
                     Останній офлайн-знімок: {{ new Date(offlineSnapshotAt).toLocaleString('uk-UA') }}
@@ -167,11 +167,13 @@
                 </div>
 
                 <div v-if="mode !== 'occupancy'" class="relative">
-                    <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
+                    <label for="mobile-schedule-search" class="sr-only">{{ mode === 'teacher' ? 'Пошук викладача' : 'Пошук групи' }}</label>
+                    <input id="mobile-schedule-search" type="search" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
+                        role="combobox" aria-autocomplete="list" aria-controls="mobile-search-results" :aria-expanded="searchResults.length > 0"
                         :placeholder="mode === 'teacher' ? 'Пошук викладача...' : 'Пошук групи...'"
                         class="w-full rounded-xl border dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700">
-                    <div v-if="searchResults.length > 0" class="absolute z-20 mt-1 w-full rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 shadow max-h-64 overflow-y-auto">
-                        <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)"
+                    <div v-if="searchResults.length > 0" id="mobile-search-results" role="listbox" class="absolute z-20 mt-1 w-full rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 shadow max-h-64 overflow-y-auto">
+                        <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)" @keydown.enter.prevent="selectSearchResult(res)" role="option" tabindex="0"
                             class="px-3 py-2 border-b dark:border-gray-700 last:border-b-0 hover:bg-amber-50 dark:hover:bg-gray-700 cursor-pointer">
                             <div class="font-semibold text-sm">{{ res.label }}</div>
                             <div class="text-xs text-gray-500">{{ res.type }} · {{ res.facultyName }}</div>
@@ -180,6 +182,9 @@
                 </div>
 
                 <div class="grid grid-cols-1 gap-2" v-if="mode !== 'occupancy'">
+                    <details class="rounded-xl border dark:border-gray-700 p-2" :open="advancedFiltersOpen" @toggle="advancedFiltersOpen = $event.target.open">
+                    <summary class="font-bold text-sm cursor-pointer py-1">⚙️ Уточнити пошук</summary>
+                    <div class="grid grid-cols-1 gap-2 mt-2">
                     <select v-model="selectedFaculty" @change="onFacultyChange" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
                         <option value="">-- Факультет --</option>
                         <option v-for="f in faculties" :key="f.Key" :value="f.Key">{{ f.Value }}</option>
@@ -187,31 +192,35 @@
 
                     <template v-if="mode === 'student'">
                         <div class="grid grid-cols-2 gap-2">
-                            <select v-model="selectedEduForm" @change="loadGroups" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                                <option value="">Форма</option>
+                            <select v-model="selectedEduForm" @change="loadGroups" :disabled="!selectedFaculty" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 disabled:opacity-50">
+                                <option value="">{{ selectedFaculty ? 'Форма навчання' : 'Спочатку факультет' }}</option>
                                 <option v-for="ef in eduForms" :key="ef.Key" :value="ef.Key">{{ ef.Value }}</option>
                             </select>
-                            <select v-model="selectedCourse" @change="loadGroups" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
-                                <option value="">Курс</option>
+                            <select v-model="selectedCourse" @change="loadGroups" :disabled="!selectedFaculty || !selectedEduForm" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 disabled:opacity-50">
+                                <option value="">{{ selectedEduForm ? 'Курс' : 'Спочатку форма' }}</option>
                                 <option v-for="c in courses" :key="c.Key" :value="c.Key">{{ c.Value }}</option>
                             </select>
                         </div>
-                        <select v-model="selectedGroup" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <input v-if="groups.length > 8" type="search" v-model="groupListQuery" placeholder="Фільтр за назвою групи" aria-label="Фільтр списку груп" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <select v-model="selectedGroup" :disabled="!selectedFaculty || !selectedEduForm || !selectedCourse" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 disabled:opacity-50">
                             <option value="">-- Група --</option>
-                            <option v-for="g in groups" :key="g.Key" :value="g">{{ g.Value }}</option>
+                            <option v-for="g in filteredGroups" :key="g.Key" :value="g">{{ g.Value }}</option>
                         </select>
                     </template>
 
                     <template v-else-if="mode === 'teacher'">
-                        <select v-model="selectedChair" @change="loadEmployees" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <select v-model="selectedChair" @change="loadEmployees" :disabled="!selectedFaculty" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 disabled:opacity-50">
                             <option value="">-- Кафедра --</option>
                             <option v-for="c in chairs" :key="c.Key" :value="c.Key">{{ c.Value }}</option>
                         </select>
-                        <select v-model="selectedEmployee" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <input v-if="employees.length > 8" type="search" v-model="employeeListQuery" placeholder="Фільтр за прізвищем" aria-label="Фільтр списку викладачів" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
+                        <select v-model="selectedEmployee" :disabled="!selectedChair" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 disabled:opacity-50">
                             <option value="">-- Викладач --</option>
-                            <option v-for="e in employees" :key="e.Key" :value="e">{{ e.Value }}</option>
+                            <option v-for="e in filteredEmployees" :key="e.Key" :value="e">{{ e.Value }}</option>
                         </select>
                     </template>
+                    </div>
+                    </details>
 
                     <div class="grid grid-cols-2 gap-2">
                         <input type="date" v-model="dateStart" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700">
@@ -238,13 +247,21 @@
                     </div>
                 </div>
 
-                <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
+                <p v-if="errorMessage" role="alert" class="text-sm text-red-600">{{ errorMessage }}</p>
 
                 <div class="grid grid-cols-3 gap-2">
-                    <button @click="shareSchedule" class="rounded-xl bg-gray-100 dark:bg-gray-700 py-2 text-xs font-bold">🔗 Share</button>
-                    <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 Calendar</button>
+                    <button @click="shareSchedule" class="rounded-xl bg-gray-100 dark:bg-gray-700 py-2 text-xs font-bold">🔗 Поділитися</button>
+                    <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())" class="rounded-xl bg-blue-100 text-blue-700 py-2 text-xs font-bold">📆 Календар</button>
                     <button @click="clearLocalData && clearLocalData()" class="rounded-xl bg-red-100 text-red-700 py-2 text-xs font-bold">🗑 Очистити</button>
                 </div>
+            </section>
+
+            <section v-if="activeEntities.length === 0 && mode !== 'occupancy'" aria-live="polite"
+                class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 text-center">
+                <div class="text-4xl">🔎</div>
+                <h2 class="mt-2 font-black text-gray-800 dark:text-gray-100">Знайдіть свій розклад</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Введіть групу або прізвище викладача вище. Додаткові фільтри відкривайте лише за потреби.</p>
+                <a href="#mobile-schedule-search" class="inline-block mt-3 rounded-xl bg-amber-600 text-white px-4 py-2 text-sm font-bold">Почати пошук</a>
             </section>
 
             <section v-if="(favorites || []).length > 0" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3">
@@ -268,7 +285,7 @@
             <section v-if="activeEntities.length > 0 && mode !== 'occupancy'" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3 space-y-3">
                 <div id="smart-day" class="flex items-center justify-between rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 scroll-mt-4">
                     <div>
-                        <div class="font-black text-amber-800 dark:text-amber-200">Smart Day</div>
+                        <div class="font-black text-amber-800 dark:text-amber-200">Мій день</div>
                         <div class="text-xs text-gray-500">Вікна {{ smartDayInsights.windows }} · пізні {{ smartDayInsights.latePairs }} · переходи {{ smartDayInsights.moves }}</div>
                     </div>
                     <div class="text-3xl font-black text-amber-700 dark:text-amber-300">{{ smartDayInsights.score }}</div>
@@ -518,7 +535,7 @@
         })();
     </script>
 
-    <script src="js/app.js?v=20260901-3"></script>
+    <script src="js/app.js?v=20260901-4"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
