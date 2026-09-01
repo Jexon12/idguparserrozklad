@@ -47,6 +47,15 @@ describe('consolidated page architecture', () => {
         expect(read('staff.html')).toContain('staff=1');
     });
 
+    test('student and teacher filters have one clear meaning', () => {
+        const desktop = read('index.html');
+        expect(desktop).not.toContain('v-model="selectedStudyType"');
+        expect(desktop).toContain("mode === 'teacher' ? 'Швидкий пошук викладача'");
+        expect(desktop).toContain('v-if="staffToolsEnabled" @click="mode = \'occupancy\'"');
+        expect(read('index2.html')).toContain("mode === 'teacher' ? 'Пошук викладача...'");
+        expect(read('staff.html')).toContain('tool=occupancy');
+    });
+
     test('legacy and print artifacts no longer pollute the root', () => {
         ['page.html', 'schedule-loader.js', 'schedule.min.js', 'diagnostic.js', 'USER_GUIDE_PDF.html']
             .forEach((file) => expect(fs.existsSync(path.join(root, file))).toBe(false));

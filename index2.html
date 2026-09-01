@@ -59,7 +59,7 @@
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
-    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260901-2" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="css/styles.css?v=20260408-15">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
     <style>
@@ -144,10 +144,10 @@
             </section>
 
             <section class="bg-white dark:bg-gray-800 rounded-2xl shadow p-3 space-y-2">
-                <div class="grid grid-cols-3 gap-2">
-                    <button @click="openReportModal" class="rounded-xl bg-green-100 text-green-700 py-2 text-xs font-bold">📊 Звіт</button>
-                    <button @click="setTomorrowRange" class="rounded-xl bg-indigo-100 text-indigo-700 py-2 text-xs font-bold">🗓 Завтра</button>
-                    <button @click="openFreeRoomsNow" class="rounded-xl bg-emerald-100 text-emerald-700 py-2 text-xs font-bold">🏫 Вільні</button>
+                <div class="flex flex-wrap gap-2">
+                    <button v-if="mode === 'teacher' || staffToolsEnabled" @click="openReportModal" class="flex-1 min-w-[100px] rounded-xl bg-green-100 text-green-700 py-2 text-xs font-bold">📊 Звіт</button>
+                    <button @click="setTomorrowRange" class="flex-1 min-w-[100px] rounded-xl bg-indigo-100 text-indigo-700 py-2 text-xs font-bold">🗓 Завтра</button>
+                    <button v-if="staffToolsEnabled" @click="openFreeRoomsNow" class="flex-1 min-w-[100px] rounded-xl bg-emerald-100 text-emerald-700 py-2 text-xs font-bold">🏫 Вільні</button>
                 </div>
                 <div class="grid grid-cols-3 gap-2">
                     <button @click="loadAllFavorites" class="rounded-xl bg-yellow-100 text-yellow-700 py-2 text-xs font-bold">⭐ Лише обране</button>
@@ -163,12 +163,12 @@
                 <div class="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
                     <button @click="mode = 'student'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'student' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">🎓 Група</button>
                     <button @click="mode = 'teacher'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'teacher' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">👨‍🏫 Викладач</button>
-                    <button @click="mode = 'occupancy'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'occupancy' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">🏫 Ауд.</button>
+                    <button v-if="staffToolsEnabled" @click="mode = 'occupancy'" :class="['flex-1 py-2 rounded-lg text-sm font-bold', mode === 'occupancy' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500']">🏫 Ауд.</button>
                 </div>
 
                 <div v-if="mode !== 'occupancy'" class="relative">
                     <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
-                        placeholder="Пошук групи/викладача..."
+                        :placeholder="mode === 'teacher' ? 'Пошук викладача...' : 'Пошук групи...'"
                         class="w-full rounded-xl border dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700">
                     <div v-if="searchResults.length > 0" class="absolute z-20 mt-1 w-full rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 shadow max-h-64 overflow-y-auto">
                         <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)"
@@ -363,10 +363,10 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="glass bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow border border-gray-200 dark:border-gray-700 grid grid-cols-5 gap-1 p-1">
+            <div :class="['glass bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow border border-gray-200 dark:border-gray-700 grid gap-1 p-1', staffToolsEnabled ? 'grid-cols-5' : 'grid-cols-4']">
                 <button @click="mode = 'student'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'student' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">🎓</button>
                 <button @click="mode = 'teacher'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'teacher' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">👨‍🏫</button>
-                <button @click="mode = 'occupancy'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'occupancy' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">🏫</button>
+                    <button v-if="staffToolsEnabled" @click="mode = 'occupancy'" class="py-2 rounded-xl text-xs font-bold" :class="mode === 'occupancy' ? 'bg-amber-100 text-amber-700' : 'text-gray-500'">🏫</button>
                 <button @click="shareSchedule" class="py-2 rounded-xl text-xs font-bold text-gray-500">🔗</button>
                 <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())" class="py-2 rounded-xl text-xs font-bold text-gray-500">📆</button>
             </div>
@@ -483,7 +483,7 @@
     </div>
 
     <script src="js/utils.js?v=20260410-1"></script>
-    <script src="js/app-shell.js?v=20260901-1"></script>
+    <script src="js/app-shell.js?v=20260901-3"></script>
     <script src="js/schedule-model.js?v=20260831-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
     <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
@@ -518,7 +518,7 @@
         })();
     </script>
 
-    <script src="js/app.js?v=20260410-1"></script>
+    <script src="js/app.js?v=20260901-3"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

@@ -49,7 +49,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260409-2" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260901-2" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="css/styles.css?v=20260410-1">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
@@ -598,7 +598,7 @@
                         </div>
 
                         <div class="mb-6">
-                            <button @click="openReportModal"
+                            <button v-if="mode === 'teacher' || staffToolsEnabled" @click="openReportModal"
                                 class="w-full bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
                                 📊 Завантажити звіт
                             </button>
@@ -614,7 +614,7 @@
                                 :class="['flex-1 py-2 font-semibold transition', mode === 'teacher' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
                                 Викладач
                             </button>
-                            <button @click="mode = 'occupancy'"
+                            <button v-if="staffToolsEnabled" @click="mode = 'occupancy'"
                                 :class="['flex-1 py-2 font-semibold transition', mode === 'occupancy' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
                                 Зайнятість
                             </button>
@@ -622,9 +622,9 @@
 
                         <!-- Search Bar (Standard Mode Only) -->
                         <div v-if="mode !== 'occupancy'" class="mb-6 relative">
-                            <label class="block text-sm font-bold mb-1">🔍 Швидкий пошук групи</label>
+                            <label class="block text-sm font-bold mb-1">🔍 {{ mode === 'teacher' ? 'Швидкий пошук викладача' : 'Швидкий пошук групи' }}</label>
                             <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
-                                placeholder="Наприклад: КН-21..."
+                                :placeholder="mode === 'teacher' ? 'Наприклад: Шевченко...' : 'Наприклад: КН-21...'"
                                 class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
 
                             <!-- Dropdown Results -->
@@ -673,18 +673,6 @@
                                     class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
                                     <option value="">-- Оберіть факультет --</option>
                                     <option v-for="fac in faculties" :key="fac.Key" :value="fac.Key">{{ fac.Value }}
-                                    </option>
-                                </select>
-                            </div>
-
-                            <!-- Common Filter: Study Type -->
-                            <div v-if="mode !== 'occupancy'">
-                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Форма навчання</label>
-                                <select v-model="selectedStudyType"
-                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
-                                    <option value="">-- Всі типи --</option>
-                                    <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value
-                                        }}
                                     </option>
                                 </select>
                             </div>
@@ -890,7 +878,7 @@
                         </div>
                     </div>
                     <div class="mb-6">
-                        <button @click="openReportModal"
+                        <button v-if="mode === 'teacher' || staffToolsEnabled" @click="openReportModal"
                             class="w-full bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
                             📊 Завантажити звіт
                         </button>
@@ -906,7 +894,7 @@
                             :class="['flex-1 py-2 font-semibold transition', mode === 'teacher' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
                             Викладач
                         </button>
-                        <button @click="mode = 'occupancy'"
+                        <button v-if="staffToolsEnabled" @click="mode = 'occupancy'"
                             :class="['flex-1 py-2 font-semibold transition', mode === 'occupancy' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
                             Зайнятість
                         </button>
@@ -914,9 +902,9 @@
 
                     <!-- Search Bar (Standard Mode Only) -->
                     <div v-if="mode !== 'occupancy'" class="mb-6 relative">
-                        <label class="block text-sm font-bold mb-1">🔍 Швидкий пошук групи</label>
+                        <label class="block text-sm font-bold mb-1">🔍 {{ mode === 'teacher' ? 'Швидкий пошук викладача' : 'Швидкий пошук групи' }}</label>
                         <input type="text" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
-                            placeholder="Наприклад: КН-21..."
+                            :placeholder="mode === 'teacher' ? 'Наприклад: Шевченко...' : 'Наприклад: КН-21...'"
                             class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
 
                         <!-- Dropdown Results -->
@@ -965,17 +953,6 @@
                                 class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
                                 <option value="">-- Оберіть факультет --</option>
                                 <option v-for="fac in faculties" :key="fac.Key" :value="fac.Key">{{ fac.Value }}
-                                </option>
-                            </select>
-                        </div>
-
-                        <!-- Common Filter: Study Type -->
-                        <div v-if="mode !== 'occupancy'">
-                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Форма навчання</label>
-                            <select v-model="selectedStudyType"
-                                class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
-                                <option value="">-- Всі типи --</option>
-                                <option v-for="type in studyTypes" :key="type.Key" :value="type.Key">{{ type.Value }}
                                 </option>
                             </select>
                         </div>
@@ -1791,7 +1768,7 @@
     </div> <!-- End of #app -->
 
     <script src="js/utils.js?v=20260410-1"></script>
-    <script src="js/app-shell.js?v=20260901-1"></script>
+    <script src="js/app-shell.js?v=20260901-3"></script>
     <script src="js/schedule-model.js?v=20260831-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
     <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
@@ -1827,7 +1804,7 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260410-1"></script>
+    <script src="js/app.js?v=20260901-3"></script>
 
     <!-- Service Worker Registration -->
     <script>
@@ -1845,8 +1822,3 @@
 </body>
 
 </html>
-
-
-
-
-

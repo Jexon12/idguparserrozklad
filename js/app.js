@@ -20,7 +20,9 @@ try {
     const App = {
         setup() {
             // --- State ---
-            const mode = ref('student');
+            const USER_ROLE_KEY = 'schedule_user_role_v1';
+            const storedUserRole = SA.UserRole?.current || localStorage.getItem(USER_ROLE_KEY);
+            const mode = ref(storedUserRole === 'teacher' ? 'teacher' : 'student');
             const loadingFilters = ref(false);
             const loadingSchedule = ref(false);
             const errorMessage = ref('');
@@ -52,15 +54,6 @@ try {
                 { value: 'консульт', label: 'Консультації' },
                 { value: 'екзам', label: 'Екзамени' }
             ];
-            const studyTypes = ref([
-                { Key: '10', Value: 'Лекції' },
-                { Key: '11', Value: 'Практичні' },
-                { Key: '12', Value: 'Лабораторні' },
-                { Key: '14', Value: 'Консультації' },
-                { Key: '21', Value: 'Семінарські' },
-                { Key: '23', Value: 'Індивідуальні заняття' }
-            ]);
-
             // Selections
             const selectedFaculty = ref('');
             const selectedEduForm = ref('');
@@ -1052,13 +1045,13 @@ try {
             const updateUrlState = () => {
                 const entities = activeEntities.value;
                 if (entities.length === 0) {
-                    history.replaceState(null, '', window.location.pathname);
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
                     return;
                 }
                 const encoded = entities.map(e =>
                     `${e.type}:${e.id}:${encodeURIComponent(e.name)}`
                 ).join(',');
-                history.replaceState(null, '', `#entities=${encoded}`);
+                history.replaceState(null, '', `${window.location.pathname}${window.location.search}#entities=${encoded}`);
             };
 
             const loadUrlState = async () => {
@@ -1203,6 +1196,10 @@ try {
                 selectedGroup.value = '';
                 selectedEmployee.value = '';
                 if (mode.value !== 'occupancy') showFreeNowOnly.value = false;
+                if (mode.value === 'student' || mode.value === 'teacher') {
+                    if (SA.UserRole) SA.UserRole.set(mode.value);
+                    else localStorage.setItem(USER_ROLE_KEY, mode.value);
+                }
                 if (selectedFaculty.value) {
                     if (mode.value === 'student') loadGroups();
                     else loadChairs();
@@ -1213,25 +1210,16 @@ try {
                 localStorage.setItem('schedule_viewMode', value);
             });
 
-            watch(selectedStudyType, async () => {
-                if (activeEntities.value.length === 0) return;
-                const entities = [...activeEntities.value];
-                activeEntities.value = [];
-                loadingSchedule.value = true;
-
-                const promises = entities.map(async (entity) => {
-                    const { action, payload } = SA.buildSchedulePayload(entity, scheduleRefs);
-                    const data = await fetchApi(action, payload);
-                    return { ...entity, scheduleData: data };
-                });
-
-                activeEntities.value = await Promise.all(promises);
-                loadingSchedule.value = false;
-            });
-
             // --- Lifecycle ---
             onMounted(async () => {
                 loadState();
+                const preferredRole = SA.UserRole?.current || localStorage.getItem(USER_ROLE_KEY);
+                if (preferredRole === 'student' || preferredRole === 'teacher') mode.value = preferredRole;
+                if (!staffToolsEnabled && mode.value === 'occupancy') mode.value = 'student';
+                if (staffToolsEnabled && new URLSearchParams(window.location.search).get('tool') === 'occupancy') mode.value = 'occupancy';
+                SA.UserRole?.subscribe((role) => {
+                    if ((role === 'student' || role === 'teacher') && mode.value !== role) mode.value = role;
+                });
                 await loadFavoritesFromHash();
                 loadingFilters.value = true;
 
@@ -1865,7 +1853,7 @@ try {
                 faculties, eduForms, courses, chairs, groups, employees,
                 selectedFaculty, selectedEduForm, selectedCourse, selectedGroup,
                 selectedChair, selectedEmployee, selectedDisciplines,
-                studyTypes, selectedStudyType,
+                selectedStudyType,
                 lessonTypeFilter, lessonTypeOptions,
                 dateStart, dateEnd, activeEntities,
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,

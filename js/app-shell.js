@@ -8,6 +8,21 @@
         student: { label: 'Студент', links: [['Розклад', '/index.html'], ['Мій день', '/index.html?desktop=1#smart-day'], ['Сесія', '/session.html']] },
         teacher: { label: 'Викладач', links: [['Розклад', '/index.html'], ['Мій день', '/index.html?desktop=1#smart-day'], ['Сесія', '/session.html']] }
     };
+    const roleSubscribers = new Set();
+    const initialRole = localStorage.getItem(ROLE_KEY);
+    SA.UserRole = {
+        current: publicRoles[initialRole] ? initialRole : 'student',
+        set(role) {
+            if (!publicRoles[role]) return;
+            this.current = role;
+            localStorage.setItem(ROLE_KEY, role);
+            roleSubscribers.forEach((listener) => listener(role));
+        },
+        subscribe(listener) {
+            roleSubscribers.add(listener);
+            return () => roleSubscribers.delete(listener);
+        }
+    };
     const staffPaths = new Set(['/staff.html', '/builder.html', '/course-live.html', '/session-constructor.html', '/session-admin.html']);
     const staffLinks = [
         ['Огляд', '/staff.html'],
@@ -77,19 +92,8 @@
         }
 
         const audienceLabel = document.createElement('span');
-        audienceLabel.textContent = 'Я:';
-        audienceLabel.className = 'text-xs text-gray-500 dark:text-gray-400';
-        const select = document.createElement('select');
-        select.setAttribute('aria-label', 'Роль користувача');
-        select.className = 'rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-xs font-bold';
-        Object.entries(publicRoles).forEach(([key, config]) => {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = config.label;
-            select.appendChild(option);
-        });
-        const storedRole = localStorage.getItem(ROLE_KEY);
-        select.value = publicRoles[storedRole] ? storedRole : 'student';
+        audienceLabel.textContent = 'Студентам і викладачам';
+        audienceLabel.className = 'px-2 py-1 rounded-lg text-xs font-bold bg-white dark:bg-gray-800 border dark:border-gray-700';
         const links = document.createElement('div');
         links.className = 'flex flex-wrap gap-1';
         badge = document.createElement('span');
@@ -98,14 +102,13 @@
         retryButton.textContent = 'Повторити';
         retryButton.className = 'hidden text-[11px] px-2 py-1 rounded-lg bg-amber-100 text-amber-800 font-bold';
         retryButton.addEventListener('click', () => location.reload());
-        select.addEventListener('change', () => {
-            localStorage.setItem(ROLE_KEY, select.value);
-            renderLinks(links, select.value);
+        SA.UserRole.subscribe((role) => {
+            renderLinks(links, role);
         });
-        renderLinks(links, select.value);
+        renderLinks(links, SA.UserRole.current);
         const staffLink = createLink(['Для персоналу', '/staff.html']);
         staffLink.className = 'ml-auto px-2 py-1 rounded-lg text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white';
-        shell.append(audienceLabel, select, links, badge, retryButton, staffLink);
+        shell.append(audienceLabel, links, badge, retryButton, staffLink);
         document.body.insertBefore(shell, document.body.firstChild);
         renderFreshness(SA.DataFreshness.state);
     });
