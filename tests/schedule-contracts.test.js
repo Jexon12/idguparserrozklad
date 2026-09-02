@@ -29,6 +29,31 @@ describe('shared schedule model contracts', () => {
         expect(model.splitTeachers('Іваненко І.І., Петренко П.П. / Іваненко І.І.'))
             .toEqual(['Іваненко І.І.', 'Петренко П.П.']);
     });
+
+    test('distinguishes cancelled, moved and online lesson statuses', () => {
+        expect(model.getLessonStatusFlags({ discipline: 'Математика (скасовано)' })).toMatchObject({
+            cancelled: true, moved: false
+        });
+        expect(model.getLessonStatusFlags({ status: 'Перенесено', cabinet: 'Zoom' })).toMatchObject({
+            cancelled: false, moved: true, online: true
+        });
+    });
+
+    test('compares room, time, status, additions and removals between versions', () => {
+        const base = {
+            full_date: '03.09.2026', study_time: '2 пара', study_time_begin: '10:00',
+            study_time_end: '11:20', discipline: 'Математика', employee: 'Іваненко',
+            contingent: '12а', study_type: 'Лекція', cabinet: '301'
+        };
+        const changes = model.compareScheduleVersions(
+            [base, { ...base, discipline: 'Фізика' }],
+            [{ ...base, study_time: '3 пара', study_time_begin: '11:30', study_time_end: '12:50', cabinet: 'Zoom', status: 'Перенесено' },
+                { ...base, discipline: 'Хімія' }]
+        );
+        expect(changes.map((item) => item.field)).toEqual(expect.arrayContaining([
+            'pair', 'cabinet', 'status', 'removed', 'added'
+        ]));
+    });
 });
 
 describe('shared session import contracts', () => {

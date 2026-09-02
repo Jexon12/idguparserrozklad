@@ -9,7 +9,7 @@ let proc = null;
 const PAGES = [
     { page: '/index.html', jsFile: 'js/app.js' },
     { page: '/index2.html', jsFile: null },
-    { page: '/staff.html', jsFile: null },
+    { page: '/staff.html', jsFile: 'js/staff-portal.js' },
     { page: '/builder.html', jsFile: 'js/builder.js' },
     { page: '/session.html', jsFile: 'js/session-page.js' },
     { page: '/session-admin.html', jsFile: 'js/session-admin.js' },
@@ -221,6 +221,24 @@ describe('UI links/buttons regression', () => {
         expect(legacyMobile).not.toContain('id="app"');
     });
 
+    test('demo mode keeps fixture data instead of reloading its generated URL hash', () => {
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+
+        expect(js).toContain("if (!demoRequested && window.location.hash.includes('entities='))");
+        expect(js).toContain('if (demoRequested && appMounted) await loadDemoSchedule()');
+        expect(js).toContain('const type = decodeURIComponent(encodedType)');
+        expect(js).toContain('const id = decodeURIComponent(encodedId)');
+    });
+
+    test('mobile filter actions and active schedule chips can wrap without page overflow', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+
+        expect(html).toContain('class="flex min-w-0 flex-wrap gap-2 sm:justify-end"');
+        expect(html).toContain('class="flex min-w-0 flex-wrap gap-3"');
+        expect(html).toContain('min-w-0 max-w-full items-center');
+        expect(html).toContain('min-w-0 break-words font-medium');
+    });
+
     test('empty schedule explains when mobile filters hide loaded lessons', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
         const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
@@ -244,5 +262,100 @@ describe('UI links/buttons regression', () => {
         expect(js).toContain("localStorage.getItem('schedule_student_week_focus') !== 'false'");
         expect(js).toContain("prefers-reduced-motion: reduce");
         expect(shell).toContain("['Мій тиждень', '/index.html#schedule-week']");
+    });
+
+    test('next lesson widget exposes mobile details and an online join action', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+
+        expect(html).toContain('Наступна пара · через');
+        expect(html).toContain('mobileWidgetData.next.teacher');
+        expect(html).toContain('mobileWidgetData.next.cabinet');
+        expect(html).toContain('mobileWidgetData.next.onlineUrl');
+        expect(html).toContain('Приєднатися онлайн');
+        expect(js).toContain('const availableLessons = slot.lessons.filter((lesson) => !lesson.isCancelled)');
+        expect(js).toContain("onlineUrl: SA.getGlobalLink(l, 'onlineUrl', adminRefs) || ''");
+        expect(js).toContain('nearestDiff < 7 * 24 * 60 * 60 * 1000');
+    });
+
+    test('hidden subjects persist and exports use the filtered schedule', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+
+        expect(html).toContain('Приховати непотрібні предмети');
+        expect(html).toContain('@click="hideDiscipline(disc)"');
+        expect(html).toContain('@click="restoreDiscipline(disc)"');
+        expect(html).toContain('Експортується лише розклад, видимий після фільтрів');
+        expect(html).not.toContain('<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>');
+        expect(js).toContain("schedule_hidden_disciplines_v1");
+        expect(js).toContain("await SA.loadScriptOnce('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js')");
+        expect(js).toContain('if (exportInProgress.value) return');
+    });
+
+    test('teacher mode has today, groups, windows and compact printing', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+
+        expect(html).toContain('id="teacher-calendar"');
+        expect(html).toContain('teacherTodayLessons');
+        expect(html).toContain('teacherGroups');
+        expect(html).toContain('teacherFreeWindows');
+        expect(html).toContain('@click="printTeacherSchedule"');
+        expect(js).toContain('const printTeacherSchedule = () =>');
+        expect(js).toContain('window.print()');
+    });
+
+    test('schedule loading distinguishes empty, offline, API and invalid range states', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        expect(html).toContain("scheduleLoadState === 'offline'");
+        expect(html).toContain("scheduleLoadState === 'api-error'");
+        expect(html).toContain("scheduleLoadState === 'invalid-range'");
+        expect(html).toContain('@click="retryScheduleLoad"');
+        expect(js).toContain('validateDateRange(dateStart.value, dateEnd.value)');
+        expect(js).toContain("latestKey: 'filters.groups'");
+        expect(js).toContain('useCache: false');
+    });
+
+    test('destructive personal actions offer undo and mobile table falls back to cards', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        const css = fs.readFileSync(path.resolve(__dirname, '..', 'css/styles.css'), 'utf8');
+        expect(html).toContain('toastActionLabel');
+        expect(html).toContain('@click="runToastAction"');
+        expect(html).toContain("viewMode === 'table' ? 'md:hidden' : ''");
+        expect(js).toContain("label: 'Скасувати'");
+        expect(css).toContain('content-visibility: auto');
+        expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+        expect(css).toContain(':focus-visible');
+    });
+
+    test('staff portal aggregates health, audit and diagnostic export', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'staff.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/staff-portal.js'), 'utf8');
+        expect(html).toContain('id="systemStateTitle"');
+        expect(html).toContain('id="staffAuditLog"');
+        expect(html).toContain('id="downloadDiagnostics"');
+        expect(js).toContain("getJson('/api/monitor')");
+        expect(js).toContain("getJson('/api/audit?limit=20')");
+        expect(js).toContain('schedule_client_errors_v1');
+        expect(js).toContain('schedule_api_metrics_v1');
+    });
+
+    test('favorite schedules are prefetched while idle and performance is recorded', () => {
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        expect(js).toContain('const prefetchFavoriteSchedules = async () =>');
+        expect(js).toContain('window.requestIdleCallback');
+        expect(js).toContain('schedule_performance_v1');
+        expect(js).toContain('Promise.allSettled');
+    });
+
+    test('repeated schedule UI is extracted into Vue components', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const app = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        expect((html.match(/<app-modal-shell/g) || []).length).toBeGreaterThanOrEqual(2);
+        expect((html.match(/<schedule-status-badges/g) || []).length).toBeGreaterThanOrEqual(2);
+        expect(app).toContain("app.component('AppModalShell'");
+        expect(app).toContain("app.component('ScheduleStatusBadges'");
     });
 });

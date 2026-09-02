@@ -6,9 +6,15 @@ window.ScheduleApp = window.ScheduleApp || {};
 
 (function (SA) {
     const inflight = new Map();
+    const latestControllers = new Map();
     const memoryCache = new Map();
     const CACHE_TTL_MS = 60 * 1000;
+    const SCHEDULE_CACHE_TTL_MS = 15 * 60 * 1000;
     const MAX_CACHE_ENTRIES = 200;
+    SA.ApiMetrics = SA.ApiMetrics || { networkRequests: 0, cacheHits: 0, retries: 0 };
+    const saveMetrics = () => {
+        try { localStorage.setItem('schedule_api_metrics_v1', JSON.stringify({ ...SA.ApiMetrics, at: new Date().toISOString() })); } catch (_) { /* optional */ }
+    };
 
     const getCacheKey = (urlObj) => urlObj.toString().replace(/([?&])_=\d+/, '$1_=');
 
@@ -22,12 +28,33 @@ window.ScheduleApp = window.ScheduleApp || {};
         return hit.value;
     };
 
-    const setCached = (key, value) => {
+    const cacheStorageKey = (key) => {
+        let hash = 2166136261;
+        for (let index = 0; index < key.length; index++) hash = Math.imul(hash ^ key.charCodeAt(index), 16777619);
+        return `schedule_request_cache_v1_${hash >>> 0}`;
+    };
+
+    const getPersistentCached = (key) => {
+        try {
+            const parsed = JSON.parse(sessionStorage.getItem(cacheStorageKey(key)) || 'null');
+            if (!parsed || Date.now() > parsed.expiresAt) return null;
+            return parsed.value;
+        } catch (_) { return null; }
+    };
+
+    const setCached = (key, value, persistent = false) => {
         while (memoryCache.size >= MAX_CACHE_ENTRIES) {
             memoryCache.delete(memoryCache.keys().next().value);
         }
-        memoryCache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+        const expiresAt = Date.now() + (persistent ? SCHEDULE_CACHE_TTL_MS : CACHE_TTL_MS);
+        memoryCache.set(key, { value, expiresAt });
+        if (persistent) {
+            try { sessionStorage.setItem(cacheStorageKey(key), JSON.stringify({ value, expiresAt })); } catch (_) { /* cache is optional */ }
+        }
     };
+
+    const shouldRetry = (error) => !error || !error.status || error.status === 408 || error.status === 429 || error.status >= 500;
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     /**
      * Fetch data from the schedule API via the proxy.
@@ -62,17 +89,28 @@ window.ScheduleApp = window.ScheduleApp || {};
         }
 
         const dedupeKey = getCacheKey(url);
+        const isScheduleRequest = action.startsWith('GetScheduleData');
         if (options.useCache !== false) {
-            const cached = getCached(dedupeKey);
+            const cached = getCached(dedupeKey) ?? (isScheduleRequest ? getPersistentCached(dedupeKey) : null);
             if (cached !== null) {
+                SA.ApiMetrics.cacheHits += 1;
+                saveMetrics();
                 SA.DataFreshness?.mark('cache');
                 return cached;
             }
         }
 
         const runRequest = async () => {
+            SA.ApiMetrics.networkRequests += 1;
+            saveMetrics();
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            if (options.latestKey) {
+                latestControllers.get(options.latestKey)?.abort();
+                latestControllers.set(options.latestKey, controller);
+            }
+            const abortFromCaller = () => controller.abort();
+            options.signal?.addEventListener?.('abort', abortFromCaller, { once: true });
+            const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs || 10000);
             try {
                 const res = await fetch(url, { signal: controller.signal });
                 const text = await res.text();
@@ -97,15 +135,43 @@ window.ScheduleApp = window.ScheduleApp || {};
                     json = JSON.parse(text);
                 }
 
-                const data = Object.prototype.hasOwnProperty.call(json || {}, 'd') ? json.d : json;
+                let data = Object.prototype.hasOwnProperty.call(json || {}, 'd') ? json.d : json;
+                if (isScheduleRequest && SA.Reliability) {
+                    const checked = SA.Reliability.sanitizeSchedule(data);
+                    if (!checked.valid && checked.rows.length === 0 && (!Array.isArray(data) || data.length > 0)) {
+                        const error = new Error(checked.reason || 'Invalid schedule data');
+                        error.status = 502;
+                        throw error;
+                    }
+                    if (checked.rejected) SA.Reliability.recordClientError(checked.reason, `api.${action}.validation`);
+                    data = checked.rows;
+                }
                 if (options.useCache !== false) {
-                    setCached(dedupeKey, data);
+                    setCached(dedupeKey, data, isScheduleRequest);
                 }
                 SA.DataFreshness?.mark('api');
+                SA.lastApiFailure = null;
                 return data;
             } finally {
                 clearTimeout(timeoutId);
+                options.signal?.removeEventListener?.('abort', abortFromCaller);
+                if (options.latestKey && latestControllers.get(options.latestKey) === controller) latestControllers.delete(options.latestKey);
             }
+        };
+
+        const runWithRetry = async () => {
+            const retries = Number.isInteger(options.retries) ? options.retries : 2;
+            let lastError;
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try { return await runRequest(); } catch (error) {
+                    lastError = error;
+                    if (error?.name === 'AbortError' || attempt >= retries || !shouldRetry(error)) throw error;
+                    SA.ApiMetrics.retries += 1;
+                    saveMetrics();
+                    await wait((options.retryDelayMs ?? 250) * (2 ** attempt));
+                }
+            }
+            throw lastError;
         };
 
         try {
@@ -113,15 +179,21 @@ window.ScheduleApp = window.ScheduleApp || {};
                 return await inflight.get(dedupeKey);
             }
 
-            const p = runRequest().finally(() => inflight.delete(dedupeKey));
+            const p = runWithRetry().finally(() => inflight.delete(dedupeKey));
             inflight.set(dedupeKey, p);
             return await p;
         } catch (e) {
-            SA.DataFreshness?.mark(navigator.onLine ? 'error' : 'offline');
+            if (e?.name === 'AbortError' && options.latestKey) return null;
+            const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+            SA.lastApiFailure = { kind: online ? 'api-error' : 'offline', action, message: e?.message || String(e), at: Date.now() };
+            SA.Reliability?.recordClientError(e, `api.${action}`);
+            SA.DataFreshness?.mark(online ? 'error' : 'offline');
             if (!options.silent) {
                 console.error('API Error:', action, e);
                 // Use a global error handler if provided
-                if (SA._onError) SA._onError('Помилка завантаження даних. Спробуйте оновити сторінку.');
+                if (SA._onError) SA._onError(online
+                    ? 'API розкладу тимчасово недоступний. Запит повторено автоматично — спробуйте ще раз пізніше.'
+                    : 'Немає інтернету. Показуємо збережені дані, якщо вони доступні.');
             }
             return null;
         }

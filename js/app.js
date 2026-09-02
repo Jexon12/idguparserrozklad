@@ -23,13 +23,17 @@ try {
             const USER_ROLE_KEY = 'schedule_user_role_v1';
             const storedUserRole = SA.UserRole?.current || localStorage.getItem(USER_ROLE_KEY);
             const mode = ref(storedUserRole === 'teacher' ? 'teacher' : 'student');
+            const demoRequested = new URLSearchParams(window.location.search).get('demo') === '1';
             const loadingFilters = ref(false);
             const loadingSchedule = ref(false);
             const errorMessage = ref('');
+            const scheduleLoadState = ref('idle');
+            SA.Reliability?.installGlobalErrorLogging();
 
             // Global Error Boundary
             onErrorCaptured((err, instance, info) => {
                 console.error("Global Error Captured:", err, info);
+                SA.Reliability?.recordClientError(err, `vue.${info || 'render'}`);
                 errorMessage.value = "Сталася помилка: " + (err.message || "Невідома помилка");
                 return false; // Stop propagation
             });
@@ -198,6 +202,8 @@ try {
             };
 
             const favorites = ref(safeParse('schedule_favorites', []));
+            const storedHiddenDisciplines = safeParse('schedule_hidden_disciplines_v1', []);
+            const hiddenDisciplines = ref(Array.isArray(storedHiddenDisciplines) ? storedHiddenDisciplines : []);
             const activeFavoriteKey = ref(localStorage.getItem('schedule_activeFavoriteKey') || '');
             const viewMode = ref(localStorage.getItem('schedule_viewMode') || 'cards');
             const studentWeekFocus = ref(localStorage.getItem('schedule_student_week_focus') !== 'false');
@@ -206,8 +212,12 @@ try {
             const sidebarOpen = ref(false);
             const toastMessage = ref('');
             const toastVisible = ref(false);
+            const toastActionLabel = ref('');
+            let toastActionHandler = null;
+            let toastTimer = null;
             const nextLessonInfo = ref(null);
             const currentLessonInfo = ref(null);
+            const exportInProgress = ref(false);
             const scheduleChangeLog = ref(safeParse('schedule_change_log_v1', []));
             const showChangeHistoryModal = ref(false);
             const aliasesMap = ref(safeParse('schedule_aliases_v1', {}));
@@ -288,7 +298,18 @@ try {
                 return Array.from(set).sort();
             });
 
+            const availableSubjects = computed(() => {
+                const set = new Set();
+                activeEntities.value.forEach((entity) => {
+                    (entity.scheduleData || []).forEach((item) => {
+                        if (item.discipline) set.add(item.discipline);
+                    });
+                });
+                return Array.from(set).sort();
+            });
+
             const canAdd = computed(() => {
+                if (!SA.Reliability.validateDateRange(dateStart.value, dateEnd.value).valid) return false;
                 if (mode.value === 'student') return !!selectedGroup.value;
                 if (mode.value === 'teacher') return !!selectedEmployee.value;
                 return false;
@@ -314,6 +335,7 @@ try {
                 });
 
                 merged.forEach(lesson => {
+                    if (hiddenDisciplines.value.includes(lesson.discipline)) return;
                     const lessonData = {
                         discipline: lesson.discipline,
                         teacher: SA.stripHtml(lesson.teacher || lesson.employee || ''),
@@ -327,7 +349,10 @@ try {
                         timeEnd: lesson.study_time_end,
                     };
                     lessonData.hasOnline = !!SA.getGlobalLink(lessonData, 'onlineUrl', adminRefs);
-                    lessonData.isCancelled = /(скас|відмін|перенес|cancel)/i.test(String(lesson.discipline || ''));
+                    lessonData.statusFlags = SA.ScheduleModel.getLessonStatusFlags(lesson);
+                    lessonData.statusFlags.online = lessonData.statusFlags.online || lessonData.hasOnline;
+                    lessonData.isCancelled = lessonData.statusFlags.cancelled;
+                    lessonData.isMoved = lessonData.statusFlags.moved;
 
                     // Lesson type filter
                     if (lessonTypeFilter.value) {
@@ -451,7 +476,51 @@ try {
                 if (selectedDisciplines.value.length > 0) {
                     filters.push(`предмети/викладачі: ${selectedDisciplines.value.length}`);
                 }
+                if (hiddenDisciplines.value.length > 0) filters.push(`приховано предметів: ${hiddenDisciplines.value.length}`);
                 return filters;
+            });
+
+            const exportLessonCount = computed(() => groupedSchedule.value.reduce(
+                (total, day) => total + day.slots.reduce((dayTotal, slot) => dayTotal + slot.lessons.length, 0),
+                0
+            ));
+
+            const teacherTodayLessons = computed(() => {
+                if (mode.value !== 'teacher') return [];
+                const today = (() => {
+                    const value = new Date();
+                    return `${String(value.getDate()).padStart(2, '0')}.${String(value.getMonth() + 1).padStart(2, '0')}.${value.getFullYear()}`;
+                })();
+                const day = groupedSchedule.value.find((item) => item.date === today);
+                if (!day) return [];
+                return day.slots.flatMap((slot) => slot.lessons.map((lesson) => ({
+                    ...lesson,
+                    time: slot.time,
+                    start: slot.start,
+                    end: slot.end
+                })));
+            });
+
+            const teacherGroups = computed(() => Array.from(new Set(
+                groupedSchedule.value.flatMap((day) => day.slots.flatMap((slot) =>
+                    slot.lessons.map((lesson) => lesson.group).filter(Boolean)
+                ))
+            )).sort());
+
+            const teacherFreeWindows = computed(() => {
+                if (mode.value !== 'teacher') return [];
+                return groupedSchedule.value.map((day) => {
+                    const occupied = Array.from(new Set(day.slots.map((slot) => {
+                        const match = String(slot.time || '').match(/(\d+)/);
+                        return match ? Number(match[1]) : 0;
+                    }).filter(Boolean))).sort((a, b) => a - b);
+                    if (occupied.length < 2) return null;
+                    const missing = [];
+                    for (let pair = occupied[0] + 1; pair < occupied[occupied.length - 1]; pair++) {
+                        if (!occupied.includes(pair)) missing.push({ pair, time: customTimes.value[pair] || SA.defaultTimes[pair] || null });
+                    }
+                    return missing.length ? { date: day.date, dayName: day.dayName, missing } : null;
+                }).filter(Boolean);
             });
 
             const scheduleHiddenByFilters = computed(() =>
@@ -771,7 +840,7 @@ try {
                     aFacultyID: selectedFaculty.value,
                     aEducationForm: selectedEduForm.value || "0",
                     aCourse: selectedCourse.value || "0"
-                });
+                }, { latestKey: 'filters.groups' });
                 groups.value = data?.studyGroups || [];
                 loadingFilters.value = false;
             };
@@ -779,7 +848,7 @@ try {
             const loadChairs = async () => {
                 if (!selectedFaculty.value) return;
                 loadingFilters.value = true;
-                const data = await fetchApi('GetEmployeeChairs', { aFacultyID: selectedFaculty.value });
+                const data = await fetchApi('GetEmployeeChairs', { aFacultyID: selectedFaculty.value }, { latestKey: 'filters.chairs' });
                 chairs.value = data?.chairs || [];
                 loadingFilters.value = false;
             };
@@ -795,13 +864,21 @@ try {
                 const data = await fetchApi('GetEmployees', {
                     aFacultyID: selectedFaculty.value,
                     aChairID: selectedChair.value
-                });
+                }, { latestKey: 'filters.employees' });
                 employees.value = Array.isArray(data) ? data : [];
                 loadingFilters.value = false;
             };
 
             const addEntity = async () => {
                 let id, name, type;
+
+                const range = SA.Reliability.validateDateRange(dateStart.value, dateEnd.value);
+                if (!range.valid) {
+                    errorMessage.value = range.reason;
+                    scheduleLoadState.value = 'invalid-range';
+                    return;
+                }
+                if (!canAdd.value || loadingSchedule.value) return;
 
                 if (mode.value === 'student') {
                     id = selectedGroup.value.Key;
@@ -817,9 +894,14 @@ try {
                 const existingIndex = activeEntities.value.findIndex(e => e.id === id && e.type === type);
 
                 loadingSchedule.value = true;
+                scheduleLoadState.value = 'loading';
                 const data = await fetchApi(action, payload);
                 loadingSchedule.value = false;
-                if (!data) return;
+                if (!data) {
+                    scheduleLoadState.value = SA.lastApiFailure?.kind || (navigator.onLine ? 'api-error' : 'offline');
+                    return;
+                }
+                scheduleLoadState.value = data.length ? 'ready' : 'empty';
 
                 if (existingIndex !== -1) {
                     activeEntities.value[existingIndex].scheduleData = data;
@@ -831,61 +913,54 @@ try {
                 activeEntities.value.push({ id, name, type, scheduleData: data });
             };
 
-            const removeEntity = (index) => activeEntities.value.splice(index, 1);
-            const clearAll = () => { activeEntities.value = []; };
+            const removeEntity = (index) => {
+                const removed = activeEntities.value[index];
+                if (!removed) return;
+                activeEntities.value.splice(index, 1);
+                showToast(`Видалено: ${removed.name}`, {
+                    label: 'Скасувати',
+                    handler: () => activeEntities.value.splice(Math.min(index, activeEntities.value.length), 0, removed)
+                });
+            };
+            const clearAll = () => {
+                if (!activeEntities.value.length || !window.confirm('Прибрати всі додані розклади?')) return;
+                const removed = [...activeEntities.value];
+                activeEntities.value = [];
+                showToast('Усі розклади прибрано', {
+                    label: 'Скасувати',
+                    handler: () => { activeEntities.value = removed; }
+                });
+            };
 
             const saveChangeLog = () => {
                 localStorage.setItem('schedule_change_log_v1', JSON.stringify(scheduleChangeLog.value));
             };
 
-            const lessonStableKey = (lesson) => {
-                const teacherOrGroup = SA.stripHtml(lesson.teacher || lesson.group || '');
-                return [
-                    lesson.full_date || '',
-                    lesson.discipline || '',
-                    lesson.type || '',
-                    teacherOrGroup
-                ].join('||');
-            };
-
             const collectScheduleChanges = (oldData, newData, entity) => {
-                const oldMap = new Map((oldData || []).map((l) => [lessonStableKey(l), l]));
-                const changes = [];
-
-                (newData || []).forEach((newLesson) => {
-                    const key = lessonStableKey(newLesson);
-                    const oldLesson = oldMap.get(key);
-                    if (!oldLesson) return;
-
-                    if ((oldLesson.study_time || '') !== (newLesson.study_time || '')) {
-                        changes.push({
-                            at: Date.now(),
-                            entityName: entity.name,
-                            entityType: entity.type,
-                            discipline: newLesson.discipline || '—',
-                            date: newLesson.full_date || '',
-                            field: 'pair',
-                            from: oldLesson.study_time || '—',
-                            to: newLesson.study_time || '—'
-                        });
-                    }
-
-                    if ((oldLesson.cabinet || '') !== (newLesson.cabinet || '')) {
-                        changes.push({
-                            at: Date.now(),
-                            entityName: entity.name,
-                            entityType: entity.type,
-                            discipline: newLesson.discipline || '—',
-                            date: newLesson.full_date || '',
-                            field: 'cabinet',
-                            from: oldLesson.cabinet || '—',
-                            to: newLesson.cabinet || '—'
-                        });
-                    }
-                });
-
-                return changes;
+                const at = Date.now();
+                return SA.ScheduleModel.compareScheduleVersions(oldData, newData).map((change) => ({
+                    at,
+                    entityName: entity.name,
+                    entityType: entity.type,
+                    discipline: change.discipline,
+                    date: change.date,
+                    field: change.field,
+                    from: change.from,
+                    to: change.to
+                }));
             };
+
+            const changeFieldLabel = (field) => ({
+                cabinet: 'Аудиторія',
+                pair: 'Час',
+                date: 'Дата',
+                status: 'Статус',
+                added: 'Додано',
+                removed: 'Видалено'
+            }[field] || 'Зміна');
+
+            const describeScheduleChange = (entry) =>
+                `${entry.discipline}: ${changeFieldLabel(entry.field)} ${entry.from} → ${entry.to}`;
 
             const appendScheduleChanges = (changes) => {
                 if (!changes || changes.length === 0) return;
@@ -898,33 +973,35 @@ try {
                 if (activeEntities.value.length === 0 || refreshInProgress) return;
                 refreshInProgress = true;
                 try {
-                let changesDetected = 0;
                 const changeEvents = [];
                 for (const entity of activeEntities.value) {
                     const { action, payload } = SA.buildSchedulePayload(entity, scheduleRefs);
-                    const newData = await fetchApi(action, payload, { silent: true });
+                    const newData = await fetchApi(action, payload, { silent: true, useCache: false });
                     if (!newData) continue;
                     if (!Array.isArray(newData)) continue;
                     const fingerprint = (items) => JSON.stringify((items || []).map((l) => [
                         l.full_date || '', l.study_time || '', l.study_time_begin || '', l.study_time_end || '',
                         l.discipline || '', l.teacher || l.employee || '', l.group || '',
-                        l.cabinet || '', l.type || l.study_type || ''
+                        l.cabinet || '', l.type || l.study_type || '', l.status || '',
+                        l.state || '', l.note || '', l.comment || '', l.online || '',
+                        l.onlineUrl || '', l.meetingUrl || ''
                     ].join('||')).sort());
                     const oldFingerprint = fingerprint(entity.scheduleData);
                     const newFingerprint = fingerprint(newData);
                     if (oldFingerprint !== newFingerprint) {
                         changeEvents.push(...collectScheduleChanges(entity.scheduleData || [], newData, entity));
                         entity.scheduleData = newData;
-                        changesDetected++;
                     }
                 }
                 appendScheduleChanges(changeEvents);
                 lastRefreshTime.value = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
-                if (changesDetected > 0) {
-                    showToast(`Розклад оновлено (${changesDetected} змін)`);
+                if (changeEvents.length > 0) {
+                    showToast(`Розклад оновлено (${changeEvents.length} змін)`);
                     if (notificationsEnabled.value && Notification.permission === "granted") {
-                        new Notification("Розклад оновлено", {
-                            body: `Виявлено ${changesDetected} змін(и) у розкладі.`
+                        const preview = changeEvents.slice(0, 2).map(describeScheduleChange).join('\n');
+                        const remainder = changeEvents.length > 2 ? `\nЩе змін: ${changeEvents.length - 2}` : '';
+                        new Notification(`Зміни розкладу: ${changeEvents.length}`, {
+                            body: `${preview}${remainder}`
                         });
                     }
                 }
@@ -963,12 +1040,60 @@ try {
                 selectedDisciplines.value = [];
                 lessonTypeFilter.value = '';
                 setDeliveryMode('');
+                hiddenDisciplines.value = [];
+                localStorage.removeItem('schedule_hidden_disciplines_v1');
+            };
+
+            const retryScheduleLoad = async () => {
+                if (activeEntities.value.length) await refreshAllSchedules();
+                else await addEntity();
+            };
+
+            const loadDemoSchedule = async () => {
+                loadingSchedule.value = true;
+                try {
+                    const response = await fetch('/data/demo-schedule.json', { cache: 'no-store' });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const fixture = await response.json();
+                    const base = new Date();
+                    const rows = (fixture.lessons || []).map((lesson) => {
+                        const date = new Date(base);
+                        date.setDate(base.getDate() + Number(lesson.dayOffset || 0));
+                        return { ...lesson, full_date: SA.ScheduleModel.isoToDmy(SA.toLocalIsoDate(date)) };
+                    });
+                    const checked = SA.Reliability.sanitizeSchedule(rows);
+                    if (!checked.rows.length) throw new Error('Демонстраційні дані порожні');
+                    dateStart.value = SA.toLocalIsoDate(base);
+                    const demoEnd = new Date(base); demoEnd.setDate(base.getDate() + 6);
+                    dateEnd.value = SA.toLocalIsoDate(demoEnd);
+                    activeEntities.value = [{
+                        id: mode.value === 'teacher' ? 'demo-teacher' : 'demo-group',
+                        name: fixture.name || 'Демонстраційний розклад',
+                        type: mode.value === 'teacher' ? 'Викладач' : 'Група',
+                        scheduleData: checked.rows
+                    }];
+                    scheduleLoadState.value = 'ready';
+                    showToast('Завантажено демонстраційний розклад');
+                } catch (error) {
+                    SA.Reliability.recordClientError(error, 'demo.load');
+                    scheduleLoadState.value = 'api-error';
+                    errorMessage.value = 'Не вдалося відкрити демонстраційні дані';
+                } finally {
+                    loadingSchedule.value = false;
+                }
             };
 
             // Start timer on mount if enabled
             startAutoRefresh();
 
-            const exportExcel = () => {
+            const exportExcel = async () => {
+                if (exportInProgress.value) return;
+                exportInProgress.value = true;
+                try {
+                    if (!window.XLSX) {
+                        await SA.loadScriptOnce('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
+                    }
+                    if (!window.XLSX) throw new Error('Excel library unavailable');
                 const rows = [["Дата", "День тижня", "Час", "Дисципліна", "Тип", "Викладач/Група", "Кабінет", "Джерело"]];
                 groupedSchedule.value.forEach(dayData => {
                     dayData.slots.forEach(slot => {
@@ -985,6 +1110,35 @@ try {
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Розклад");
                 XLSX.writeFile(wb, "rozklad.xlsx");
+                    showToast(`Експортовано занять: ${exportLessonCount.value}`);
+                } catch (error) {
+                    console.error('Excel export failed', error);
+                    showToast('Не вдалося завантажити модуль Excel');
+                } finally {
+                    exportInProgress.value = false;
+                }
+            };
+
+            const escapePrintHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[char]));
+
+            const printTeacherSchedule = () => {
+                const rows = groupedSchedule.value.flatMap((day) => day.slots.flatMap((slot) =>
+                    slot.lessons.map((lesson) => `<tr><td>${escapePrintHtml(day.dayName)}<br><small>${escapePrintHtml(day.date)}</small></td><td>${escapePrintHtml(slot.time)}<br><small>${escapePrintHtml(slot.start)}–${escapePrintHtml(slot.end)}</small></td><td><strong>${escapePrintHtml(lesson.discipline)}</strong><br><small>${escapePrintHtml(lesson.type)}</small></td><td>${escapePrintHtml(lesson.group || '—')}</td><td>${escapePrintHtml(lesson.cabinet || '—')}</td></tr>`)
+                )).join('');
+                if (!rows) {
+                    showToast('Немає занять для друку');
+                    return;
+                }
+                const title = activeEntities.value.map((item) => item.name).join(', ') || 'Викладач';
+                const popup = window.open('', '_blank');
+                if (!popup) {
+                    showToast('Дозвольте спливаюче вікно для друку');
+                    return;
+                }
+                popup.document.write(`<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Розклад · ${escapePrintHtml(title)}</title><style>body{font:13px system-ui,sans-serif;color:#111;margin:18px}h1{font-size:20px;margin:0 0 4px}p{color:#555;margin:0 0 14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left;vertical-align:top}th{background:#eee}small{color:#555}@media print{body{margin:0}thead{display:table-header-group}}</style></head><body><h1>${escapePrintHtml(title)}</h1><p>${escapePrintHtml(dateStart.value)} — ${escapePrintHtml(dateEnd.value)}</p><table><thead><tr><th>День</th><th>Час</th><th>Дисципліна</th><th>Група</th><th>Аудиторія</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}<\/script></body></html>`);
+                popup.document.close();
             };
 
             const toggleDiscipline = (disc) => {
@@ -1111,7 +1265,7 @@ try {
                     return;
                 }
                 const encoded = entities.map(e =>
-                    `${e.type}:${e.id}:${encodeURIComponent(e.name)}`
+                    `${encodeURIComponent(e.type)}:${encodeURIComponent(e.id)}:${encodeURIComponent(e.name)}`
                 ).join(',');
                 history.replaceState(null, '', `${window.location.pathname}${window.location.search}#entities=${encoded}`);
             };
@@ -1127,8 +1281,10 @@ try {
                 const entities = [];
 
                 for (const part of parts) {
-                    const [type, id, encodedName] = part.split(':');
-                    if (!type || !id) continue;
+                    const [encodedType, encodedId, encodedName] = part.split(':');
+                    if (!encodedType || !encodedId) continue;
+                    const type = decodeURIComponent(encodedType);
+                    const id = decodeURIComponent(encodedId);
                     const name = decodeURIComponent(encodedName || '');
 
                     const { action, payload } = SA.buildSchedulePayload(
@@ -1149,6 +1305,10 @@ try {
                 saveState();
                 updateUrlState();
             }, { deep: true });
+
+            watch(mode, async () => {
+                if (demoRequested && appMounted) await loadDemoSchedule();
+            });
 
             watch(activeEntities, () => {
                 if ((activeEntities.value || []).length > 0) {
@@ -1240,7 +1400,18 @@ try {
             const openNote = (lesson, date, time) => SA.openNote(lesson, date, time, noteRefs);
             const saveNote = () => SA.saveNote(noteRefs);
             const hasNote = (lesson, date, time) => SA.hasNote(lesson, date, time, noteRefs);
-            const deleteNote = (key) => SA.deleteNote(key, noteRefs);
+            const deleteNote = (key) => {
+                const removedText = notesMap.value[key];
+                if (!removedText) return;
+                SA.deleteNote(key, noteRefs);
+                showToast('Нотатку видалено', {
+                    label: 'Скасувати',
+                    handler: () => {
+                        notesMap.value[key] = removedText;
+                        saveState();
+                    }
+                });
+            };
 
             const toggleAdminLogin = () => SA.toggleAdminLogin(adminRefs);
             const openAdminModal = (lesson) => SA.openAdminModal(lesson, adminRefs);
@@ -1285,6 +1456,33 @@ try {
                     viewMode.value = 'cards';
                     await scrollToTodaySchedule(true);
                 }
+            };
+
+            const saveHiddenDisciplines = () => {
+                localStorage.setItem('schedule_hidden_disciplines_v1', JSON.stringify(hiddenDisciplines.value));
+            };
+
+            const hideDiscipline = (discipline) => {
+                if (!discipline || hiddenDisciplines.value.includes(discipline)) return;
+                hiddenDisciplines.value = [...hiddenDisciplines.value, discipline];
+                selectedDisciplines.value = selectedDisciplines.value.filter((item) => item !== discipline);
+                saveHiddenDisciplines();
+                showToast(`Приховано: ${discipline}`, {
+                    label: 'Скасувати',
+                    handler: () => restoreDiscipline(discipline)
+                });
+            };
+
+            const restoreDiscipline = (discipline) => {
+                hiddenDisciplines.value = hiddenDisciplines.value.filter((item) => item !== discipline);
+                saveHiddenDisciplines();
+                showToast(`Відновлено: ${discipline}`);
+            };
+
+            const restoreAllDisciplines = () => {
+                hiddenDisciplines.value = [];
+                localStorage.removeItem('schedule_hidden_disciplines_v1');
+                showToast('Усі предмети відновлено');
             };
 
 
@@ -1344,7 +1542,7 @@ try {
                 await loadFavoritesFromHash();
                 loadingFilters.value = true;
 
-                const filtersData = await fetchApi('GetStudentScheduleFiltersData');
+                const filtersData = demoRequested ? null : await fetchApi('GetStudentScheduleFiltersData');
                 if (filtersData) {
                     faculties.value = filtersData.faculties || [];
                     eduForms.value = filtersData.educForms || [];
@@ -1353,8 +1551,10 @@ try {
 
                 loadingFilters.value = false;
 
+                if (demoRequested) await loadDemoSchedule();
+
                 // URL state overrides localStorage (for shared links)
-                if (window.location.hash.includes('entities=')) {
+                if (!demoRequested && window.location.hash.includes('entities=')) {
                     loadingSchedule.value = true;
                     await loadUrlState();
                     loadingSchedule.value = false;
@@ -1389,15 +1589,43 @@ try {
                     viewMode.value = 'cards';
                     await scrollToTodaySchedule();
                 }
+                const runWhenIdle = window.requestIdleCallback || ((callback) => setTimeout(callback, 500));
+                runWhenIdle(() => {
+                    prefetchFavoriteSchedules();
+                    try {
+                        const navigation = performance.getEntriesByType?.('navigation')?.[0];
+                        localStorage.setItem('schedule_performance_v1', JSON.stringify({
+                            at: new Date().toISOString(),
+                            domContentLoadedMs: navigation ? Math.round(navigation.domContentLoadedEventEnd) : null,
+                            loadMs: navigation ? Math.round(navigation.loadEventEnd) : null,
+                            resources: performance.getEntriesByType?.('resource')?.length || 0
+                        }));
+                    } catch (_) { /* diagnostics are optional */ }
+                }, { timeout: 2500 });
             });
 
             // === NEW FUNCTIONS ===
 
             // Toast notification
-            const showToast = (msg) => {
+            const showToast = (msg, action = null) => {
+                if (toastTimer) clearTimeout(toastTimer);
                 toastMessage.value = msg;
+                toastActionLabel.value = action?.label || '';
+                toastActionHandler = typeof action?.handler === 'function' ? action.handler : null;
                 toastVisible.value = true;
-                setTimeout(() => { toastVisible.value = false; }, 3000);
+                toastTimer = setTimeout(() => {
+                    toastVisible.value = false;
+                    toastActionLabel.value = '';
+                    toastActionHandler = null;
+                }, action ? 6000 : 3000);
+            };
+
+            const runToastAction = () => {
+                const handler = toastActionHandler;
+                toastVisible.value = false;
+                toastActionLabel.value = '';
+                toastActionHandler = null;
+                if (handler) handler();
             };
 
             const OFFLINE_SNAPSHOT_KEY = 'schedule_offline_snapshot_v1';
@@ -1583,6 +1811,20 @@ try {
                 showToast(`⭐ Завантажено обране: ${entities.length}`);
             };
 
+            const prefetchFavoriteSchedules = async () => {
+                if (!navigator.onLine || !favorites.value.length) return;
+                const activeKeys = new Set(activeEntities.value.map((item) => `${item.type}:${item.id}`));
+                const pending = favorites.value
+                    .filter((favorite) => !activeKeys.has(`${favorite.type}:${favorite.id}`))
+                    .slice(0, 6);
+                for (let index = 0; index < pending.length; index += 2) {
+                    await Promise.allSettled(pending.slice(index, index + 2).map((favorite) => {
+                        const { action, payload } = SA.buildSchedulePayload(favorite, scheduleRefs);
+                        return fetchApi(action, payload, { silent: true });
+                    }));
+                }
+            };
+
             const clearChangeHistory = () => {
                 scheduleChangeLog.value = [];
                 saveChangeLog();
@@ -1619,6 +1861,7 @@ try {
                     'schedule_viewMode',
                     'schedule_student_week_focus',
                     'schedule_delivery_mode',
+                    'schedule_hidden_disciplines_v1',
                     'schedule_change_log_v1',
                     'schedule_aliases_v1',
                     'schedule_autoRefresh',
@@ -1642,6 +1885,7 @@ try {
                 selectedEmployee.value = '';
                 selectedStudyType.value = '';
                 selectedDisciplines.value = [];
+                hiddenDisciplines.value = [];
                 lessonTypeFilter.value = '';
 
                 activeEntities.value = [];
@@ -1861,6 +2105,8 @@ try {
                 for (const dayData of gs) {
                     for (const slot of dayData.slots) {
                         if (!slot.start || !slot.end || !slot.lessons.length) continue;
+                        const availableLessons = slot.lessons.filter((lesson) => !lesson.isCancelled);
+                        if (availableLessons.length === 0) continue;
 
                         const parts = dayData.date.split('.');
                         if (parts.length !== 3) continue;
@@ -1871,8 +2117,8 @@ try {
 
                         // Check Current Lesson
                         if (now >= lessonStart && now < lessonEnd) {
-                            if (!current && slot.lessons.length > 0) {
-                                const l = slot.lessons[0];
+                            if (!current) {
+                                const l = availableLessons[0];
                                 const totalDuration = lessonEnd - lessonStart;
                                 const elapsed = now - lessonStart;
                                 const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100)));
@@ -1884,6 +2130,7 @@ try {
                                     teacher: l.teacher || l.group || '',
                                     cabinet: l.cabinet || '',
                                     type: l.type,
+                                    onlineUrl: SA.getGlobalLink(l, 'onlineUrl', adminRefs) || '',
                                     time: slot.time,
                                     percent,
                                     remainingPercent: Math.min(100, Math.max(0, 100 - percent)),
@@ -1898,27 +2145,28 @@ try {
                         const diff = lessonStart - now;
                         if (diff > 0 && diff < nearestDiff) {
                             nearestDiff = diff;
-                            if (slot.lessons.length > 0) {
-                                const l = slot.lessons[0];
-                                nearest = {
-                                    discipline: l.discipline,
-                                    teacher: l.teacher || '',
-                                    cabinet: l.cabinet || '',
-                                    time: slot.time,
-                                    date: dayData.date,
-                                    start: slot.start,
-                                    end: slot.end,
-                                    type: l.type || ''
-                                };
-                            }
+                            const l = availableLessons[0];
+                            nearest = {
+                                discipline: l.discipline,
+                                teacher: l.teacher || '',
+                                cabinet: l.cabinet || '',
+                                group: l.group || l.entityName || '',
+                                time: slot.time,
+                                date: dayData.date,
+                                start: slot.start,
+                                end: slot.end,
+                                type: l.type || '',
+                                onlineUrl: SA.getGlobalLink(l, 'onlineUrl', adminRefs) || '',
+                                isMoved: Boolean(l.isMoved)
+                            };
                         }
 
                         // Notification Logic (15 and 5 mins before)
                         const diffMins = Math.floor(diff / 60000);
-                        if (notificationsEnabled.value && diffMins > 0) {
-                            const l = slot.lessons[0];
+                        if (notificationsEnabled.value && diff > 0) {
+                            const l = availableLessons[0];
                             [15, 5].forEach((lead) => {
-                                if (diffMins > lead) return;
+                                if (diff > lead * 60000 || diff <= (lead - 1) * 60000) return;
                                 const notifKey = `${dayData.date}-${slot.start}-${l.discipline}-${lead}`;
                                 if (notifiedLessons.value.has(notifKey)) return;
                                 notifiedLessons.value.add(notifKey);
@@ -1936,7 +2184,7 @@ try {
                 // Update state
                 currentLessonInfo.value = current;
 
-                if (nearest && nearestDiff < 24 * 60 * 60 * 1000) {
+                if (nearest && nearestDiff < 7 * 24 * 60 * 60 * 1000) {
                     const mins = Math.floor(nearestDiff / 60000);
                     const hrs = Math.floor(mins / 60);
                     const m = mins % 60;
@@ -1954,14 +2202,14 @@ try {
                     activeEntities.value.forEach((e) => {
                         (e.scheduleData || []).forEach((lesson) => {
                             if (lesson.full_date !== todayDate) return;
-                            if (/(скас|відмін|перенес|cancel)/i.test(String(lesson.discipline || ''))) {
+                            if (SA.ScheduleModel.getLessonStatusFlags(lesson).cancelled) {
                                 cancelledCount++;
                             }
                         });
                     });
                     if (cancelledCount > 0 && notificationsEnabled.value && Notification.permission === "granted") {
                         new Notification('⚠ Зміни на сьогодні', {
-                            body: `Скасовані/перенесені пари: ${cancelledCount}`
+                            body: `Скасовані пари: ${cancelledCount}`
                         });
                     }
                     notifiedCancellationDigestKey.value = digestKey;
@@ -1983,7 +2231,7 @@ try {
 
             // --- Return all template bindings ---
             return {
-                mode, loadingFilters, loadingSchedule, errorMessage,
+                mode, loadingFilters, loadingSchedule, errorMessage, scheduleLoadState, retryScheduleLoad, loadDemoSchedule,
                 isDark, toggleDarkMode,
                 faculties, eduForms, courses, chairs, groups, employees,
                 selectedFaculty, selectedEduForm, selectedCourse, selectedGroup,
@@ -1994,10 +2242,12 @@ try {
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,
                 groupListQuery, employeeListQuery, filteredGroups, filteredEmployees, advancedFiltersOpen,
-                availableDisciplines, canAdd, groupedSchedule, scheduleStats,
+                availableDisciplines, availableSubjects, canAdd, groupedSchedule, scheduleStats,
+                teacherTodayLessons, teacherGroups, teacherFreeWindows, printTeacherSchedule,
                 activeScheduleFilters, scheduleHiddenByFilters, clearScheduleFilters,
+                hiddenDisciplines, hideDiscipline, restoreDiscipline, restoreAllDisciplines,
                 onFacultyChange, loadGroups, loadChairs, loadEmployees,
-                addEntity, removeEntity, clearAll, exportExcel,
+                addEntity, removeEntity, clearAll, exportExcel, exportInProgress, exportLessonCount,
                 toggleDiscipline, getColorClass: SA.getColorClass,
                 getLessonTypeClass: SA.getLessonTypeClass,
                 getLessonTypeIcon: SA.getLessonTypeIcon,
@@ -2017,10 +2267,11 @@ try {
                 favorites, activeFavoriteKey, viewMode, datePreset, sidebarOpen,
                 studentWeekFocus, setStudentWeekFocus, scrollToTodaySchedule, isTodayDate,
                 deliveryModeFilter, setDeliveryMode,
-                toastMessage, toastVisible, nextLessonInfo,
+                toastMessage, toastVisible, toastActionLabel, runToastAction, nextLessonInfo,
                 setDateRange, setTomorrowRange, shiftWeek,
                 addToFavorites, removeFavorite, loadFromFavorite, quickSwitchFavorite, loadAllFavorites,
                 scheduleChangeLog, showChangeHistoryModal, clearChangeHistory,
+                changeFieldLabel,
                 exportICal, shareSchedule, showToast,
                 shareFavoritesSet, openNextLessonInGoogleCalendar,
                 conflictSlots, advancedAnalytics,
@@ -2048,6 +2299,12 @@ try {
     const app = createApp(App);
     if (window.CurrentLessonBannerComponent) {
         app.component('CurrentLessonBanner', window.CurrentLessonBannerComponent);
+    }
+    if (window.ScheduleStatusBadgesComponent) {
+        app.component('ScheduleStatusBadges', window.ScheduleStatusBadgesComponent);
+    }
+    if (window.AppModalShellComponent) {
+        app.component('AppModalShell', window.AppModalShellComponent);
     }
     app.mount('#app');
 } catch (e) {

@@ -48,10 +48,28 @@ describe('API client regressions', () => {
             console
         };
         vm.runInNewContext(source, sandbox);
-        const first = await sandbox.window.ScheduleApp.fetchApi('GetEmployees', {}, { silent: true });
-        const second = await sandbox.window.ScheduleApp.fetchApi('GetEmployees', {}, { silent: true });
+        const first = await sandbox.window.ScheduleApp.fetchApi('GetEmployees', {}, { silent: true, retryDelayMs: 0 });
+        const second = await sandbox.window.ScheduleApp.fetchApi('GetEmployees', {}, { silent: true, retryDelayMs: 0 });
         expect(first).toBeNull();
         expect(second).toBeNull();
+        expect(calls).toBe(6);
+    });
+
+    test('temporary API failure is retried and recovered', async () => {
+        const source = fs.readFileSync(path.resolve(__dirname, '../js/api.js'), 'utf8');
+        let calls = 0;
+        const sandbox = {
+            window: { location: { origin: 'https://example.test' }, ScheduleApp: { API_PROXY: '/api/', VUZ_ID: 1 } },
+            fetch: async () => {
+                calls += 1;
+                if (calls < 2) return { ok: false, status: 503, text: async () => 'temporary' };
+                return { ok: true, status: 200, text: async () => JSON.stringify({ d: [{ Key: 1, Value: 'A' }] }) };
+            },
+            AbortController, URL, setTimeout, clearTimeout, console
+        };
+        vm.runInNewContext(source, sandbox);
+        const result = await sandbox.window.ScheduleApp.fetchApi('GetEmployees', {}, { silent: true, retryDelayMs: 0 });
+        expect(result).toHaveLength(1);
         expect(calls).toBe(2);
     });
 });

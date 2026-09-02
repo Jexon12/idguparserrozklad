@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-v46';
+const CACHE_NAME = 'schedule-v58';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -10,7 +10,11 @@ const STATIC_ASSETS = [
     '/css/styles.css',
     '/js/utils.js',
     '/js/app-shell.js',
+    '/js/staff-portal.js',
     '/js/schedule-model.js',
+    '/js/reliability.js',
+    '/js/components/schedule-status-badges.js',
+    '/js/components/app-modal-shell.js',
     '/js/schedule-analytics.js',
     '/js/session-import.js',
     '/js/schedule-catalog.js',
@@ -23,7 +27,8 @@ const STATIC_ASSETS = [
     '/js/app.js',
     '/js/session-page.js',
     '/js/session-admin.js',
-    '/data/session-2025-26.json'
+    '/data/session-2025-26.json',
+    '/data/demo-schedule.json'
 ];
 
 self.addEventListener('install', (event) => {

@@ -24,9 +24,8 @@
     <link rel="preconnect" href="https://vnz.osvita.net" crossorigin>
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260901-3" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260901-1">
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="css/styles.css?v=20260902-2">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -41,7 +40,13 @@
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
     <div id="app" class="min-h-screen">
         <!-- Toast Notification -->
-        <div class="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
+        <div class="toast" :class="{ show: toastVisible }" role="status" aria-live="polite">
+            <span>{{ toastMessage }}</span>
+            <button v-if="toastActionLabel" @click="runToastAction"
+                class="ml-3 rounded bg-white/20 px-2 py-1 text-xs font-bold underline hover:bg-white/30 focus:outline-none focus:ring-2 focus:ring-white">
+                {{ toastActionLabel }}
+            </button>
+        </div>
 
         <!-- Global Sticky Status Bar (Component) -->
         <current-lesson-banner :current-lesson-info="currentLessonInfo"></current-lesson-banner>
@@ -96,8 +101,32 @@
                         <div class="font-bold text-indigo-700 dark:text-indigo-300">{{ (mobileWidgetData && mobileWidgetData.tomorrowCount) || 0 }} пар</div>
                     </div>
                 </div>
-                <div class="text-xs text-gray-600 dark:text-gray-400" v-if="mobileWidgetData && mobileWidgetData.next">
-                    Далі: <span class="font-semibold">{{ mobileWidgetData.next.time }}</span> · {{ mobileWidgetData.next.discipline }}
+                <div v-if="mobileWidgetData && mobileWidgetData.next"
+                    class="rounded-lg border border-amber-100 bg-amber-50/60 p-3 dark:border-gray-700 dark:bg-gray-700/50">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                                Наступна пара · через {{ mobileWidgetData.next.timeLeft }}
+                            </div>
+                            <div class="mt-1 font-bold leading-tight text-gray-900 dark:text-gray-100">
+                                {{ mobileWidgetData.next.discipline }}
+                            </div>
+                        </div>
+                        <span v-if="mobileWidgetData.next.isMoved"
+                            class="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            Перенесено
+                        </span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+                        <span>🕒 {{ mobileWidgetData.next.date }} · {{ mobileWidgetData.next.start }}–{{ mobileWidgetData.next.end }}</span>
+                        <span v-if="mobileWidgetData.next.cabinet">📍 {{ mobileWidgetData.next.cabinet }}</span>
+                        <span v-if="mobileWidgetData.next.teacher">👨‍🏫 {{ mobileWidgetData.next.teacher }}</span>
+                    </div>
+                    <a v-if="mobileWidgetData.next.onlineUrl" :href="mobileWidgetData.next.onlineUrl"
+                        target="_blank" rel="noopener noreferrer"
+                        class="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-purple-600 px-3 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
+                        📹 Приєднатися онлайн
+                    </a>
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400" v-else>
                     Найближчих пар поки не знайдено
@@ -107,17 +136,14 @@
             <!-- MODALS MOVED HERE TO ENSURE SCOPE -->
 
             <!-- Modal: Admin Link Editor -->
-            <div v-if="showAdminModal"
-                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4"
-                @click.self="showAdminModal = false">
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full flex flex-col">
-                    <div class="p-4 border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-700 rounded-t-xl">
-                        <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">🔧 Адмін: Посилання</h3>
+            <app-modal-shell :open="showAdminModal" title="🔧 Адмін: Посилання" max-width="max-w-md"
+                @close="showAdminModal = false">
+                    <div class="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
                         <p class="text-xs text-gray-600 dark:text-gray-400 truncate">{{ adminTargetTitle }}</p>
                         <p class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{{ adminTargetKey }}</p>
                     </div>
 
-                    <div class="p-4 space-y-4">
+                    <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-bold mb-1 dark:text-gray-300">🔗 Посилання на курс</label>
                             <input type="text" v-model="adminForm.courseUrl" placeholder="https://moodle..."
@@ -130,8 +156,8 @@
                                 class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         </div>
                     </div>
-
-                    <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-2">
+                    <template #footer>
+                    <div class="flex justify-end gap-2">
                         <button @click="showAdminModal = false"
                             class="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold py-2 px-4 rounded">
                             Скасувати
@@ -141,8 +167,8 @@
                             Зберегти (Сервер)
                         </button>
                     </div>
-                </div>
-            </div>
+                    </template>
+            </app-modal-shell>
 
             <!-- Modal: Free Time -->
             <div v-if="showFreeTimeModal"
@@ -196,22 +222,19 @@
 
 
             <!-- Modal: Edit Note -->
-            <div v-if="showNoteModal"
-                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
-                @click.self="showNoteModal = false">
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full flex flex-col">
-                    <div class="p-4 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-t-xl">
-                        <h3 class="font-bold text-lg text-yellow-800 dark:text-yellow-300">📝 Нотатка</h3>
+            <app-modal-shell :open="showNoteModal" title="📝 Нотатка" max-width="max-w-md"
+                header-class="bg-yellow-50 dark:bg-yellow-900/20" @close="showNoteModal = false">
+                    <div class="mb-3">
                         <p class="text-xs text-yellow-600 dark:text-yellow-400 truncate">{{ currentNoteTitle }}</p>
                     </div>
 
-                    <div class="p-4">
+                    <div>
                         <textarea v-model="noteText" rows="5"
                             placeholder="Введіть ваш запис тут (напр. 'Д/З: прочитати ст. 20')"
                             class="w-full border dark:border-gray-600 rounded-lg p-3 focus:ring focus:ring-yellow-200 dark:focus:ring-yellow-800 resize-none dark:bg-gray-700 dark:text-white"></textarea>
                     </div>
-
-                    <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-2">
+                    <template #footer>
+                    <div class="flex justify-end gap-2">
                         <button @click="showNoteModal = false"
                             class="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold py-2 px-4 rounded">
                             Скасувати
@@ -221,8 +244,8 @@
                             Зберегти
                         </button>
                     </div>
-                </div>
-            </div>
+                    </template>
+            </app-modal-shell>
 
 
             <!-- Modal: All Notes Manager -->
@@ -289,7 +312,7 @@
                             <div class="text-xs text-gray-500 dark:text-gray-400">{{ entry.date }}</div>
                             <div class="mt-2 text-sm">
                                 <span class="font-semibold text-gray-600 dark:text-gray-300">
-                                    {{ entry.field === 'cabinet' ? 'Аудиторія' : 'Пара' }}:
+                                    {{ changeFieldLabel(entry.field) }}:
                                 </span>
                                 <span class="text-red-600 dark:text-red-400">{{ entry.from }}</span>
                                 <span class="mx-1">→</span>
@@ -809,9 +832,9 @@
 
                             <!-- Add Button + Favorite -->
                             <div class="flex gap-2">
-                                <button @click="addEntity" :disabled="!canAdd"
+                                <button @click="addEntity" :disabled="!canAdd || loadingSchedule"
                                     class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed">
-                                    + Додати
+                                    {{ loadingSchedule ? 'Завантаження…' : '+ Додати' }}
                                 </button>
                                 <button @click="addToFavorites" :disabled="!canAdd" title="Додати до обраного"
                                     class="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:hover:bg-yellow-800/40 text-yellow-600 dark:text-yellow-400 font-bold py-2 px-3 rounded transition disabled:opacity-30 disabled:cursor-not-allowed">
@@ -824,9 +847,10 @@
                         <!-- Export Buttons -->
                         <div v-if="Object.keys(groupedSchedule).length > 0"
                             class="mt-6 pt-4 border-t dark:border-gray-700 space-y-2">
-                            <button @click="exportExcel"
-                                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
-                                <span>📥</span> Excel
+                            <button @click="exportExcel" :disabled="exportInProgress"
+                                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-60">
+                                <span>{{ exportInProgress ? '⏳' : '📥' }}</span>
+                                {{ exportInProgress ? 'Підготовка…' : `Excel · ${exportLessonCount} занять` }}
                             </button>
                             <div class="flex gap-2">
                                 <button @click="exportICal"
@@ -838,6 +862,9 @@
                                     🔗 Поділитись
                                 </button>
                             </div>
+                            <p class="text-center text-[11px] text-gray-400 dark:text-gray-500">
+                                Експортується лише розклад, видимий після фільтрів
+                            </p>
                         </div>
                     </div>
                 </aside>
@@ -926,17 +953,25 @@
                     <!-- STANDARD VIEW -->
                     <div v-else>
                         <!-- Countdown to Next Lesson -->
-                        <div v-if="nextLessonInfo" class="countdown-banner mb-6 flex items-center justify-between">
-                            <div>
+                        <div v-if="nextLessonInfo" class="countdown-banner mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="min-w-0">
                                 <div class="text-xs font-medium opacity-80">⏰ Наступна пара</div>
                                 <div class="font-bold text-lg">{{ nextLessonInfo.discipline }}</div>
-                                <div class="text-sm opacity-90">{{ nextLessonInfo.teacher }} · {{ nextLessonInfo.cabinet
-                                    }}
+                                <div class="text-sm opacity-90">
+                                    {{ nextLessonInfo.date }} · {{ nextLessonInfo.start }}–{{ nextLessonInfo.end }}
+                                    <span v-if="nextLessonInfo.cabinet"> · 📍 {{ nextLessonInfo.cabinet }}</span>
+                                </div>
+                                <div v-if="nextLessonInfo.teacher" class="text-sm opacity-90">
+                                    👨‍🏫 {{ nextLessonInfo.teacher }}
                                 </div>
                             </div>
-                            <div class="text-right">
+                            <div class="flex shrink-0 items-center justify-between gap-3 sm:flex-col sm:items-end sm:text-right">
                                 <div class="text-2xl font-bold">{{ nextLessonInfo.timeLeft }}</div>
-                                <div class="text-xs opacity-80">{{ nextLessonInfo.time }}</div>
+                                <a v-if="nextLessonInfo.onlineUrl" :href="nextLessonInfo.onlineUrl"
+                                    target="_blank" rel="noopener noreferrer"
+                                    class="rounded-lg bg-purple-700 px-3 py-2 text-sm font-bold text-white hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-white">
+                                    📹 Онлайн
+                                </a>
                             </div>
                         </div>
 
@@ -1050,10 +1085,10 @@
                         <!-- Global Controls (Discipline Filter) -->
                         <div v-if="activeEntities.length > 0"
                             class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow transition-colors">
-                            <div class="flex justify-between items-center mb-2">
+                            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                 <div class="font-bold text-gray-700 dark:text-gray-200">Фільтр (Предмети, Викладачі):
                                 </div>
-                                <div class="flex gap-2">
+                                <div class="flex min-w-0 flex-wrap gap-2 sm:justify-end">
                                     <button @click="selectedDisciplines = []"
                                         :disabled="selectedDisciplines.length === 0"
                                         :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
@@ -1104,7 +1139,7 @@
                                 </button>
 
                                 <!-- Discipline Chips -->
-                                <button v-for="disc in availableDisciplines" :key="disc" @click="toggleDiscipline(disc)"
+                                <button v-for="disc in availableDisciplines.filter(item => !hiddenDisciplines.includes(item))" :key="disc" @click="toggleDiscipline(disc)"
                                     :class="['px-3 py-1 rounded-full text-sm border transition text-left', 
                                     selectedDisciplines.includes(disc) 
                                     ? 'bg-amber-100 text-amber-800 border-amber-300 font-semibold shadow-sm ring-1 ring-amber-300' 
@@ -1112,16 +1147,43 @@
                                     {{ disc }}
                                 </button>
                             </div>
+
+                            <div v-if="availableSubjects.length > 0" class="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Приховати непотрібні предмети</span>
+                                    <button v-if="hiddenDisciplines.length" @click="restoreAllDisciplines"
+                                        class="text-xs font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-300">
+                                        Відновити всі
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button v-for="disc in availableSubjects.filter(item => !hiddenDisciplines.includes(item))"
+                                        :key="`hide-${disc}`" @click="hideDiscipline(disc)"
+                                        class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-left text-xs text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                                        :aria-label="`Приховати предмет ${disc}`">
+                                        🙈 {{ disc }}
+                                    </button>
+                                </div>
+                                <div v-if="hiddenDisciplines.length" class="mt-3 rounded-lg bg-gray-50 p-2 dark:bg-gray-700/60">
+                                    <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Приховані</div>
+                                    <button v-for="disc in hiddenDisciplines" :key="`restore-${disc}`"
+                                        @click="restoreDiscipline(disc)"
+                                        class="mr-2 mt-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-gray-800 dark:text-amber-300"
+                                        :aria-label="`Повернути предмет ${disc}`">
+                                        ↩ {{ disc }}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Active Entities List -->
-                        <div v-if="activeEntities.length > 0" class="flex flex-wrap gap-3">
+                        <div v-if="activeEntities.length > 0" class="flex min-w-0 flex-wrap gap-3">
                             <div v-for="(entity, index) in activeEntities" :key="index"
-                                class="flex items-center bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-full shadow-sm">
-                                <span class="font-medium mr-2">{{ entity.name }}</span>
-                                <span class="text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
+                                class="flex min-w-0 max-w-full items-center bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-2xl shadow-sm">
+                                <span class="min-w-0 break-words font-medium mr-2">{{ entity.name }}</span>
+                                <span class="shrink-0 text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
                                 <button @click="removeEntity(index)"
-                                    class="text-red-400 hover:text-red-700 font-bold">✕</button>
+                                    class="shrink-0 text-red-400 hover:text-red-700 font-bold">✕</button>
                             </div>
                         </div>
 
@@ -1144,6 +1206,59 @@
                                 </button>
                             </div>
                         </div>
+
+                        <section id="teacher-calendar" v-if="mode === 'teacher' && activeEntities.length > 0"
+                            class="rounded-xl border border-indigo-100 bg-white p-4 shadow dark:border-indigo-900 dark:bg-gray-800">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Персональний календар</div>
+                                    <h2 class="text-xl font-black text-gray-900 dark:text-gray-100">Заняття викладача</h2>
+                                </div>
+                                <button @click="printTeacherSchedule"
+                                    class="min-h-10 rounded-lg bg-gray-800 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:bg-indigo-600 dark:hover:bg-indigo-700">
+                                    🖨️ Друк тижня
+                                </button>
+                            </div>
+
+                            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                                <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
+                                    <h3 class="font-bold text-indigo-900 dark:text-indigo-200">Сьогодні</h3>
+                                    <div v-if="teacherTodayLessons.length" class="mt-2 space-y-2">
+                                        <div v-for="(lesson, index) in teacherTodayLessons" :key="`today-${index}`"
+                                            class="rounded-lg border border-indigo-100 bg-white p-3 dark:border-indigo-800 dark:bg-gray-800">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="font-bold text-gray-900 dark:text-gray-100">{{ lesson.discipline }}</div>
+                                                <span class="shrink-0 text-sm font-bold text-indigo-700 dark:text-indigo-300">{{ lesson.start }}–{{ lesson.end }}</span>
+                                            </div>
+                                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ lesson.group || 'Групу не вказано' }} · 📍 {{ lesson.cabinet || '—' }}</div>
+                                            <a v-if="getGlobalLink(lesson, 'onlineUrl')" :href="getGlobalLink(lesson, 'onlineUrl')"
+                                                target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex rounded bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">📹 Онлайн</a>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">На сьогодні занять немає.</p>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
+                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Групи викладача</h3>
+                                        <div v-if="teacherGroups.length" class="mt-2 flex flex-wrap gap-2">
+                                            <span v-for="group in teacherGroups" :key="group" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">{{ group }}</span>
+                                        </div>
+                                        <p v-else class="mt-2 text-sm text-gray-400">Групи не знайдено.</p>
+                                    </div>
+                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
+                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Вікна між парами</h3>
+                                        <div v-if="teacherFreeWindows.length" class="mt-2 space-y-2 text-sm">
+                                            <div v-for="day in teacherFreeWindows" :key="day.date">
+                                                <span class="font-semibold">{{ day.dayName }}, {{ day.date }}:</span>
+                                                {{ day.missing.map(item => `${item.pair} пара`).join(', ') }}
+                                            </div>
+                                        </div>
+                                        <p v-else class="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Вікон у вибраному періоді немає.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
 
                         <!-- Week Navigation + View Toggle -->
                         <div v-if="activeEntities.length > 0"
@@ -1254,7 +1369,7 @@
 
                         <!-- COMPACT TABLE VIEW -->
                         <div v-if="viewMode === 'table' && Object.keys(groupedSchedule).length > 0"
-                            class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors overflow-x-auto">
+                            class="hidden md:block bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
                             <table class="schedule-table w-full text-sm">
                                 <thead>
                                     <tr class="bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
@@ -1300,8 +1415,10 @@
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td class="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">{{
-                                                    lesson.discipline }}</td>
+                                                <td class="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">
+                                                    <div>{{ lesson.discipline }}</div>
+                                                    <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" compact class="mt-1"></schedule-status-badges>
+                                                </td>
                                                 <td class="px-3 py-2 text-center"><span
                                                         :class="['lesson-type-badge text-xs', getLessonTypeClass(lesson.type)]">{{
                                                         lesson.type || '—' }}</span></td>
@@ -1321,12 +1438,13 @@
                         </div>
 
                         <!-- CARD VIEW (Schedule Grid) -->
-                        <div v-if="viewMode === 'cards' && Object.keys(groupedSchedule).length > 0"
+                        <div v-if="(viewMode === 'cards' || viewMode === 'table') && Object.keys(groupedSchedule).length > 0"
+                            :class="viewMode === 'table' ? 'md:hidden' : ''"
                             class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
                             <div v-for="dayData in groupedSchedule" :key="dayData.date"
                                 :data-schedule-date="dayData.date"
                                 :class="isTodayDate(dayData.date) ? 'ring-2 ring-inset ring-amber-400' : ''"
-                                class="scroll-mt-20 border-b dark:border-gray-700 last:border-b-0">
+                                class="schedule-day scroll-mt-20 border-b dark:border-gray-700 last:border-b-0">
                                 <div
                                     class="day-header-sticky bg-gray-50/95 dark:bg-gray-700/95 px-6 py-3 border-b border-gray-100 dark:border-gray-600 flex justify-between items-center transition-colors">
                                     <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">{{ dayData.dayName
@@ -1397,6 +1515,8 @@
                                                             </span>
                                                         </h4>
 
+                                                        <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" class="mb-2"></schedule-status-badges>
+
                                                         <!-- 2. Type Badge -->
                                                         <div class="mb-1" v-if="lesson.type">
                                                             <span
@@ -1441,6 +1561,12 @@
 
                                                     <!-- Note Indicator/Button -->
                                                     <div class="mt-2 flex justify-end">
+                                                        <button v-if="lesson.discipline"
+                                                            @click.stop="hideDiscipline(lesson.discipline)"
+                                                            class="mr-1 rounded px-2 py-1 text-xs text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                                                            :aria-label="`Приховати предмет ${lesson.discipline}`">
+                                                            🙈 Приховати
+                                                        </button>
                                                         <button
                                                             @click.stop="openNote(lesson, dayData.date, timeSlot.time)"
                                                             class="text-xs px-2 py-1 rounded transition flex items-center gap-1"
@@ -1466,7 +1592,7 @@
                         </div>
                     </div>
 
-                    <div v-if="activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0 && !loadingSchedule"
+                    <div v-if="!loadingSchedule && ((activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0) || (activeEntities.length === 0 && ['offline', 'api-error', 'invalid-range'].includes(scheduleLoadState)))"
                         class="mx-auto my-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-5 py-6 text-center text-gray-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-gray-200">
                         <template v-if="scheduleHiddenByFilters">
                             <div class="font-bold text-amber-800 dark:text-amber-200">Розклад приховано фільтрами</div>
@@ -1477,6 +1603,22 @@
                                 class="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700">
                                 Показати весь розклад
                             </button>
+                        </template>
+                        <template v-else-if="scheduleLoadState === 'offline'">
+                            <div class="font-bold text-amber-800 dark:text-amber-200">Немає інтернету</div>
+                            <div class="mt-1 text-sm">Перевірте підключення або скористайтеся офлайн-знімком.</div>
+                            <button @click="retryScheduleLoad" class="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white">Повторити</button>
+                            <button @click="loadDemoSchedule" class="ml-2 mt-4 rounded-lg border border-amber-600 bg-white px-4 py-2 text-sm font-bold text-amber-700 dark:bg-gray-800">Демо-дані</button>
+                        </template>
+                        <template v-else-if="scheduleLoadState === 'api-error'">
+                            <div class="font-bold text-red-700 dark:text-red-300">API розкладу недоступний</div>
+                            <div class="mt-1 text-sm">Тимчасова помилка сервера. Запит уже повторювався автоматично.</div>
+                            <button @click="retryScheduleLoad" class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white">Спробувати ще раз</button>
+                            <button @click="loadDemoSchedule" class="ml-2 mt-4 rounded-lg border border-red-500 bg-white px-4 py-2 text-sm font-bold text-red-700 dark:bg-gray-800">Демо-дані</button>
+                        </template>
+                        <template v-else-if="scheduleLoadState === 'invalid-range'">
+                            <div class="font-bold text-red-700 dark:text-red-300">Некоректний період</div>
+                            <div class="mt-1 text-sm">Оберіть не більше 62 днів і перевірте порядок дат.</div>
                         </template>
                         <template v-else>
                             На вибраний період розкладу немає.
@@ -1521,10 +1663,13 @@
 
     <script src="js/utils.js?v=20260410-1"></script>
     <script src="js/app-shell.js?v=20260902-1"></script>
-    <script src="js/schedule-model.js?v=20260831-1"></script>
+    <script src="js/schedule-model.js?v=20260902-2"></script>
+    <script src="js/reliability.js?v=20260902-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
     <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
-    <script src="js/api.js?v=20260410-1"></script>
+    <script src="js/components/schedule-status-badges.js?v=20260902-1"></script>
+    <script src="js/components/app-modal-shell.js?v=20260902-1"></script>
+    <script src="js/api.js?v=20260902-3"></script>
     <script src="js/search.js?v=20260902-1"></script>
     <script src="js/notes.js?v=20260410-1"></script>
     <script src="js/admin.js?v=20260410-1"></script>
@@ -1556,7 +1701,7 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260902-2"></script>
+    <script src="js/app.js?v=20260902-13"></script>
 
     <!-- Service Worker Registration -->
     <script>

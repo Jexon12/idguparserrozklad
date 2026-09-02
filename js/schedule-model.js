@@ -104,6 +104,121 @@
             .join('|');
     };
 
+    const getLessonStatusFlags = (lesson = {}) => {
+        const statusText = cleanText([
+            lesson.status,
+            lesson.state,
+            lesson.note,
+            lesson.comment,
+            lesson.description,
+            lesson.discipline,
+            lesson.study_type,
+            lesson.type,
+            lesson.cabinet,
+            lesson.room
+        ].filter(Boolean).join(' '));
+        return {
+            cancelled: /скас|відмін|анульован|cancel/iu.test(statusText),
+            moved: /перенес|переміщ|заміна|reschedul/iu.test(statusText),
+            online: Boolean(lesson.online || lesson.onlineUrl || lesson.meetingUrl ||
+                /онлайн|online|дистанц|zoom|google\s*meet|microsoft\s*teams/iu.test(statusText))
+        };
+    };
+
+    const lessonStatusLabel = (lesson) => {
+        const flags = getLessonStatusFlags(lesson);
+        const labels = [];
+        if (flags.cancelled) labels.push('Скасовано');
+        if (flags.moved) labels.push('Перенесено');
+        if (flags.online) labels.push('Онлайн');
+        return labels.join(', ') || 'Без змін';
+    };
+
+    const comparisonKey = (lesson, includeDate = true) => {
+        const row = normalizeLesson(lesson);
+        return [
+            includeDate ? row.date : '',
+            row.discipline,
+            row.teacher,
+            row.group,
+            row.type
+        ].map((value) => cleanText(value).toLowerCase()).join('|');
+    };
+
+    const lessonTimeLabel = (lesson) => {
+        const row = normalizeLesson(lesson);
+        const explicit = cleanText(lesson?.study_time || lesson?.studyTime || lesson?.time);
+        const interval = [row.start, row.end].filter(Boolean).join('–');
+        return [explicit, interval].filter(Boolean).join(' · ') || (row.pair ? `${row.pair} пара` : '—');
+    };
+
+    const compareMatchedLessons = (oldLesson, newLesson) => {
+        const oldRow = normalizeLesson(oldLesson);
+        const newRow = normalizeLesson(newLesson);
+        const base = {
+            discipline: newRow.discipline || oldRow.discipline || '—',
+            date: newRow.dateDmy || oldRow.dateDmy || '',
+            oldLesson,
+            newLesson
+        };
+        const changes = [];
+        if (oldRow.date !== newRow.date) {
+            changes.push({ ...base, field: 'date', from: oldRow.dateDmy || '—', to: newRow.dateDmy || '—' });
+        }
+        const oldTime = lessonTimeLabel(oldLesson);
+        const newTime = lessonTimeLabel(newLesson);
+        if (oldTime !== newTime) {
+            changes.push({ ...base, field: 'pair', from: oldTime, to: newTime });
+        }
+        if (oldRow.room !== newRow.room) {
+            changes.push({ ...base, field: 'cabinet', from: oldRow.room || '—', to: newRow.room || '—' });
+        }
+        const oldStatus = lessonStatusLabel(oldLesson);
+        const newStatus = lessonStatusLabel(newLesson);
+        if (oldStatus !== newStatus) {
+            changes.push({ ...base, field: 'status', from: oldStatus, to: newStatus });
+        }
+        return changes;
+    };
+
+    const compareScheduleVersions = (oldLessons = [], newLessons = []) => {
+        const oldPool = (oldLessons || []).map((lesson, index) => ({ lesson, index, matched: false }));
+        const newPool = (newLessons || []).map((lesson, index) => ({ lesson, index, matched: false }));
+        const changes = [];
+
+        const matchPass = (includeDate) => {
+            newPool.forEach((newItem) => {
+                if (newItem.matched) return;
+                const key = comparisonKey(newItem.lesson, includeDate);
+                const oldItem = oldPool.find((candidate) => !candidate.matched && comparisonKey(candidate.lesson, includeDate) === key);
+                if (!oldItem) return;
+                oldItem.matched = true;
+                newItem.matched = true;
+                changes.push(...compareMatchedLessons(oldItem.lesson, newItem.lesson));
+            });
+        };
+
+        matchPass(true);
+        matchPass(false);
+
+        oldPool.filter((item) => !item.matched).forEach(({ lesson }) => {
+            const row = normalizeLesson(lesson);
+            changes.push({
+                field: 'removed', from: lessonStatusLabel(lesson), to: 'Видалено',
+                discipline: row.discipline || '—', date: row.dateDmy || '', oldLesson: lesson
+            });
+        });
+        newPool.filter((item) => !item.matched).forEach(({ lesson }) => {
+            const row = normalizeLesson(lesson);
+            changes.push({
+                field: 'added', from: 'Не було', to: lessonStatusLabel(lesson),
+                discipline: row.discipline || '—', date: row.dateDmy || '', newLesson: lesson
+            });
+        });
+
+        return changes;
+    };
+
     return {
         cleanText,
         normalizeDiscipline,
@@ -115,6 +230,9 @@
         parsePairNumber,
         buildingKey,
         normalizeLesson,
-        stableLessonKey
+        stableLessonKey,
+        getLessonStatusFlags,
+        lessonStatusLabel,
+        compareScheduleVersions
     };
 });

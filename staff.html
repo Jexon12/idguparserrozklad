@@ -11,8 +11,8 @@
       document.documentElement.classList.add('dark');
     }
   </script>
-  <link rel="stylesheet" href="css/tailwind.generated.css?v=20260901-2">
-  <link rel="stylesheet" href="css/styles.css?v=20260410-1">
+  <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4">
+  <link rel="stylesheet" href="css/styles.css?v=20260902-2">
   <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
@@ -27,6 +27,30 @@
         <a href="/index.html" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-bold">← Публічний розклад</a>
       </div>
     </header>
+
+    <section aria-labelledby="systemStateTitle" class="rounded-2xl bg-white p-5 shadow dark:bg-gray-800">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="systemStateTitle" class="text-lg font-black">Стан системи</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Актуальність API, сховища та останні адміністративні дії.</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="refreshStaffStatus" class="ui-btn bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200">Оновити</button>
+          <button id="downloadDiagnostics" class="ui-btn ui-btn-primary">Експорт діагностики</button>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-live="polite">
+        <div class="rounded-xl bg-gray-50 p-3 dark:bg-gray-700"><div class="text-xs text-gray-500 dark:text-gray-400">Сервер</div><div id="staffHealth" class="mt-1 font-bold">Перевірка…</div></div>
+        <div class="rounded-xl bg-gray-50 p-3 dark:bg-gray-700"><div class="text-xs text-gray-500 dark:text-gray-400">Моніторинг</div><div id="staffMonitor" class="mt-1 font-bold">Перевірка…</div></div>
+        <div class="rounded-xl bg-gray-50 p-3 dark:bg-gray-700"><div class="text-xs text-gray-500 dark:text-gray-400">Версії сесії</div><div id="staffVersions" class="mt-1 font-bold">Перевірка…</div></div>
+      </div>
+      <div class="mt-4">
+        <h3 class="font-bold">Останні дії</h3>
+        <ul id="staffAuditLog" class="mt-2 max-h-56 space-y-2 overflow-auto text-sm text-gray-600 dark:text-gray-300">
+          <li>Завантаження журналу…</li>
+        </ul>
+      </div>
+    </section>
 
     <section aria-labelledby="operationsTitle">
       <h2 id="operationsTitle" class="text-lg font-black mb-3">Оперативна робота з розкладом</h2>
@@ -80,5 +104,6 @@
     </aside>
   </main>
   <script src="js/app-shell.js?v=20260901-3"></script>
+  <script src="js/staff-portal.js?v=20260902-1"></script>
 </body>
 </html>

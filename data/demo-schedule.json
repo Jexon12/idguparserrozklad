@@ -1,0 +1,10 @@
+{
+  "name": "Демонстраційний розклад",
+  "lessons": [
+    { "dayOffset": 0, "study_time": "2 пара", "study_time_begin": "10:00", "study_time_end": "11:20", "discipline": "Алгоритми та структури даних", "study_type": "Лекція", "employee": "Іваненко Олена Ігорівна", "contingent": "КН-31", "cabinet": "301/к1" },
+    { "dayOffset": 0, "study_time": "3 пара", "study_time_begin": "12:00", "study_time_end": "13:20", "discipline": "Вебтехнології", "study_type": "Практичні", "employee": "Петренко Андрій Сергійович", "contingent": "КН-31", "cabinet": "Google Meet", "online": true, "onlineUrl": "https://meet.google.com/" },
+    { "dayOffset": 1, "study_time": "1 пара", "study_time_begin": "08:30", "study_time_end": "09:50", "discipline": "Бази даних", "study_type": "Лабораторна", "employee": "Іваненко Олена Ігорівна", "contingent": "КН-31", "cabinet": "215/к2", "status": "Перенесено" },
+    { "dayOffset": 1, "study_time": "3 пара", "study_time_begin": "12:00", "study_time_end": "13:20", "discipline": "Комп’ютерні мережі", "study_type": "Практичні", "employee": "Іваненко Олена Ігорівна", "contingent": "КН-32", "cabinet": "110/к1" },
+    { "dayOffset": 2, "study_time": "2 пара", "study_time_begin": "10:00", "study_time_end": "11:20", "discipline": "Англійська мова (скасовано)", "study_type": "Практичні", "employee": "Коваль Марія Олегівна", "contingent": "КН-31", "cabinet": "405/к1", "status": "Скасовано" }
+  ]
+}
