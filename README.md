@@ -4,7 +4,7 @@
 
 ## Розподіл інтерфейсу
 
-- Публічний режим (`index.html`, `index2.html`, `session.html`) призначений лише для студентів і викладачів: розклад, «Мій день» та перегляд сесії. Звіт показується у режимі викладача.
+- Публічний режим (`index.html`, `session.html`) призначений лише для студентів і викладачів: адаптивний розклад, «Мій день» та перегляд сесії. Звіт показується у режимі викладача.
 - Службовий центр (`staff.html`) об'єднує інструменти диспетчерів, методистів і адміністраторів: Course Day, Week Builder, зайнятість аудиторій, конструктор та адміністрування сесій.
 - Адміністративні посилання не показуються у звичайній навігації. Операції зміни даних додатково перевіряють `ADMIN_PASSWORD` на сервері.
 
@@ -16,6 +16,7 @@
 - Відображення у режимах `картки` і `таблиця`.
 - Підсвітка поточної пари + прогрес заняття.
 - Швидка навігація по тижнях.
+- Компактний студентський режим «Мій тиждень» з автопереходом до поточного або найближчого навчального дня.
 - Фільтр дисциплін/викладачів.
 - Фільтр типу пари (лекція, практика, лабораторна тощо).
 - Фільтр формату: `усі / тільки офлайн / тільки онлайн`.
@@ -66,11 +67,10 @@
 - iCal (`.ics`).
 - Додавання найближчої пари в Google Calendar.
 
-### Mobile UI
-- Окремий мобільний інтерфейс: `index2.html`.
-- Автоперехід на мобільну версію для телефонів.
-- Перемикачі режимів у нижній навігації.
-- Картка “Сьогодні/Завтра” для швидкого огляду.
+### Адаптивний UI
+- Єдиний `index.html` працює на телефонах і комп'ютерах.
+- На вузьких екранах фільтри відкриваються у drawer, а картка “Сьогодні/Завтра” дає швидкий огляд.
+- `index2.html` залишено лише як сумісний редирект для старих закладок.
 
 ### Розклад сесії
 - Окрема сторінка `session.html` з табличним переглядом сесії.
@@ -85,7 +85,7 @@
 - Серверний кеш для proxy-запитів (in-memory + Redis/KV за наявності).
 - Дедуплікація одночасних proxy-запитів на сервері.
 - Кеш і дедуплікація API-викликів на клієнті.
-- Префіксний індекс для пошуку (швидше за повний фільтр на кожен символ).
+- Серверний префіксний індекс груп і викладачів із кешем на 12 годин та локальним fallback.
 - Lazy-loading рідкісних модулів (`report.js`, `occupancy.js`).
 - Brotli/gzip для статики, ETag, Cache-Control.
 - Service Worker з оновленим cache-version.
@@ -93,12 +93,13 @@
 ## Архітектура
 
 ### Frontend
-- `index.html` — desktop/main UI.
-- `index2.html` — mobile-first UI.
+- `index.html` — єдиний адаптивний UI.
+- `index2.html` — compatibility redirect на `index.html`.
 - `staff.html` — окрема точка входу для адміністративного персоналу.
 - `js/app.js` — головний Vue-додаток (оркестрація модулів).
 - `js/api.js` — API client + кеш/дедуп.
 - `js/search.js` — пошук і префіксний індекс.
+- `api/search-index.js` — побудова, нормалізація та запити до серверного індексу груп/викладачів.
 - `js/occupancy.js` — UI-логіка сканування аудиторій.
 - `js/workers/occupancy-worker.js` — worker для важкого сканування.
 - `js/report.js` — генерація звіту (lazy).
@@ -117,12 +118,12 @@
 - `POST /api/monitor/log` — прийом frontend-помилок/метрик.
 - `GET /api/audit?limit=...` — журнал admin-дій.
 - `GET /api/versions?scope=session|times|links` — метадані версій змін.
-- `POST /api/cache/invalidate` — ручна інвалідація кешу (`scope: proxy|all`, admin).
+- `POST /api/cache/invalidate` — ручна інвалідація кешу (`scope: proxy|search|all`, admin).
 - `GET /api/times` — отримати глобальні часи пар.
 - `POST /api/times` — зберегти глобальні часи (admin).
 - `GET /api/links` — отримати глобальні посилання.
 - `POST /api/links` — зберегти посилання (admin).
-- `GET /api/search?q=...` — серверний пошук (кешований).
+- `GET /api/search?q=...&type=group|teacher&limit=10` — пошук у серверному індексі.
 - `GET /api/session` — отримати актуальні дані сесії.
 - `POST /api/session` — зберегти нові дані сесії (admin).
 - `POST /api/report/start` — локальний legacy-режим фонової генерації Excel-звіту.
@@ -184,11 +185,10 @@ npm run lint:encoding
 3. Додати env vars (`ADMIN_PASSWORD` мінімум).
 4. Деплой.
 
-## Mobile/Desktop routing
+## Адаптивна маршрутизація
 
-- За замовчуванням на мобільних `index.html` перенаправляє на `index2.html`.
-- Примусовий desktop: `?desktop=1`.
-- Примусовий mobile: `?mobile=1`.
+- Усі пристрої відкривають `index.html`; компонування змінюється CSS media queries.
+- Старий маршрут `index2.html` постійно перенаправляється на `index.html`.
 
 ## PWA / кешування
 
@@ -206,7 +206,7 @@ npm run lint:encoding
 ### Швидка перевірка після деплою
 1. `GET /api/health` має повертати `status: ok`.
 2. `GET /api/monitor` — перевірити, що `reportQueue.active/queued` в адекватних межах.
-3. Відкрити `index.html`, `index2.html`, `builder.html`, `course-live.html`, `session.html` і `session-constructor.html`.
+3. Відкрити `index.html`, `builder.html`, `course-live.html`, `session.html` і `session-constructor.html`; окремо перевірити вузький viewport для `index.html`.
 4. Зробити hard reload (`Ctrl+F5`) при підозрі на старий JS/SW кеш.
 
 ### Якщо admin-збереження не працює
@@ -228,7 +228,6 @@ npm run lint:encoding
 ## Корисні файли
 
 - [index.html](C:\Users\0009\.gemini\antigravity\scratch\schedule-viewer\index.html)
-- [index2.html](C:\Users\0009\.gemini\antigravity\scratch\schedule-viewer\index2.html)
 - [js/app.js](C:\Users\0009\.gemini\antigravity\scratch\schedule-viewer\js\app.js)
 - [api/index.js](C:\Users\0009\.gemini\antigravity\scratch\schedule-viewer\api\index.js)
 - [server.js](C:\Users\0009\.gemini\antigravity\scratch\schedule-viewer\server.js)

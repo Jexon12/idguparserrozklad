@@ -8,7 +8,7 @@ let proc = null;
 
 const PAGES = [
     { page: '/index.html', jsFile: 'js/app.js' },
-    { page: '/index2.html', jsFile: 'js/app.js' },
+    { page: '/index2.html', jsFile: null },
     { page: '/staff.html', jsFile: null },
     { page: '/builder.html', jsFile: 'js/builder.js' },
     { page: '/session.html', jsFile: 'js/session-page.js' },
@@ -202,14 +202,47 @@ describe('UI links/buttons regression', () => {
 
     test('schedule filters keep one responsive sidebar and explicit dependency states', () => {
         const desktop = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
-        const mobile = fs.readFileSync(path.resolve(__dirname, '..', 'index2.html'), 'utf8');
 
         expect((desktop.match(/class="[^"]*desktop-sidebar/g) || [])).toHaveLength(1);
         expect(desktop).not.toContain('sidebar-content-mobile');
         expect(desktop).toContain('advanced-schedule-filters');
         expect(desktop).toContain(':disabled="!selectedFaculty || !selectedEduForm"');
-        expect(mobile).toContain('⚙️ Уточнити пошук');
-        expect(mobile).toContain('filteredGroups');
-        expect(mobile).toContain('filteredEmployees');
+        expect(desktop).toContain('mobile-menu-btn');
+        expect(desktop).toContain('md:hidden');
+    });
+
+    test('legacy mobile entry redirects to the unified responsive interface', () => {
+        const desktop = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const legacyMobile = fs.readFileSync(path.resolve(__dirname, '..', 'index2.html'), 'utf8');
+
+        expect(desktop).not.toContain("schedule_ui_variant");
+        expect(desktop).not.toContain('/index2.html?mobile=1');
+        expect(legacyMobile).toContain("window.location.replace('/index.html'");
+        expect(legacyMobile).not.toContain('id="app"');
+    });
+
+    test('empty schedule explains when mobile filters hide loaded lessons', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+
+        expect(html).toContain('Розклад приховано фільтрами');
+        expect(html).toContain('@click="clearScheduleFilters"');
+        expect(html).toContain(':aria-pressed="deliveryModeFilter === \'online\'"');
+        expect(js).toContain('const scheduleHiddenByFilters = computed');
+        expect(js).toContain('const clearScheduleFilters = () =>');
+    });
+
+    test('student week mode hides analytics and can jump to the current day', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        const shell = fs.readFileSync(path.resolve(__dirname, '..', 'js/app-shell.js'), 'utf8');
+
+        expect(html).toContain('id="schedule-week"');
+        expect(html).toContain('@click="scrollToTodaySchedule(true)"');
+        expect(html).toContain("activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)");
+        expect(html).toContain(':data-schedule-date="dayData.date"');
+        expect(js).toContain("localStorage.getItem('schedule_student_week_focus') !== 'false'");
+        expect(js).toContain("prefers-reduced-motion: reduce");
+        expect(shell).toContain("['Мій тиждень', '/index.html#schedule-week']");
     });
 });

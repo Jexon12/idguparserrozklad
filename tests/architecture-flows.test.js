@@ -20,11 +20,11 @@ describe('consolidated page architecture', () => {
         expect(fs.existsSync(path.join(root, 'legacy/pages/session-prep.html'))).toBe(true);
     });
 
-    test('Smart Day is present in the main interfaces', () => {
+    test('Smart Day is present in the unified main interface', () => {
         expect(read('index.html')).toContain('id="smart-day"');
         expect(read('index.html')).toContain('smartSimulationResult');
-        expect(read('index2.html')).toContain('id="smart-day"');
-        expect(read('smart.html')).toContain('/index.html?desktop=1#smart-day');
+        expect(read('index2.html')).toContain("window.location.replace('/index.html'");
+        expect(read('smart.html')).toContain('/index.html#smart-day');
     });
 
     test('public and staff navigation are separated', () => {
@@ -52,7 +52,6 @@ describe('consolidated page architecture', () => {
         expect(desktop).not.toContain('v-model="selectedStudyType"');
         expect(desktop).toContain("mode === 'teacher' ? 'Швидкий пошук викладача'");
         expect(desktop).toContain('v-if="staffToolsEnabled" @click="mode = \'occupancy\'"');
-        expect(read('index2.html')).toContain("mode === 'teacher' ? 'Пошук викладача...'");
         expect(read('staff.html')).toContain('tool=occupancy');
     });
 

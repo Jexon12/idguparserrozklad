@@ -8,7 +8,7 @@ try {
         throw new Error("Vue library failed to load (CDN issue).");
     }
 
-    const { createApp, ref, computed, onMounted, watch, onErrorCaptured } = Vue;
+    const { createApp, ref, computed, onMounted, watch, nextTick, onErrorCaptured } = Vue;
     // Backward-compatibility guard for stale cached app versions that still reference ReportModule eagerly.
     window.ReportModule = window.ReportModule || {
         state: {},
@@ -200,6 +200,7 @@ try {
             const favorites = ref(safeParse('schedule_favorites', []));
             const activeFavoriteKey = ref(localStorage.getItem('schedule_activeFavoriteKey') || '');
             const viewMode = ref(localStorage.getItem('schedule_viewMode') || 'cards');
+            const studentWeekFocus = ref(localStorage.getItem('schedule_student_week_focus') !== 'false');
             const deliveryModeFilter = ref(localStorage.getItem('schedule_delivery_mode') || '');
             const datePreset = ref('');
             const sidebarOpen = ref(false);
@@ -436,6 +437,28 @@ try {
                     return new Date(`${y1}-${m1}-${d1}`) - new Date(`${y2}-${m2}-${d2}`);
                 });
             });
+
+            const sourceScheduleLessonCount = computed(() => activeEntities.value.reduce(
+                (total, entity) => total + (Array.isArray(entity.scheduleData) ? entity.scheduleData.length : 0),
+                0
+            ));
+
+            const activeScheduleFilters = computed(() => {
+                const filters = [];
+                if (deliveryModeFilter.value === 'online') filters.push('тільки онлайн');
+                if (deliveryModeFilter.value === 'offline') filters.push('тільки офлайн');
+                if (lessonTypeFilter.value) filters.push(`тип: ${lessonTypeFilter.value}`);
+                if (selectedDisciplines.value.length > 0) {
+                    filters.push(`предмети/викладачі: ${selectedDisciplines.value.length}`);
+                }
+                return filters;
+            });
+
+            const scheduleHiddenByFilters = computed(() =>
+                sourceScheduleLessonCount.value > 0 &&
+                groupedSchedule.value.length === 0 &&
+                activeScheduleFilters.value.length > 0
+            );
 
             const scheduleStats = computed(() => {
                 const stats = { totalPairs: 0, bySubject: {}, byType: {} };
@@ -931,8 +954,15 @@ try {
             };
 
             const setDeliveryMode = (value) => {
-                deliveryModeFilter.value = value;
-                localStorage.setItem('schedule_delivery_mode', value);
+                const nextValue = deliveryModeFilter.value === value && value ? '' : value;
+                deliveryModeFilter.value = nextValue;
+                localStorage.setItem('schedule_delivery_mode', nextValue);
+            };
+
+            const clearScheduleFilters = () => {
+                selectedDisciplines.value = [];
+                lessonTypeFilter.value = '';
+                setDeliveryMode('');
             };
 
             // Start timer on mount if enabled
@@ -1218,6 +1248,45 @@ try {
             const saveGlobalTimes = () => SA.saveGlobalTimes(adminRefs);
             const getGlobalLink = (lesson, type) => SA.getGlobalLink(lesson, type, adminRefs);
 
+            let appMounted = false;
+            let lastAutoScrollKey = '';
+            const todayDmy = () => {
+                const now = new Date();
+                return `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
+            };
+            const dmyToIso = (value) => {
+                const [day, month, year] = String(value || '').split('.');
+                return year && month && day ? `${year}-${month}-${day}` : '';
+            };
+            const isTodayDate = (date) => date === todayDmy();
+            const scrollToTodaySchedule = async (force = false) => {
+                if (!appMounted || mode.value !== 'student' || groupedSchedule.value.length === 0) return false;
+                const currentDate = todayDmy();
+                const currentIso = dmyToIso(currentDate);
+                const dates = groupedSchedule.value.map((day) => day.date);
+                const targetDate = dates.includes(currentDate)
+                    ? currentDate
+                    : dates.find((date) => dmyToIso(date) >= currentIso) || dates[0];
+                const scrollKey = `${activeEntities.value.map((entity) => `${entity.type}:${entity.id}`).join('|')}|${dates.join('|')}|${targetDate}`;
+                if (!force && scrollKey === lastAutoScrollKey) return false;
+                await nextTick();
+                const target = document.querySelector(`[data-schedule-date="${targetDate}"]`);
+                if (!target) return false;
+                const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+                target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+                lastAutoScrollKey = scrollKey;
+                if (force && targetDate !== currentDate) showToast('На сьогодні пар немає — показано найближчий день');
+                return true;
+            };
+            const setStudentWeekFocus = async (enabled) => {
+                studentWeekFocus.value = !!enabled;
+                localStorage.setItem('schedule_student_week_focus', studentWeekFocus.value ? 'true' : 'false');
+                if (studentWeekFocus.value) {
+                    viewMode.value = 'cards';
+                    await scrollToTodaySchedule(true);
+                }
+            };
+
 
 
 
@@ -1235,6 +1304,10 @@ try {
                     if (SA.UserRole) SA.UserRole.set(mode.value);
                     else localStorage.setItem(USER_ROLE_KEY, mode.value);
                 }
+                if (mode.value === 'student' && studentWeekFocus.value) {
+                    viewMode.value = 'cards';
+                    nextTick(() => scrollToTodaySchedule());
+                }
                 if (selectedFaculty.value) {
                     if (mode.value === 'student') loadGroups();
                     else loadChairs();
@@ -1245,6 +1318,15 @@ try {
                 localStorage.setItem('schedule_viewMode', value);
             });
 
+            watch(
+                () => [mode.value, studentWeekFocus.value, loadingSchedule.value, groupedSchedule.value.map((day) => day.date).join('|')],
+                () => {
+                    if (mode.value === 'student' && studentWeekFocus.value && !loadingSchedule.value) {
+                        scrollToTodaySchedule();
+                    }
+                }
+            );
+
             // --- Lifecycle ---
             onMounted(async () => {
                 loadState();
@@ -1252,6 +1334,10 @@ try {
                 if (preferredRole === 'student' || preferredRole === 'teacher') mode.value = preferredRole;
                 if (!staffToolsEnabled && mode.value === 'occupancy') mode.value = 'student';
                 if (staffToolsEnabled && new URLSearchParams(window.location.search).get('tool') === 'occupancy') mode.value = 'occupancy';
+                if (window.location.hash === '#schedule-week') {
+                    studentWeekFocus.value = true;
+                    localStorage.setItem('schedule_student_week_focus', 'true');
+                }
                 SA.UserRole?.subscribe((role) => {
                     if ((role === 'student' || role === 'teacher') && mode.value !== role) mode.value = role;
                 });
@@ -1298,6 +1384,11 @@ try {
                     if (e.key === 'ArrowLeft') { shiftWeek(-1); }
                     if (e.key === 'ArrowRight') { shiftWeek(1); }
                 });
+                appMounted = true;
+                if (mode.value === 'student' && studentWeekFocus.value) {
+                    viewMode.value = 'cards';
+                    await scrollToTodaySchedule();
+                }
             });
 
             // === NEW FUNCTIONS ===
@@ -1526,6 +1617,7 @@ try {
                     'schedule_favorites',
                     'schedule_activeFavoriteKey',
                     'schedule_viewMode',
+                    'schedule_student_week_focus',
                     'schedule_delivery_mode',
                     'schedule_change_log_v1',
                     'schedule_aliases_v1',
@@ -1556,6 +1648,7 @@ try {
                 favorites.value = [];
                 activeFavoriteKey.value = '';
                 viewMode.value = 'cards';
+                studentWeekFocus.value = true;
                 deliveryModeFilter.value = '';
                 datePreset.value = '';
                 sidebarOpen.value = false;
@@ -1902,6 +1995,7 @@ try {
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,
                 groupListQuery, employeeListQuery, filteredGroups, filteredEmployees, advancedFiltersOpen,
                 availableDisciplines, canAdd, groupedSchedule, scheduleStats,
+                activeScheduleFilters, scheduleHiddenByFilters, clearScheduleFilters,
                 onFacultyChange, loadGroups, loadChairs, loadEmployees,
                 addEntity, removeEntity, clearAll, exportExcel,
                 toggleDiscipline, getColorClass: SA.getColorClass,
@@ -1921,6 +2015,7 @@ try {
                 occupancySearch, filteredOccupancyResults, scanErrors,
                 // NEW features
                 favorites, activeFavoriteKey, viewMode, datePreset, sidebarOpen,
+                studentWeekFocus, setStudentWeekFocus, scrollToTodaySchedule, isTodayDate,
                 deliveryModeFilter, setDeliveryMode,
                 toastMessage, toastVisible, nextLessonInfo,
                 setDateRange, setTomorrowRange, shiftWeek,

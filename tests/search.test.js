@@ -10,6 +10,7 @@ describe('universal schedule search', () => {
 
     afterEach(() => {
         delete global.window;
+        delete global.fetch;
     });
 
     const ref = (value) => ({ value });
@@ -85,5 +86,38 @@ describe('universal schedule search', () => {
         expect(groupCalls.every((call) => call.aEducationForm !== '0' && call.aCourse !== '0')).toBe(true);
         expect(refs.groupCacheReady.value).toBe(true);
         expect(refs.allItemsCache.value).toHaveLength(1);
+    });
+
+    test('uses server search without building the full browser catalogue', async () => {
+        global.window.location = { origin: 'http://localhost' };
+        global.fetch = jest.fn(async () => ({
+            ok: true,
+            status: 200,
+            json: async () => ([{
+                type: 'group',
+                value: { Key: 'group-1', Value: 'КН-16-У' },
+                facultyId: 'faculty-1',
+                label: 'КН-16-У (Факультет)'
+            }])
+        }));
+        const refs = {
+            mode: ref('student'),
+            searchQuery: ref('16у'),
+            searchResults: ref([]),
+            allItemsCache: ref([]),
+            isCacheLoaded: ref(false),
+            isSearching: ref(false),
+            cacheStatus: ref(''),
+            searchPrefixIndex: ref({})
+        };
+        SA.buildUniversalCache = jest.fn();
+
+        SA.createSearchHandler(refs)();
+        await new Promise((resolve) => setTimeout(resolve, 260));
+
+        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/search?'), expect.any(Object));
+        expect(SA.buildUniversalCache).not.toHaveBeenCalled();
+        expect(refs.searchResults.value[0].value.Key).toBe('group-1');
+        expect(refs.isSearching.value).toBe(false);
     });
 });

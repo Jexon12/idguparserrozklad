@@ -16,30 +16,6 @@
             document.head.appendChild(s);
         };
     </script>
-    <script>
-        (function () {
-            try {
-                var url = new URL(window.location.href);
-                var params = url.searchParams;
-                var pref = localStorage.getItem('schedule_ui_variant');
-                if (params.get('desktop') === '1') {
-                    localStorage.setItem('schedule_ui_variant', 'desktop');
-                    return;
-                }
-                if (params.get('mobile') === '1') {
-                    localStorage.setItem('schedule_ui_variant', 'mobile');
-                    pref = 'mobile';
-                }
-                var isMobile = window.matchMedia('(max-width: 900px)').matches ||
-                    /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
-                if ((pref === 'mobile' || (isMobile && pref !== 'desktop')) &&
-                    !window.location.pathname.endsWith('/index2.html')) {
-                    var target = '/index2.html' + window.location.search + window.location.hash;
-                    window.location.replace(target);
-                }
-            } catch (e) { }
-        })();
-    </script>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
     <title>Універсальний Розклад</title>
@@ -87,17 +63,12 @@
                         :title="isDark ? 'Світла тема' : 'Темна тема'">
                         {{ isDark ? '☀️' : '🌙' }}
                     </button>
-                    <a href="/index2.html?mobile=1"
-                        class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xs font-bold"
-                        title="Перемкнути на мобільну версію">
-                        Мобільна
-                    </a>
                     <a href="/session.html"
                         class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition text-xs font-bold text-emerald-700 dark:text-emerald-300"
                         title="Розклад сесії">
                         Сесія
                     </a>
-                    <a href="#smart-day"
+                    <a v-if="mode !== 'student' || !studentWeekFocus" href="#smart-day"
                         class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition text-xs font-bold text-indigo-700 dark:text-indigo-300"
                         title="Перейти до огляду дня">
                         Мій день
@@ -1116,11 +1087,11 @@
                             </div>
                             <div class="flex flex-wrap items-center gap-2 mb-3">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">Формат пар:</span>
-                                <button @click="setDeliveryMode && setDeliveryMode('')"
+                                <button @click="setDeliveryMode && setDeliveryMode('')" :aria-pressed="deliveryModeFilter === ''"
                                     :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === '' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Усі</button>
-                                <button @click="setDeliveryMode && setDeliveryMode('offline')"
+                                <button @click="setDeliveryMode && setDeliveryMode('offline')" :aria-pressed="deliveryModeFilter === 'offline'"
                                     :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'offline' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки офлайн</button>
-                                <button @click="setDeliveryMode && setDeliveryMode('online')"
+                                <button @click="setDeliveryMode && setDeliveryMode('online')" :aria-pressed="deliveryModeFilter === 'online'"
                                     :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'online' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки онлайн</button>
                             </div>
                             <div class="flex flex-wrap gap-2">
@@ -1154,6 +1125,26 @@
                             </div>
                         </div>
 
+                        <div id="schedule-week" v-if="mode === 'student' && activeEntities.length > 0"
+                            class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+                            <div>
+                                <div class="font-bold text-amber-800 dark:text-amber-200">Мій тиждень</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-300">
+                                    {{ studentWeekFocus ? 'Тільки потрібне для щоденного перегляду' : 'Повний огляд зі статистикою' }}
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button @click="scrollToTodaySchedule(true)"
+                                    class="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 dark:bg-gray-800 dark:text-amber-200">
+                                    Сьогодні
+                                </button>
+                                <button @click="setStudentWeekFocus(!studentWeekFocus)" :aria-pressed="studentWeekFocus"
+                                    class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700">
+                                    {{ studentWeekFocus ? 'Повний огляд' : 'Мій тиждень' }}
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Week Navigation + View Toggle -->
                         <div v-if="activeEntities.length > 0"
                             class="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -1165,7 +1156,7 @@
                                 <button v-if="favorites.length > 1" @click="quickSwitchFavorite(1)"
                                     class="week-nav-btn">Обране →</button>
                             </div>
-                            <div class="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                            <div v-if="mode !== 'student' || !studentWeekFocus" class="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                                 <button @click="viewMode = 'cards'"
                                     :class="['px-3 py-1 rounded-md text-xs font-semibold transition', viewMode === 'cards' ? 'bg-white dark:bg-gray-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700']">
                                     🃏 Картки
@@ -1178,7 +1169,7 @@
                         </div>
 
                         <!-- Conflicts & Analytics -->
-                        <div v-if="activeEntities.length > 0" class="grid lg:grid-cols-2 gap-4 mb-4">
+                        <div v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="grid lg:grid-cols-2 gap-4 mb-4">
                             <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-red-100 dark:border-gray-700">
                                 <div class="flex items-center justify-between mb-2">
                                     <h4 class="font-bold text-red-700 dark:text-red-300">Конфлікти розкладу</h4>
@@ -1232,7 +1223,7 @@
                             </div>
                         </div>
 
-                        <div id="smart-day" v-if="activeEntities.length > 0" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-amber-100 dark:border-gray-700 mb-4 scroll-mt-4">
+                        <div id="smart-day" v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-amber-100 dark:border-gray-700 mb-4 scroll-mt-4">
                             <div class="flex items-center justify-between gap-2">
                                 <span class="font-bold text-amber-700 dark:text-amber-300">Мій день</span>
                                 <span class="text-2xl font-black">{{ smartDayInsights.score }}/100</span>
@@ -1283,7 +1274,8 @@
                                     <template v-for="dayData in groupedSchedule" :key="'t-'+dayData.date">
                                         <template v-for="(timeSlot, si) in dayData.slots" :key="'ts-'+dayData.date+si">
                                             <tr v-for="(lesson, li) in timeSlot.lessons" :key="'tl-'+dayData.date+si+li"
-                                                class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition"
+                                                :data-schedule-date="si === 0 && li === 0 ? dayData.date : null"
+                                                class="scroll-mt-20 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition"
                                                 :class="[isActiveLesson(dayData.date, timeSlot.start, timeSlot.end) ? 'bg-green-50 dark:bg-green-900/20' : '']">
                                                 <td v-if="si === 0 && li === 0"
                                                     :rowspan="dayData.slots.reduce((sum, s) => sum + s.lessons.length, 0)"
@@ -1291,6 +1283,7 @@
                                                     <div>{{ dayData.dayName }}</div>
                                                     <div class="text-xs text-gray-400 font-normal">{{ dayData.date }}
                                                     </div>
+                                                    <div v-if="isTodayDate(dayData.date)" class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">Сьогодні</div>
                                                 </td>
                                                 <td class="px-3 py-2 whitespace-nowrap text-center align-middle">
                                                     <div class="flex flex-col items-center">
@@ -1331,7 +1324,9 @@
                         <div v-if="viewMode === 'cards' && Object.keys(groupedSchedule).length > 0"
                             class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
                             <div v-for="dayData in groupedSchedule" :key="dayData.date"
-                                class="border-b dark:border-gray-700 last:border-b-0">
+                                :data-schedule-date="dayData.date"
+                                :class="isTodayDate(dayData.date) ? 'ring-2 ring-inset ring-amber-400' : ''"
+                                class="scroll-mt-20 border-b dark:border-gray-700 last:border-b-0">
                                 <div
                                     class="day-header-sticky bg-gray-50/95 dark:bg-gray-700/95 px-6 py-3 border-b border-gray-100 dark:border-gray-600 flex justify-between items-center transition-colors">
                                     <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">{{ dayData.dayName
@@ -1339,6 +1334,7 @@
                                         dayData.date }}</h3>
                                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ dayData.slots.length }}
                                         пар</span>
+                                    <span v-if="isTodayDate(dayData.date)" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">Сьогодні</span>
                                 </div>
 
                                 <div class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -1471,8 +1467,20 @@
                     </div>
 
                     <div v-if="activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0 && !loadingSchedule"
-                        class="text-center py-10 text-gray-500">
-                        На вибраний період розкладу немає.
+                        class="mx-auto my-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-5 py-6 text-center text-gray-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-gray-200">
+                        <template v-if="scheduleHiddenByFilters">
+                            <div class="font-bold text-amber-800 dark:text-amber-200">Розклад приховано фільтрами</div>
+                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                                Активні: {{ activeScheduleFilters.join(', ') }}.
+                            </div>
+                            <button @click="clearScheduleFilters"
+                                class="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700">
+                                Показати весь розклад
+                            </button>
+                        </template>
+                        <template v-else>
+                            На вибраний період розкладу немає.
+                        </template>
                     </div>
 
                     <!-- Schedule Loading Skeleton -->
@@ -1512,12 +1520,12 @@
     </div> <!-- End of #app -->
 
     <script src="js/utils.js?v=20260410-1"></script>
-    <script src="js/app-shell.js?v=20260901-3"></script>
+    <script src="js/app-shell.js?v=20260902-1"></script>
     <script src="js/schedule-model.js?v=20260831-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
     <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
     <script src="js/api.js?v=20260410-1"></script>
-    <script src="js/search.js?v=20260901-4"></script>
+    <script src="js/search.js?v=20260902-1"></script>
     <script src="js/notes.js?v=20260410-1"></script>
     <script src="js/admin.js?v=20260410-1"></script>
     <script src="js/occupancy.js?v=20260410-1"></script>
@@ -1548,13 +1556,13 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260901-5"></script>
+    <script src="js/app.js?v=20260902-2"></script>
 
     <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js?v=20260410-1')
+            navigator.serviceWorker.register('/sw.js?v=20260902-1')
                     .then(registration => console.log('SW registered'))
                     .catch(registrationError => console.log('SW registration failed: ', registrationError));
             });

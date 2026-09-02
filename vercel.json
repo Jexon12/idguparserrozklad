@@ -50,6 +50,7 @@
     }
   ],
   "redirects": [
+    { "source": "/index2.html", "destination": "/index.html", "permanent": true },
     { "source": "/page.html", "destination": "/legacy/external-widget/page.html", "permanent": false },
     { "source": "/schedule-loader.js", "destination": "/legacy/external-widget/schedule-loader.js", "permanent": false },
     { "source": "/schedule.min.js", "destination": "/legacy/external-widget/schedule.min.js", "permanent": false },

@@ -5,8 +5,8 @@
     const SA = root.ScheduleApp;
     const ROLE_KEY = 'schedule_user_role_v1';
     const publicRoles = {
-        student: { label: 'Студент', links: [['Розклад', '/index.html'], ['Мій день', '/index.html?desktop=1#smart-day'], ['Сесія', '/session.html']] },
-        teacher: { label: 'Викладач', links: [['Розклад', '/index.html'], ['Мій день', '/index.html?desktop=1#smart-day'], ['Сесія', '/session.html']] }
+        student: { label: 'Студент', links: [['Розклад', '/index.html'], ['Мій тиждень', '/index.html#schedule-week'], ['Сесія', '/session.html']] },
+        teacher: { label: 'Викладач', links: [['Розклад', '/index.html'], ['Мій день', '/index.html#smart-day'], ['Сесія', '/session.html']] }
     };
     const roleSubscribers = new Set();
     const initialRole = localStorage.getItem(ROLE_KEY);

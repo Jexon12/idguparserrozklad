@@ -3,6 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const JobQueue = require('./job-queue');
+const {
+    createSearchIndex,
+    searchIndex,
+    buildSearchCatalog
+} = require('./search-index');
 
 const DB_FILE = path.join(__dirname, '../db.json');
 const SESSION_FALLBACK_FILE = path.join(__dirname, '../data/session-2025-26.json');
@@ -17,6 +22,10 @@ const VUZ_ID = process.env.VUZ_ID || 11927;
 // --- Proxy cache: Redis/KV when available, else in-memory ---
 const proxyCache = new Map();
 const inFlightProxyRequests = new Map();
+let serverSearchIndex = null;
+let searchIndexBuildPromise = null;
+const SEARCH_INDEX_STORAGE_KEY = 'search_index_v2';
+const SEARCH_INDEX_TTL_MS = 12 * 60 * 60 * 1000;
 // --- Report jobs (progress flow) ---
 const reportJobs = new Map();
 const REPORT_JOB_TTL = 10 * 60 * 1000;
@@ -351,6 +360,76 @@ async function fetchWithTimeout(targetUrl, options = {}, timeoutMs = 10000) {
     }
 }
 
+async function fetchOsvitaCatalogAction(action, params = {}) {
+    const targetUrl = new URL(`http://vnz.osvita.net/WidgetSchedule.asmx/${action}`);
+    targetUrl.searchParams.set('aVuzID', String(VUZ_ID));
+    if (action === 'GetStudyGroups') {
+        targetUrl.searchParams.set('aGiveStudyTimes', 'false');
+    } else if (action !== 'GetEmployees') {
+        targetUrl.searchParams.set('aGiveStudyTimes', 'true');
+    }
+    Object.entries(params).forEach(([key, value]) => {
+        const serialized = typeof value === 'string' && !value.startsWith('"') ? `"${value}"` : String(value ?? '');
+        targetUrl.searchParams.set(key, serialized);
+    });
+
+    const cacheKey = normalizeProxyCacheKey(targetUrl.toString());
+    const cached = await getCachedProxy(cacheKey);
+    let payload;
+    if (cached) {
+        payload = cached.data;
+    } else {
+        const result = await getOrCreateInFlightProxy(cacheKey, async () => {
+            const response = await fetchWithTimeout(targetUrl.toString(), {
+                headers: {
+                    'User-Agent': 'ScheduleViewer/1.0',
+                    'Referer': 'http://wp-fuaid.zzz.com.ua/',
+                    'Content-Type': 'application/json'
+                }
+            }, 12000);
+            const text = await response.text();
+            if (!response.ok) throw new Error(`Catalog request failed: ${response.status}`);
+            await setCachedProxy(cacheKey, text, response.status, false);
+            return { data: text };
+        });
+        payload = result.data;
+    }
+
+    const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    return Object.prototype.hasOwnProperty.call(parsed || {}, 'd') ? parsed.d : parsed;
+}
+
+async function getServerSearchIndex() {
+    if (serverSearchIndex && Date.now() - serverSearchIndex.builtAt < SEARCH_INDEX_TTL_MS) {
+        return serverSearchIndex;
+    }
+    if (searchIndexBuildPromise) return searchIndexBuildPromise;
+
+    searchIndexBuildPromise = (async () => {
+        const db = await getDb();
+        const persisted = await readJsonKey(db, SEARCH_INDEX_STORAGE_KEY, null);
+        if (persisted && Array.isArray(persisted.items) &&
+            Date.now() - Number(persisted.builtAt || 0) < SEARCH_INDEX_TTL_MS) {
+            serverSearchIndex = createSearchIndex(persisted.items, Number(persisted.builtAt));
+            return serverSearchIndex;
+        }
+
+        const items = await buildSearchCatalog(fetchOsvitaCatalogAction, { concurrency: 8 });
+        serverSearchIndex = createSearchIndex(items, Date.now());
+        if (db) {
+            await writeJsonKey(db, SEARCH_INDEX_STORAGE_KEY, {
+                builtAt: serverSearchIndex.builtAt,
+                items: serverSearchIndex.items.map(({ _searchKey, ...item }) => item)
+            });
+        }
+        return serverSearchIndex;
+    })().finally(() => {
+        searchIndexBuildPromise = null;
+    });
+
+    return searchIndexBuildPromise;
+}
+
 function hashString(input) {
     let h = 0;
     const s = String(input || '');
@@ -605,6 +684,19 @@ const apiHandler = async (req, res) => {
         }
 
         const db = await getDb();
+        if (scope === 'search' || scope === 'all') {
+            cleared += serverSearchIndex?.items?.length || 0;
+            serverSearchIndex = null;
+            searchIndexBuildPromise = null;
+            if (db) {
+                try {
+                    if (typeof db.client.del === 'function') await db.client.del(SEARCH_INDEX_STORAGE_KEY);
+                    else await db.client.set(SEARCH_INDEX_STORAGE_KEY, null);
+                } catch (e) {
+                    console.error('Search index cache clear error', e);
+                }
+            }
+        }
         if (db && db.type === 'redis' && (scope === 'proxy' || scope === 'all')) {
             try {
                 const keys = await db.client.keys('proxy:*');
@@ -1025,56 +1117,26 @@ const apiHandler = async (req, res) => {
     // ROUTE: Search (/api/search?q=...)
     // =========================================================
     if (pathname === '/api/search' && req.method === 'GET') {
-        const normalizeSearch = (value) => String(value || '')
-            .toLowerCase()
-            .replace(/\./g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-        const q = normalizeSearch(urlObj.searchParams.get('q') || '');
+        if (!enforceRateLimit(req, res, 'search', RATE_LIMITS.proxy)) return;
+        const q = String(urlObj.searchParams.get('q') || '').trim();
         if (!q || q.length < 2) {
             res.status(400).json({ error: 'Query too short (min 2 chars)' });
             return;
         }
+        const typeParam = String(urlObj.searchParams.get('type') || '').toLowerCase();
+        const type = typeParam === 'group' || typeParam === 'teacher' ? typeParam : '';
+        const limit = Math.max(1, Math.min(parseInt(urlObj.searchParams.get('limit') || '10', 10), 25));
 
-        // Check Redis cache first
-        const db = await getDb();
-        const cacheKey = 'search_cache';
-        let cached = null;
-
-        if (db) {
-            try {
-                if (db.type === 'kv') {
-                    cached = await db.client.get(cacheKey);
-                } else if (db.type === 'redis') {
-                    const str = await db.client.get(cacheKey);
-                    try { cached = str ? JSON.parse(str) : null; } catch (e) { }
-                }
-            } catch (e) { /* ignore cache errors */ }
-        }
-
-        if (cached && Array.isArray(cached)) {
-            const seen = new Set();
-            // Filter cached items
-            const results = cached
-                .filter((item) => normalizeSearch(item.label).includes(q))
-                .sort((a, b) => {
-                    const aStarts = normalizeSearch(a.label).startsWith(q);
-                    const bStarts = normalizeSearch(b.label).startsWith(q);
-                    if (aStarts && !bStarts) return -1;
-                    if (!aStarts && bStarts) return 1;
-                    return 0;
-                })
-                .filter((item) => {
-                    const key = `${item.type || ''}|${normalizeSearch(item.label)}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .slice(0, 15);
+        try {
+            const index = await getServerSearchIndex();
+            const results = searchIndex(index, q, { type, limit });
+            res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+            res.setHeader('X-Search-Index-Count', String(index.items.length));
+            res.setHeader('X-Search-Index-Built-At', new Date(index.builtAt).toISOString());
             res.status(200).json(results);
-        } else {
-            // No cache — return empty, client handles client-side search
-            res.status(200).json([]);
+        } catch (error) {
+            console.error('Search index error:', error);
+            res.status(503).json({ error: 'Search index is temporarily unavailable' });
         }
         return;
     }
@@ -1786,6 +1848,8 @@ apiHandler.__resetInternalsForTests = () => {
     reportJobs.clear();
     proxyCache.clear();
     inFlightProxyRequests.clear();
+    serverSearchIndex = null;
+    searchIndexBuildPromise = null;
     mutationTails.clear();
 };
 

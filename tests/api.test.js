@@ -212,10 +212,36 @@ describe('API routing', () => {
         expect(res.status).toBe(400);
     });
 
-    test('GET /api/search with valid query returns array', async () => {
-        const res = await makeRequest('/api/search?q=test');
+    test('GET /api/search builds the server index and filters by entity type', async () => {
+        apiHandler.__setFetchForTests(async (targetUrl) => {
+            const action = new URL(targetUrl).pathname.split('/').pop().toLowerCase();
+            let d;
+            if (action === 'getstudentschedulefiltersdata') {
+                d = {
+                    faculties: [{ Key: 'f1', Value: 'ФУАІД' }],
+                    educForms: [{ Key: '1', Value: 'Денна' }],
+                    courses: [{ Key: '1', Value: '1 курс' }]
+                };
+            } else if (action === 'getstudygroups') {
+                d = { studyGroups: [{ Key: 'g1', Value: 'КН-16-У' }] };
+            } else if (action === 'getemployeechairs') {
+                d = { chairs: [{ Key: 'c1', Value: 'Математика' }] };
+            } else if (action === 'getemployees') {
+                d = [{ Key: 'e1', Value: 'Абросімов Євген' }];
+            }
+            return {
+                ok: true,
+                status: 200,
+                text: async () => JSON.stringify({ d })
+            };
+        });
+
+        const res = await makeRequest('/api/search?q=16%D1%83&type=group');
         expect(res.status).toBe(200);
         expect(Array.isArray(res.json)).toBe(true);
+        expect(res.json).toHaveLength(1);
+        expect(res.json[0].type).toBe('group');
+        expect(Number(res.headers['x-search-index-count'])).toBe(2);
     });
 
     test('GET /api/occupancy without date returns 400', async () => {

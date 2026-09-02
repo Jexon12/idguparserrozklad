@@ -7,6 +7,8 @@ window.ScheduleApp = window.ScheduleApp || {};
 (function (SA) {
     const MAX_PREFIX = 4;
     let cacheBuildPromise = null;
+    let serverSearchController = null;
+    let searchRequestSequence = 0;
 
     function normalizeSearchText(value) {
         return String(value || '')
@@ -57,7 +59,7 @@ window.ScheduleApp = window.ScheduleApp || {};
      * @param {Object} refs - Vue refs { faculties, allItemsCache, isSearching, isCacheLoaded, cacheStatus, searchPrefixIndex }
      */
     SA.buildUniversalCache = (refs) => {
-        if (refs.isCacheLoaded.value) return Promise.resolve();
+        if (refs.isCacheLoaded.value && refs.allItemsCache.value.length > 0) return Promise.resolve();
         if (cacheBuildPromise) return cacheBuildPromise;
 
         cacheBuildPromise = (async () => {
@@ -196,11 +198,16 @@ window.ScheduleApp = window.ScheduleApp || {};
         let timer;
         return () => {
             clearTimeout(timer);
+            searchRequestSequence += 1;
+            const requestSequence = searchRequestSequence;
+            if (serverSearchController) serverSearchController.abort();
             timer = setTimeout(async () => {
                 const originalQuery = refs.searchQuery.value;
                 const q = originalQuery.toLocaleLowerCase('uk-UA').trim();
-                if (!q) {
+                if (q.length < 2) {
                     refs.searchResults.value = [];
+                    refs.isSearching.value = false;
+                    if (refs.cacheStatus) refs.cacheStatus.value = '';
                     return;
                 }
 
@@ -209,7 +216,40 @@ window.ScheduleApp = window.ScheduleApp || {};
                     ? 'group'
                     : (refs.mode?.value === 'teacher' ? 'teacher' : null);
 
-                if (!refs.isCacheLoaded.value) {
+                refs.isSearching.value = true;
+                if (refs.cacheStatus) refs.cacheStatus.value = 'Пошук...';
+
+                try {
+                    if (!window.location?.origin) throw new Error('Server search unavailable');
+                    const requestController = new AbortController();
+                    serverSearchController = requestController;
+                    const timeoutId = setTimeout(() => requestController.abort(), 12000);
+                    let response;
+                    try {
+                        const params = new URLSearchParams({ q: originalQuery, limit: '10' });
+                        if (expectedType) params.set('type', expectedType);
+                        response = await fetch(`/api/search?${params.toString()}`, {
+                            signal: requestController.signal,
+                            headers: { Accept: 'application/json' }
+                        });
+                    } finally {
+                        clearTimeout(timeoutId);
+                    }
+                    if (!response.ok) throw new Error(`Server search failed: ${response.status}`);
+                    const serverResults = await response.json();
+                    if (!Array.isArray(serverResults)) throw new Error('Invalid server search response');
+                    if (requestSequence !== searchRequestSequence || originalQuery !== refs.searchQuery.value) return;
+                    refs.searchResults.value = serverResults;
+                    refs.isCacheLoaded.value = true;
+                    refs.isSearching.value = false;
+                    if (refs.cacheStatus) refs.cacheStatus.value = '';
+                    return;
+                } catch (error) {
+                    if (requestSequence !== searchRequestSequence || originalQuery !== refs.searchQuery.value) return;
+                    if (refs.cacheStatus) refs.cacheStatus.value = 'Локальний пошук...';
+                }
+
+                if (!refs.isCacheLoaded.value || refs.allItemsCache.value.length === 0) {
                     const buildPromise = SA.buildUniversalCache(refs);
                     if (expectedType === 'group' && refs.groupCacheReady) {
                         while (refs.isSearching.value && !refs.groupCacheReady.value) {
@@ -238,6 +278,8 @@ window.ScheduleApp = window.ScheduleApp || {};
                         return 0;
                     })
                     .slice(0, 10);
+                refs.isSearching.value = false;
+                if (refs.cacheStatus) refs.cacheStatus.value = '';
             }, 220);
         };
     };
