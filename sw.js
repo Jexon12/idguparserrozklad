@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-v59';
+const CACHE_NAME = 'schedule-v60';
 const STATIC_ASSETS = [
     '/',
     '/index.html',

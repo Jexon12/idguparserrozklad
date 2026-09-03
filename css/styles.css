@@ -91,7 +91,7 @@
     }
 
     .app-header {
-        margin-bottom: 12px;
+        margin-bottom: 8px;
     }
 
     .app-header > div {
@@ -149,49 +149,53 @@
     }
 
     .mobile-minimal .mobile-overview-card {
-        margin-bottom: 10px;
-        padding: 0;
-        overflow: hidden;
-        border-color: #fde68a;
-        box-shadow: 0 1px 3px rgba(120, 53, 15, 0.08);
-    }
-
-    .mobile-minimal .mobile-overview-card > div:not(.mobile-expanded-only) {
-        padding: 10px 12px;
-        border: 0;
-        border-radius: 0;
-    }
-
-    .mobile-minimal .mobile-next-meta {
-        margin-top: 5px;
-    }
-
-    .mobile-minimal #schedule-week {
-        justify-content: flex-end;
-        margin-bottom: 8px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-    }
-
-    .mobile-minimal #schedule-week > div:first-child,
-    .mobile-minimal #schedule-week button:last-child {
         display: none;
     }
 
+    .mobile-minimal .mobile-title-icon,
+    .mobile-minimal .mobile-view-switch button:first-child {
+        display: none;
+    }
+
+    .mobile-minimal .mobile-view-switch {
+        padding: 0;
+        background: transparent;
+        border: 0;
+    }
+
+    .mobile-minimal .mobile-view-switch button:last-child {
+        min-height: 34px;
+        border: 1px solid #d1d5db;
+        background: transparent;
+    }
+
+    .dark .mobile-minimal .mobile-view-switch button:last-child {
+        border-color: #4b5563;
+        color: #d1d5db;
+    }
+
+    .mobile-minimal #schedule-week,
+    .mobile-minimal footer {
+        display: none !important;
+    }
+
     .mobile-minimal .day-header-sticky {
-        padding: 8px 12px;
+        padding: 6px 10px;
     }
 
     .mobile-minimal .day-header-sticky h3 {
-        font-size: 0.95rem;
+        font-size: 0.88rem;
+    }
+
+    .mobile-minimal .schedule-day-count {
+        display: none;
     }
 
     .mobile-minimal .schedule-slot {
         display: grid;
-        grid-template-columns: 72px minmax(0, 1fr);
-        gap: 8px;
-        padding: 8px 10px;
+        grid-template-columns: 68px minmax(0, 1fr);
+        gap: 6px;
+        padding: 6px 8px;
     }
 
     .mobile-minimal .schedule-slot-time {
@@ -204,12 +208,13 @@
     }
 
     .mobile-minimal .schedule-pair-badge {
-        padding: 2px 6px;
+        display: none;
     }
 
     .mobile-minimal .schedule-slot-range {
-        font-size: 0.68rem;
+        font-size: 0.7rem;
         line-height: 1.2;
+        white-space: nowrap;
     }
 
     .mobile-minimal .schedule-slot > .col-span-12:last-child {
@@ -219,7 +224,7 @@
     }
 
     .mobile-minimal .lesson-card {
-        padding: 8px 8px 8px 10px;
+        padding: 5px 6px 5px 8px;
         border-top: 0;
         border-right: 0;
         border-bottom: 0;
@@ -228,13 +233,13 @@
     }
 
     .mobile-minimal .lesson-card h4 {
-        margin-bottom: 3px;
-        font-size: 0.86rem;
+        margin-bottom: 1px;
+        font-size: 0.82rem;
         line-height: 1.25;
     }
 
     .mobile-minimal .lesson-meta {
-        font-size: 0.72rem;
+        font-size: 0.68rem;
     }
 
     .mobile-expanded .app-header > div {

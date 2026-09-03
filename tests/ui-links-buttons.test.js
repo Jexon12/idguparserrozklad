@@ -291,6 +291,8 @@ describe('UI links/buttons regression', () => {
         expect(js).toContain("localStorage.setItem('schedule_mobile_view', mobileView.value)");
         expect(css).toContain('.mobile-minimal .mobile-expanded-only');
         expect(css).toContain('.mobile-minimal .schedule-slot');
+        expect(css).toContain('.mobile-minimal .mobile-overview-card');
+        expect(css).toContain('.mobile-minimal footer');
     });
 
     test('hidden subjects persist and exports use the filtered schedule', () => {
