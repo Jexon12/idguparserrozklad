@@ -79,6 +79,169 @@
     display: none;
 }
 
+.mobile-title-short,
+.mobile-view-switch {
+    display: none;
+}
+
+/* Mobile density switch: the minimal view is the default, details remain one tap away. */
+@media (max-width: 767px) {
+    .app-content {
+        padding: 10px;
+    }
+
+    .app-header {
+        margin-bottom: 12px;
+    }
+
+    .app-header > div {
+        flex-wrap: nowrap;
+    }
+
+    .app-title {
+        min-width: 0;
+        flex: 1;
+        text-align: left;
+        font-size: 1.15rem;
+        white-space: nowrap;
+    }
+
+    .mobile-title-full {
+        display: none;
+    }
+
+    .mobile-title-short {
+        display: inline;
+    }
+
+    .mobile-view-switch {
+        display: inline-flex;
+        flex-shrink: 0;
+        padding: 3px;
+        border: 1px solid #e5e7eb;
+        border-radius: 9999px;
+        background: #f3f4f6;
+    }
+
+    .dark .mobile-view-switch {
+        border-color: #4b5563;
+        background: #1f2937;
+    }
+
+    .mobile-view-switch button {
+        min-height: 32px;
+        padding: 0 9px;
+        border-radius: 9999px;
+        color: #6b7280;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    .mobile-view-switch button.active {
+        background: #d97706;
+        color: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+    }
+
+    .mobile-minimal .mobile-expanded-action,
+    .mobile-minimal .mobile-expanded-only {
+        display: none !important;
+    }
+
+    .mobile-minimal .mobile-overview-card {
+        margin-bottom: 10px;
+        padding: 0;
+        overflow: hidden;
+        border-color: #fde68a;
+        box-shadow: 0 1px 3px rgba(120, 53, 15, 0.08);
+    }
+
+    .mobile-minimal .mobile-overview-card > div:not(.mobile-expanded-only) {
+        padding: 10px 12px;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .mobile-minimal .mobile-next-meta {
+        margin-top: 5px;
+    }
+
+    .mobile-minimal #schedule-week {
+        justify-content: flex-end;
+        margin-bottom: 8px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    .mobile-minimal #schedule-week > div:first-child,
+    .mobile-minimal #schedule-week button:last-child {
+        display: none;
+    }
+
+    .mobile-minimal .day-header-sticky {
+        padding: 8px 12px;
+    }
+
+    .mobile-minimal .day-header-sticky h3 {
+        font-size: 0.95rem;
+    }
+
+    .mobile-minimal .schedule-slot {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px 10px;
+    }
+
+    .mobile-minimal .schedule-slot-time {
+        grid-column: 1;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0;
+        text-align: left;
+    }
+
+    .mobile-minimal .schedule-pair-badge {
+        padding: 2px 6px;
+    }
+
+    .mobile-minimal .schedule-slot-range {
+        font-size: 0.68rem;
+        line-height: 1.2;
+    }
+
+    .mobile-minimal .schedule-slot > .col-span-12:last-child {
+        grid-column: 2;
+        min-width: 0;
+        gap: 6px;
+    }
+
+    .mobile-minimal .lesson-card {
+        padding: 8px 8px 8px 10px;
+        border-top: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-radius: 6px;
+        box-shadow: none;
+    }
+
+    .mobile-minimal .lesson-card h4 {
+        margin-bottom: 3px;
+        font-size: 0.86rem;
+        line-height: 1.25;
+    }
+
+    .mobile-minimal .lesson-meta {
+        font-size: 0.72rem;
+    }
+
+    .mobile-expanded .app-header > div {
+        flex-wrap: wrap;
+    }
+}
+
 @media (max-width: 1023px) {
     .mobile-menu-btn {
         display: flex;

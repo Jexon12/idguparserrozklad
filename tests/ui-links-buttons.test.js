@@ -234,7 +234,7 @@ describe('UI links/buttons regression', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
 
         expect(html).toContain('class="flex min-w-0 flex-wrap gap-2 sm:justify-end"');
-        expect(html).toContain('class="flex min-w-0 flex-wrap gap-3"');
+        expect(html).toContain('class="flex min-w-0 flex-wrap gap-3');
         expect(html).toContain('min-w-0 max-w-full items-center');
         expect(html).toContain('min-w-0 break-words font-medium');
     });
@@ -276,6 +276,21 @@ describe('UI links/buttons regression', () => {
         expect(js).toContain('const availableLessons = slot.lessons.filter((lesson) => !lesson.isCancelled)');
         expect(js).toContain("onlineUrl: SA.getGlobalLink(l, 'onlineUrl', adminRefs) || ''");
         expect(js).toContain('nearestDiff < 7 * 24 * 60 * 60 * 1000');
+    });
+
+    test('mobile schedule defaults to minimal and can reveal expanded details', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        const css = fs.readFileSync(path.resolve(__dirname, '..', 'css/styles.css'), 'utf8');
+
+        expect(html).toContain("@click=\"setMobileView('minimal')\"");
+        expect(html).toContain("@click=\"setMobileView('expanded')\"");
+        expect(html).toContain('mobile-expanded-only');
+        expect(html).toContain('lesson-card');
+        expect(js).toContain("localStorage.getItem('schedule_mobile_view') === 'expanded' ? 'expanded' : 'minimal'");
+        expect(js).toContain("localStorage.setItem('schedule_mobile_view', mobileView.value)");
+        expect(css).toContain('.mobile-minimal .mobile-expanded-only');
+        expect(css).toContain('.mobile-minimal .schedule-slot');
     });
 
     test('hidden subjects persist and exports use the filtered schedule', () => {

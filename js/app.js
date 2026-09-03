@@ -206,6 +206,7 @@ try {
             const hiddenDisciplines = ref(Array.isArray(storedHiddenDisciplines) ? storedHiddenDisciplines : []);
             const activeFavoriteKey = ref(localStorage.getItem('schedule_activeFavoriteKey') || '');
             const viewMode = ref(localStorage.getItem('schedule_viewMode') || 'cards');
+            const mobileView = ref(localStorage.getItem('schedule_mobile_view') === 'expanded' ? 'expanded' : 'minimal');
             const studentWeekFocus = ref(localStorage.getItem('schedule_student_week_focus') !== 'false');
             const deliveryModeFilter = ref(localStorage.getItem('schedule_delivery_mode') || '');
             const datePreset = ref('');
@@ -227,6 +228,11 @@ try {
             const showFreeNowOnly = ref(false);
             const notifiedCancellationDigestKey = ref('');
             let nextLessonTimer = null;
+
+            const setMobileView = (value) => {
+                mobileView.value = value === 'expanded' ? 'expanded' : 'minimal';
+                localStorage.setItem('schedule_mobile_view', mobileView.value);
+            };
 
             const saveAliases = () => {
                 localStorage.setItem('schedule_aliases_v1', JSON.stringify(aliasesMap.value));
@@ -2264,7 +2270,7 @@ try {
                 occupancyResults, startOccupancyScan, exportOccupancy,
                 occupancySearch, filteredOccupancyResults, scanErrors,
                 // NEW features
-                favorites, activeFavoriteKey, viewMode, datePreset, sidebarOpen,
+                favorites, activeFavoriteKey, viewMode, mobileView, setMobileView, datePreset, sidebarOpen,
                 studentWeekFocus, setStudentWeekFocus, scrollToTodaySchedule, isTodayDate,
                 deliveryModeFilter, setDeliveryMode,
                 toastMessage, toastVisible, toastActionLabel, runToastAction, nextLessonInfo,
