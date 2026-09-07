@@ -85,7 +85,19 @@ describe('universal schedule search', () => {
         expect(groupCalls).toHaveLength(2);
         expect(groupCalls.every((call) => call.aEducationForm !== '0' && call.aCourse !== '0')).toBe(true);
         expect(refs.groupCacheReady.value).toBe(true);
-        expect(refs.allItemsCache.value).toHaveLength(1);
+        expect(refs.allItemsCache.value).toHaveLength(2);
+        expect(refs.allItemsCache.value.map((item) => item.courseId)).toEqual(['1', '2']);
+    });
+
+    test('distinguishes same-name records by study context and falls back to record code', () => {
+        const items = ['a', 'b'].map((Key) => ({
+            type: 'group', value: { Key, Value: '42У' }, label: '42У (ФУАІД)',
+            educationFormName: 'Денна', courseName: '4 курс'
+        }));
+        const described = SA.describeSearchResults(items);
+        expect(described[0].detail).toBe('42У (ФУАІД) · Денна · 4 курс · Код a');
+        expect(described[1].detail).toContain('Код b');
+        expect(SA.describeSearchResults([items[0]])[0].detail).not.toContain('Код');
     });
 
     test('uses server search without building the full browser catalogue', async () => {

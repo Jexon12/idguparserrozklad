@@ -1337,6 +1337,8 @@ try {
                 if (item.type === 'group') {
                     mode.value = 'student';
                     selectedFaculty.value = item.facultyId;
+                    selectedEduForm.value = item.educationFormId || '';
+                    selectedCourse.value = item.courseId || '';
                     await loadGroups();
                     selectedGroup.value = item.value;
                 } else {

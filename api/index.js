@@ -24,7 +24,7 @@ const proxyCache = new Map();
 const inFlightProxyRequests = new Map();
 let serverSearchIndex = null;
 let searchIndexBuildPromise = null;
-const SEARCH_INDEX_STORAGE_KEY = 'search_index_v2';
+const SEARCH_INDEX_STORAGE_KEY = 'search_index_v3';
 const SEARCH_INDEX_TTL_MS = 12 * 60 * 60 * 1000;
 // --- Report jobs (progress flow) ---
 const reportJobs = new Map();

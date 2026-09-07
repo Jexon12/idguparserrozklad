@@ -234,7 +234,8 @@ describe('UI links/buttons regression', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
 
         expect(html).toContain('class="flex min-w-0 flex-wrap gap-2 sm:justify-end"');
-        expect(html).toContain('class="flex min-w-0 flex-wrap gap-3');
+        expect(html).toContain('class="active-schedules flex min-w-0 flex-wrap gap-3"');
+        expect(html).toContain("mode !== 'occupancy' && groupedSchedule.length > 0");
         expect(html).toContain('min-w-0 max-w-full items-center');
         expect(html).toContain('min-w-0 break-words font-medium');
     });

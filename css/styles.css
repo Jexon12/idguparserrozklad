@@ -768,6 +768,23 @@
 .mobile-view-switch button.active { color: white; }
 
 /* One compact date rail; secondary controls do not compete with lessons. */
+.search-result-detail { overflow-wrap: anywhere; line-height: 1.5; }
+.active-schedules { margin-bottom: 12px; }
+@media (max-width: 767px) {
+    .mobile-expanded .app-header > div {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .mobile-expanded .app-header .mobile-menu-btn { width: 44px; }
+    .mobile-expanded .app-title { grid-column: 2 / -1; white-space: normal; margin: 0; }
+    .mobile-expanded .mobile-view-switch { grid-column: 1 / -1; width: 100%; }
+    .mobile-expanded .mobile-view-switch button { flex: 1; min-height: 44px; }
+    .mobile-expanded .app-header .mobile-expanded-action { min-width: 0; min-height: 44px; }
+    .mobile-minimal .active-schedules { gap: 6px; }
+    .mobile-minimal .active-schedules > div { padding: 0 10px; border-radius: 6px; box-shadow: none; font-size: .875rem; }
+    .active-schedules button { min-width: 44px; min-height: 44px; }
+}
 .schedule-navigation { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
 .schedule-navigation .schedule-day-tabs { flex: 1; min-width: 0; margin: 0; border: 0; background: transparent; padding: 0; }
 .schedule-navigation > .week-nav-btn { flex: 0 0 44px; min-height: 44px; }

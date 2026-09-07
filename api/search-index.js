@@ -111,6 +111,10 @@ async function buildSearchCatalog(fetchAction, options = {}) {
             value: group,
             facultyId: faculty.Key,
             facultyName: faculty.Value,
+            educationFormId: form.Key,
+            educationFormName: form.Value,
+            courseId: course.Key,
+            courseName: course.Value,
             label: `${group.Value} (${faculty.Value})`
         }));
     });

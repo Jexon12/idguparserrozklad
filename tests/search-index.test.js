@@ -38,6 +38,7 @@ describe('server search index', () => {
         const items = await buildSearchCatalog(fetchAction, { concurrency: 2 });
 
         expect(items.map((item) => item.type)).toEqual(['group', 'teacher']);
+        expect(items[0]).toMatchObject({ educationFormId: '1', educationFormName: 'Денна', courseId: '1', courseName: '1 курс' });
         expect(fetchAction).toHaveBeenCalledTimes(4);
     });
 });

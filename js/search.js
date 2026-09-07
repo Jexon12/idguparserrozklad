@@ -19,6 +19,19 @@ window.ScheduleApp = window.ScheduleApp || {};
 
     SA.normalizeSearchText = normalizeSearchText;
 
+    // Names are not identities: keep distinct groups and explain their context.
+    SA.describeSearchResults = (items) => {
+        const described = items.map((item) => ({
+            ...item,
+            detail: [item.label, item.educationFormName, item.courseName].filter(Boolean).join(' · ')
+        }));
+        const counts = new Map();
+        described.forEach((item) => counts.set(item.detail, (counts.get(item.detail) || 0) + 1));
+        return described.map((item) => counts.get(item.detail) > 1 && item.value?.Key
+            ? { ...item, detail: `${item.detail} · Код ${item.value.Key}` }
+            : item);
+    };
+
     function addPrefixes(index, token, item) {
         if (!token) return;
         const normalized = String(token).toLowerCase();
@@ -108,6 +121,10 @@ window.ScheduleApp = window.ScheduleApp || {};
                                 value: g,
                                 facultyId: fac.Key,
                                 facultyName: fac.Value,
+                                educationFormId: form.Key,
+                                educationFormName: form.Value,
+                                courseId: course.Key,
+                                courseName: course.Value,
                                 label,
                                 _lower: label.toLocaleLowerCase('uk-UA'),
                                 _searchKey: normalizeSearchText(label)
@@ -123,7 +140,7 @@ window.ScheduleApp = window.ScheduleApp || {};
             const chunkRes = await Promise.all(chunkPromises);
             chunkRes.forEach((arr) => {
                 arr.forEach((item) => {
-                    const key = `${item.facultyId}|${normalizeSearchText(item.value?.Value || item.label)}`;
+                    const key = `${item.facultyId}|${item.value?.Key || normalizeSearchText(item.value?.Value || item.label)}`;
                     if (seenGroups.has(key)) return;
                     seenGroups.add(key);
                     refs.allItemsCache.value.push(item);
@@ -239,7 +256,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                     const serverResults = await response.json();
                     if (!Array.isArray(serverResults)) throw new Error('Invalid server search response');
                     if (requestSequence !== searchRequestSequence || originalQuery !== refs.searchQuery.value) return;
-                    refs.searchResults.value = serverResults;
+                    refs.searchResults.value = SA.describeSearchResults(serverResults);
                     refs.isCacheLoaded.value = true;
                     refs.isSearching.value = false;
                     if (refs.cacheStatus) refs.cacheStatus.value = '';
@@ -267,7 +284,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                     refs.allItemsCache.value
                 );
 
-                refs.searchResults.value = candidates
+                refs.searchResults.value = SA.describeSearchResults(candidates
                     .filter((item) => !expectedType || item.type === expectedType)
                     .filter((item) => item._lower.includes(q) || (item._searchKey || normalizeSearchText(item._lower)).includes(searchKey))
                     .sort((a, b) => {
@@ -277,7 +294,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                         if (!aStarts && bStarts) return 1;
                         return 0;
                     })
-                    .slice(0, 10);
+                    .slice(0, 10));
                 refs.isSearching.value = false;
                 if (refs.cacheStatus) refs.cacheStatus.value = '';
             }, 220);

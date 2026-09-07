@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260907-4">
+    <link rel="stylesheet" href="css/styles.css?v=20260907-5">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -640,7 +640,7 @@
                                 <div>
                                     <div class="font-bold text-amber-700">{{ res.label ? res.label.split('(')[0] :
                                         res.value.Value }}</div>
-                                    <div class="text-gray-500 text-xs">{{ res.label }}</div>
+                                    <div class="search-result-detail text-gray-500 text-xs">{{ res.detail || res.label }}</div>
                                 </div>
                             </div>
                         </div>
@@ -997,12 +997,12 @@
                         </div>
 
                         <!-- Active Entities List -->
-                        <div v-if="activeEntities.length > 0" class="flex min-w-0 flex-wrap gap-3 mobile-expanded-only">
+                        <div v-if="activeEntities.length > 0" class="active-schedules flex min-w-0 flex-wrap gap-3" aria-label="Вибрані розклади">
                             <div v-for="(entity, index) in activeEntities" :key="index"
                                 class="flex min-w-0 max-w-full items-center bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-2xl shadow-sm">
                                 <span class="min-w-0 break-words font-medium mr-2">{{ entity.name }}</span>
                                 <span class="shrink-0 text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
-                                <button @click="removeEntity(index)"
+                                <button @click="removeEntity(index)" :aria-label="`Прибрати розклад ${entity.name}`"
                                     class="shrink-0 text-red-400 hover:text-red-700 font-bold">✕</button>
                             </div>
                         </div>
@@ -1289,7 +1289,7 @@
                         </div>
                     </div>
 
-                    <section v-show="mobileView === 'expanded' && mode !== 'occupancy'" class="schedule-details" aria-label="Аналітика та інструменти">
+                    <section v-show="mobileView === 'expanded' && mode !== 'occupancy' && groupedSchedule.length > 0" class="schedule-details" aria-label="Аналітика та інструменти">
                         <!-- Statistics Block -->
                         <div v-if="activeEntities.length > 0"
                             class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow mb-6 transition-colors overflow-hidden">
@@ -1698,7 +1698,7 @@
     <script src="js/components/schedule-status-badges.js?v=20260902-1"></script>
     <script src="js/components/app-modal-shell.js?v=20260902-1"></script>
     <script src="js/api.js?v=20260902-3"></script>
-    <script src="js/search.js?v=20260902-1"></script>
+    <script src="js/search.js?v=20260907-5"></script>
     <script src="js/notes.js?v=20260410-1"></script>
     <script src="js/admin.js?v=20260410-1"></script>
     <script src="js/occupancy.js?v=20260410-1"></script>
@@ -1729,7 +1729,7 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260907-1"></script>
+    <script src="js/app.js?v=20260907-5"></script>
 
     <!-- Service Worker Registration -->
     <script>
