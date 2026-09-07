@@ -295,6 +295,20 @@ describe('UI links/buttons regression', () => {
         expect(css).toContain('.mobile-minimal footer');
     });
 
+    test('academic board design exposes direct day navigation and essential statuses', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
+        const css = fs.readFileSync(path.resolve(__dirname, '..', 'css/styles.css'), 'utf8');
+
+        expect(html).toContain('class="schedule-day-tabs"');
+        expect(html).toContain('@click="scrollToScheduleDate(dayData.date)"');
+        expect(html).toContain('compact class="essential-status mb-2"');
+        expect(js).toContain('const scrollToScheduleDate = async (date) =>');
+        expect(js).toContain('element.offsetParent !== null');
+        expect(css).toContain('--academic-accent');
+        expect(css).toContain('.schedule-board .lesson-card');
+    });
+
     test('hidden subjects persist and exports use the filtered schedule', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
         const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');

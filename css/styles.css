@@ -445,3 +445,322 @@
     background: #1e3a5f;
     border-color: #3b82f6;
 }
+
+/* --- 2026 Academic board visual system --- */
+:root {
+    --academic-bg: #f2efe7;
+    --academic-surface: #fffdf8;
+    --academic-surface-muted: #f7f3ea;
+    --academic-ink: #202832;
+    --academic-muted: #66707b;
+    --academic-rule: #ddd5c6;
+    --academic-accent: #95611a;
+    --academic-accent-strong: #744811;
+    --academic-accent-soft: #f3e7cf;
+    --academic-live: #2e6b61;
+    --academic-live-soft: #dcece8;
+    --academic-shadow: 0 12px 32px rgba(52, 42, 25, 0.07);
+}
+
+.dark {
+    --academic-bg: #151719;
+    --academic-surface: #1d2023;
+    --academic-surface-muted: #24272a;
+    --academic-ink: #edf0f2;
+    --academic-muted: #adb4bc;
+    --academic-rule: #393c40;
+    --academic-accent: #dfad5b;
+    --academic-accent-strong: #f0c477;
+    --academic-accent-soft: #382d1d;
+    --academic-live: #83c8bb;
+    --academic-live-soft: #19362f;
+    --academic-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+}
+
+.app-body {
+    background: var(--academic-bg) !important;
+    color: var(--academic-ink);
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.app-content {
+    width: min(100%, 1480px);
+    margin-inline: auto;
+}
+
+.app-header {
+    padding: 14px 18px;
+    border: 1px solid var(--academic-rule);
+    border-radius: 8px;
+    background: var(--academic-surface);
+    box-shadow: var(--academic-shadow);
+}
+
+.app-header > div {
+    justify-content: flex-start !important;
+}
+
+.app-title {
+    flex: 1;
+    text-align: left;
+    color: var(--academic-ink) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.65rem, 3vw, 2.25rem) !important;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+.app-header > div > button,
+.app-header > div > a {
+    min-height: 40px;
+    border: 1px solid var(--academic-rule);
+    border-radius: 6px !important;
+    color: var(--academic-ink) !important;
+    background: var(--academic-surface-muted) !important;
+}
+
+.app-header > div > button:hover,
+.app-header > div > a:hover {
+    border-color: var(--academic-accent);
+    background: var(--academic-accent-soft) !important;
+}
+
+.app-header > p {
+    color: var(--academic-muted) !important;
+    text-align: left;
+}
+
+.app-title .mobile-title-icon {
+    color: var(--academic-accent);
+}
+
+.app-sidebar {
+    border: 1px solid var(--academic-rule);
+    border-radius: 8px !important;
+    background: var(--academic-surface) !important;
+    box-shadow: var(--academic-shadow) !important;
+}
+
+.schedule-main > div > .bg-white,
+.schedule-main > .bg-white,
+.schedule-main section.bg-white {
+    border: 1px solid var(--academic-rule);
+    border-radius: 8px;
+    background: var(--academic-surface) !important;
+    box-shadow: none;
+}
+
+.schedule-main .bg-blue-50,
+.schedule-main .bg-green-50,
+.schedule-main .bg-purple-50,
+.schedule-main .bg-indigo-50,
+.schedule-main .bg-amber-50 {
+    background: var(--academic-surface-muted) !important;
+}
+
+.schedule-main .text-blue-600,
+.schedule-main .text-green-600,
+.schedule-main .text-purple-600,
+.schedule-main .text-indigo-600,
+.schedule-main .text-amber-600 {
+    color: var(--academic-accent-strong) !important;
+}
+
+.app-sidebar input,
+.app-sidebar select,
+.schedule-main input,
+.schedule-main select {
+    border-color: var(--academic-rule) !important;
+    border-radius: 6px !important;
+    color: var(--academic-ink) !important;
+    background: var(--academic-surface) !important;
+}
+
+.schedule-board {
+    border: 1px solid var(--academic-rule);
+    border-radius: 8px !important;
+    background: var(--academic-surface) !important;
+    box-shadow: var(--academic-shadow) !important;
+}
+
+.schedule-board .day-header-sticky {
+    border-color: var(--academic-rule) !important;
+    background: color-mix(in srgb, var(--academic-surface-muted) 94%, transparent) !important;
+}
+
+.schedule-board .day-header-sticky h3 {
+    color: var(--academic-ink) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    letter-spacing: -0.01em;
+}
+
+.schedule-board .schedule-slot {
+    border-color: var(--academic-rule);
+}
+
+.schedule-board .schedule-slot:hover {
+    background: var(--academic-surface-muted) !important;
+}
+
+.schedule-board .schedule-pair-badge {
+    border-radius: 4px;
+    background: var(--academic-accent-soft) !important;
+    color: var(--academic-accent-strong) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.schedule-board .schedule-slot-range {
+    color: var(--academic-muted) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.schedule-board .lesson-card {
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 4px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.schedule-board .lesson-card h4 {
+    color: var(--academic-ink) !important;
+}
+
+.schedule-board .lesson-meta {
+    color: var(--academic-muted) !important;
+}
+
+.current-lesson-banner {
+    background: var(--academic-live) !important;
+    box-shadow: none !important;
+}
+
+.quick-date-btn.active,
+.mobile-view-switch button.active {
+    border-color: var(--academic-accent) !important;
+    background: var(--academic-accent) !important;
+}
+
+.week-nav-btn {
+    border-color: var(--academic-rule);
+    border-radius: 6px;
+    color: var(--academic-ink);
+    background: var(--academic-surface);
+}
+
+.week-nav-btn:hover {
+    border-color: var(--academic-accent);
+    background: var(--academic-accent-soft);
+}
+
+.schedule-day-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    border: 1px solid var(--academic-rule);
+    border-radius: 8px;
+    background: var(--academic-surface);
+}
+
+.schedule-day-tabs button {
+    display: grid;
+    min-width: 74px;
+    min-height: 48px;
+    place-items: center;
+    padding: 5px 10px;
+    border: 0;
+    border-radius: 5px;
+    color: var(--academic-muted);
+    background: transparent;
+    line-height: 1.1;
+}
+
+.schedule-day-tabs button span {
+    max-width: 82px;
+    overflow: hidden;
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.schedule-day-tabs button strong {
+    color: var(--academic-ink);
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.schedule-day-tabs button:hover {
+    color: var(--academic-accent-strong);
+    background: var(--academic-accent-soft);
+}
+
+.schedule-day-tabs button.active {
+    color: #fff;
+    background: var(--academic-accent);
+}
+
+.schedule-day-tabs button.active strong {
+    color: #fff;
+}
+
+.app-sidebar button.bg-amber-600,
+.schedule-main button.bg-amber-600,
+.schedule-main a.bg-amber-600 {
+    background: var(--academic-accent) !important;
+}
+
+.app-sidebar button.bg-amber-600:hover,
+.schedule-main button.bg-amber-600:hover,
+.schedule-main a.bg-amber-600:hover {
+    background: var(--academic-accent-strong) !important;
+}
+
+.app-sidebar input:focus,
+.app-sidebar select:focus,
+.schedule-main input:focus,
+.schedule-main select:focus {
+    border-color: var(--academic-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--academic-accent) 18%, transparent);
+}
+
+@media (max-width: 767px) {
+    .app-header {
+        padding: 8px;
+        border-radius: 6px;
+        box-shadow: none;
+    }
+
+    .app-title {
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+        font-size: 1.1rem !important;
+        letter-spacing: -0.01em;
+    }
+
+    .schedule-board {
+        box-shadow: none !important;
+    }
+
+    .schedule-day-tabs {
+        margin-inline: -2px;
+        padding: 4px;
+        border-radius: 6px;
+    }
+
+    .schedule-day-tabs button {
+        min-width: 62px;
+        min-height: 44px;
+        padding-inline: 7px;
+    }
+
+    .mobile-minimal .week-navigation {
+        display: none !important;
+    }
+
+    .mobile-minimal .essential-status {
+        margin: 3px 0 0 !important;
+    }
+}

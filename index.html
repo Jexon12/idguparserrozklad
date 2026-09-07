@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260903-2">
+    <link rel="stylesheet" href="css/styles.css?v=20260907-2">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -37,7 +37,7 @@
     </script>
 </head>
 
-<body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
+<body class="app-body bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
     <div id="app" class="min-h-screen" :class="`mobile-${mobileView}`">
         <!-- Toast Notification -->
         <div class="toast" :class="{ show: toastVisible }" role="status" aria-live="polite">
@@ -49,7 +49,7 @@
         </div>
 
         <!-- Global Sticky Status Bar (Component) -->
-        <current-lesson-banner :current-lesson-info="currentLessonInfo"></current-lesson-banner>
+        <current-lesson-banner class="current-lesson-strip" :current-lesson-info="currentLessonInfo"></current-lesson-banner>
 
         <div class="app-content p-4 md:p-8">
             <!-- Header -->
@@ -62,7 +62,7 @@
                     </button>
                     <h1 class="app-title text-2xl md:text-4xl font-bold text-amber-700 dark:text-amber-400 mb-0 md:mb-2">
                         <span class="mobile-title-icon" aria-hidden="true">📅</span>
-                        <span class="mobile-title-full">Гнучкий Розклад</span>
+                        <span class="mobile-title-full">Розклад</span>
                         <span class="mobile-title-short">Розклад</span>
                     </h1>
                     <div class="mobile-view-switch" role="group" aria-label="Щільність мобільного розкладу">
@@ -92,9 +92,7 @@
                         ⚙️
                     </button>
                 </div>
-                <p class="text-gray-600 dark:text-gray-400 hidden md:block mt-1">Оберіть декілька груп або викладачів
-                    для
-                    порівняння</p>
+                <p class="text-gray-600 dark:text-gray-400 hidden md:block mt-1">Групи · викладачі · аудиторії</p>
             </header>
 
             <!-- Mobile Today/Tomorrow Widget -->
@@ -577,7 +575,7 @@
 
 
                 <!-- Sidebar: Controls -->
-                <aside class="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-fit desktop-sidebar"
+                <aside class="app-sidebar lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-fit desktop-sidebar"
                     :class="{ open: sidebarOpen }" aria-label="Пошук і фільтри розкладу">
                     <div class="sidebar-mobile-heading flex justify-between items-center mb-4">
                         <h2 class="font-bold text-lg text-gray-800 dark:text-gray-200">⚙️ Пошук розкладу</h2>
@@ -880,7 +878,7 @@
                 <!-- Main Panel: Results -->
 
                 <!-- Main Panel: Results -->
-                <div class="lg:col-span-3 space-y-6">
+                <div class="schedule-main lg:col-span-3 space-y-6">
 
                     <!-- OCCUPANCY VIEW -->
                     <div v-if="mode === 'occupancy'">
@@ -1268,9 +1266,20 @@
                             </div>
                         </section>
 
+                        <nav v-if="activeEntities.length > 0 && groupedSchedule.length > 0"
+                            class="schedule-day-tabs" aria-label="Швидкий перехід між днями">
+                            <button v-for="dayData in groupedSchedule" :key="`day-tab-${dayData.date}`"
+                                type="button" @click="scrollToScheduleDate(dayData.date)"
+                                :aria-current="selectedDayDate === dayData.date || (!selectedDayDate && isTodayDate(dayData.date)) ? 'date' : null"
+                                :class="{ active: selectedDayDate === dayData.date || (!selectedDayDate && isTodayDate(dayData.date)) }">
+                                <span>{{ dayData.dayName }}</span>
+                                <strong>{{ dayData.date.split('.')[0] }}</strong>
+                            </button>
+                        </nav>
+
                         <!-- Week Navigation + View Toggle -->
                         <div v-if="activeEntities.length > 0"
-                            class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                            class="week-navigation flex flex-wrap items-center justify-between gap-2 mb-4">
                             <div class="flex gap-2">
                                 <button @click="shiftWeek(-1)" class="week-nav-btn" aria-label="Попередній тиждень">← <span class="week-nav-label">Пред. тиждень</span></button>
                                 <button @click="shiftWeek(1)" class="week-nav-btn" aria-label="Наступний тиждень"><span class="week-nav-label">Наст. тиждень</span> →</button>
@@ -1448,7 +1457,7 @@
                         <!-- CARD VIEW (Schedule Grid) -->
                         <div v-if="(viewMode === 'cards' || viewMode === 'table') && Object.keys(groupedSchedule).length > 0"
                             :class="viewMode === 'table' ? 'md:hidden' : ''"
-                            class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
+                            class="schedule-board bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
                             <div v-for="dayData in groupedSchedule" :key="dayData.date"
                                 :data-schedule-date="dayData.date"
                                 :class="isTodayDate(dayData.date) ? 'ring-2 ring-inset ring-amber-400' : ''"
@@ -1523,7 +1532,7 @@
                                                             </span>
                                                         </h4>
 
-                                                        <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" class="mobile-expanded-only mb-2"></schedule-status-badges>
+                                                        <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" compact class="essential-status mb-2"></schedule-status-badges>
 
                                                         <!-- 2. Type Badge -->
                                                         <div class="mobile-expanded-only mb-1" v-if="lesson.type">
@@ -1674,7 +1683,7 @@
     <script src="js/schedule-model.js?v=20260902-2"></script>
     <script src="js/reliability.js?v=20260902-1"></script>
     <script src="js/schedule-analytics.js?v=20260831-1"></script>
-    <script src="js/components/current-lesson-banner.js?v=20260410-1"></script>
+    <script src="js/components/current-lesson-banner.js?v=20260907-1"></script>
     <script src="js/components/schedule-status-badges.js?v=20260902-1"></script>
     <script src="js/components/app-modal-shell.js?v=20260902-1"></script>
     <script src="js/api.js?v=20260902-3"></script>
@@ -1709,7 +1718,7 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260903-2"></script>
+    <script src="js/app.js?v=20260907-1"></script>
 
     <!-- Service Worker Registration -->
     <script>

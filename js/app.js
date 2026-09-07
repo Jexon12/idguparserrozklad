@@ -207,6 +207,7 @@ try {
             const activeFavoriteKey = ref(localStorage.getItem('schedule_activeFavoriteKey') || '');
             const viewMode = ref(localStorage.getItem('schedule_viewMode') || 'cards');
             const mobileView = ref(localStorage.getItem('schedule_mobile_view') === 'expanded' ? 'expanded' : 'minimal');
+            const selectedDayDate = ref('');
             const studentWeekFocus = ref(localStorage.getItem('schedule_student_week_focus') !== 'false');
             const deliveryModeFilter = ref(localStorage.getItem('schedule_delivery_mode') || '');
             const datePreset = ref('');
@@ -1436,6 +1437,17 @@ try {
                 return year && month && day ? `${year}-${month}-${day}` : '';
             };
             const isTodayDate = (date) => date === todayDmy();
+            const scrollToScheduleDate = async (date) => {
+                if (!date) return false;
+                await nextTick();
+                const targets = Array.from(document.querySelectorAll(`[data-schedule-date="${date}"]`));
+                const target = targets.find((element) => element.offsetParent !== null) || targets[0];
+                if (!target) return false;
+                selectedDayDate.value = date;
+                const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+                target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+                return true;
+            };
             const scrollToTodaySchedule = async (force = false) => {
                 if (!appMounted || mode.value !== 'student' || groupedSchedule.value.length === 0) return false;
                 const currentDate = todayDmy();
@@ -1446,11 +1458,8 @@ try {
                     : dates.find((date) => dmyToIso(date) >= currentIso) || dates[0];
                 const scrollKey = `${activeEntities.value.map((entity) => `${entity.type}:${entity.id}`).join('|')}|${dates.join('|')}|${targetDate}`;
                 if (!force && scrollKey === lastAutoScrollKey) return false;
-                await nextTick();
-                const target = document.querySelector(`[data-schedule-date="${targetDate}"]`);
-                if (!target) return false;
-                const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-                target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+                const didScroll = await scrollToScheduleDate(targetDate);
+                if (!didScroll) return false;
                 lastAutoScrollKey = scrollKey;
                 if (force && targetDate !== currentDate) showToast('На сьогодні пар немає — показано найближчий день');
                 return true;
@@ -2271,7 +2280,7 @@ try {
                 occupancySearch, filteredOccupancyResults, scanErrors,
                 // NEW features
                 favorites, activeFavoriteKey, viewMode, mobileView, setMobileView, datePreset, sidebarOpen,
-                studentWeekFocus, setStudentWeekFocus, scrollToTodaySchedule, isTodayDate,
+                studentWeekFocus, setStudentWeekFocus, selectedDayDate, scrollToScheduleDate, scrollToTodaySchedule, isTodayDate,
                 deliveryModeFilter, setDeliveryMode,
                 toastMessage, toastVisible, toastActionLabel, runToastAction, nextLessonInfo,
                 setDateRange, setTomorrowRange, shiftWeek,

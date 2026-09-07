@@ -6,7 +6,7 @@ window.CurrentLessonBannerComponent = {
     props: { currentLessonInfo: { type: Object, default: null } },
     template: `
         <div v-if="currentLessonInfo"
-            class="sticky top-0 z-[60] bg-green-600 text-white shadow-md px-4 py-3 flex items-center justify-between animate-slide-down">
+            class="current-lesson-banner sticky top-0 z-[60] bg-green-600 text-white shadow-md px-4 py-3 flex items-center justify-between animate-slide-down">
             <div class="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
                 <div class="flex flex-col leading-tight min-w-0">
                     <span class="text-[10px] font-bold opacity-80 uppercase tracking-wider">Зараз іде</span>
