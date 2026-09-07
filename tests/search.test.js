@@ -100,6 +100,18 @@ describe('universal schedule search', () => {
         expect(SA.describeSearchResults([items[0]])[0].detail).not.toContain('Код');
     });
 
+    test('availability distinguishes populated, empty and failed schedule requests', async () => {
+        SA.Reliability = { validateDateRange: () => ({ valid: true }) };
+        SA.buildSchedulePayload = (entity) => ({ action: 'schedule', payload: { id: entity.id } });
+        SA.fetchApi = jest.fn(async (_, payload) => payload.id === 'a' ? [{}] : payload.id === 'b' ? [] : null);
+        const items = ['a', 'b', 'c'].map((Key) => ({ type: 'group', ambiguous: true, value: { Key } }));
+        await SA.annotateGroupAvailability(items, { dateStart: ref('2026-09-07'), dateEnd: ref('2026-09-14') });
+        expect(items.map((item) => item.availability)).toEqual([
+            'Є заняття за вибраний період', 'Немає занять за вибраний період', 'Не вдалося перевірити заняття'
+        ]);
+        expect(items[0].availabilityPeriod).toBe('2026-09-07 — 2026-09-14');
+    });
+
     test('uses server search without building the full browser catalogue', async () => {
         global.window.location = { origin: 'http://localhost' };
         global.fetch = jest.fn(async () => ({

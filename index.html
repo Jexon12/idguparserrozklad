@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260907-5">
+    <link rel="stylesheet" href="css/styles.css?v=20260907-6">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -641,6 +641,9 @@
                                     <div class="font-bold text-amber-700">{{ res.label ? res.label.split('(')[0] :
                                         res.value.Value }}</div>
                                     <div class="search-result-detail text-gray-500 text-xs">{{ res.detail || res.label }}</div>
+                                    <div v-if="res.availability && res.availabilityPeriod === `${dateStart} — ${dateEnd}`" class="search-availability" role="status">
+                                        {{ res.availability }}<br><small>{{ res.availabilityPeriod }}</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1698,7 +1701,7 @@
     <script src="js/components/schedule-status-badges.js?v=20260902-1"></script>
     <script src="js/components/app-modal-shell.js?v=20260902-1"></script>
     <script src="js/api.js?v=20260902-3"></script>
-    <script src="js/search.js?v=20260907-5"></script>
+    <script src="js/search.js?v=20260907-6"></script>
     <script src="js/notes.js?v=20260410-1"></script>
     <script src="js/admin.js?v=20260410-1"></script>
     <script src="js/occupancy.js?v=20260410-1"></script>
@@ -1729,7 +1732,7 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/app.js?v=20260907-5"></script>
+    <script src="js/app.js?v=20260907-6"></script>
 
     <!-- Service Worker Registration -->
     <script>

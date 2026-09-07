@@ -281,7 +281,7 @@ try {
 
             const searchRefs = {
                 mode, faculties, eduForms, courses, allItemsCache, isSearching, isCacheLoaded,
-                groupCacheReady, cacheStatus, searchQuery, searchResults, searchPrefixIndex
+                groupCacheReady, cacheStatus, searchQuery, searchResults, searchPrefixIndex, dateStart, dateEnd
             };
 
             const scanRefs = {

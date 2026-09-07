@@ -769,6 +769,11 @@
 
 /* One compact date rail; secondary controls do not compete with lessons. */
 .search-result-detail { overflow-wrap: anywhere; line-height: 1.5; }
+.search-availability { margin-top: 4px; color: var(--academic-ink); font-size: .875rem; line-height: 1.4; }
+.search-availability small { color: var(--academic-muted); font-size: .75rem; }
+@media (max-width: 767px) {
+    .mobile-expanded .countdown-banner { display: none !important; }
+}
 .active-schedules { margin-bottom: 12px; }
 @media (max-width: 767px) {
     .mobile-expanded .app-header > div {

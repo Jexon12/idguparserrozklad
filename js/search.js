@@ -28,8 +28,32 @@ window.ScheduleApp = window.ScheduleApp || {};
         const counts = new Map();
         described.forEach((item) => counts.set(item.detail, (counts.get(item.detail) || 0) + 1));
         return described.map((item) => counts.get(item.detail) > 1 && item.value?.Key
-            ? { ...item, detail: `${item.detail} · Код ${item.value.Key}` }
+            ? { ...item, ambiguous: true, detail: `${item.detail} · Код ${item.value.Key}` }
             : item);
+    };
+
+    SA.annotateGroupAvailability = async (items, refs) => {
+        if (!refs.dateStart || !refs.dateEnd || !SA.buildSchedulePayload) return;
+        const start = refs.dateStart.value;
+        const end = refs.dateEnd.value;
+        if (!SA.Reliability.validateDateRange(start, end).valid) return;
+        const candidates = items.filter((item) => item.type === 'group' && item.ambiguous).slice(0, 10);
+        await Promise.all(candidates.map(async (item) => {
+            item.availabilityPeriod = `${start} — ${end}`;
+            item.availability = 'Перевіряємо заняття…';
+            try {
+                const { action, payload } = SA.buildSchedulePayload(
+                    { id: item.value.Key, type: 'Група' },
+                    { dateStart: { value: start }, dateEnd: { value: end }, selectedStudyType: { value: '' } }
+                );
+                const data = await SA.fetchApi(action, payload, { silent: true });
+                item.availability = Array.isArray(data)
+                    ? (data.length ? 'Є заняття за вибраний період' : 'Немає занять за вибраний період')
+                    : 'Не вдалося перевірити заняття';
+            } catch (_) {
+                item.availability = 'Не вдалося перевірити заняття';
+            }
+        }));
     };
 
     function addPrefixes(index, token, item) {
@@ -260,6 +284,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                     refs.isCacheLoaded.value = true;
                     refs.isSearching.value = false;
                     if (refs.cacheStatus) refs.cacheStatus.value = '';
+                    await SA.annotateGroupAvailability(refs.searchResults.value, refs);
                     return;
                 } catch (error) {
                     if (requestSequence !== searchRequestSequence || originalQuery !== refs.searchQuery.value) return;
@@ -297,6 +322,7 @@ window.ScheduleApp = window.ScheduleApp || {};
                     .slice(0, 10));
                 refs.isSearching.value = false;
                 if (refs.cacheStatus) refs.cacheStatus.value = '';
+                await SA.annotateGroupAvailability(refs.searchResults.value, refs);
             }, 220);
         };
     };
