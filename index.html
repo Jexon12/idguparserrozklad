@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260907-2">
+    <link rel="stylesheet" href="css/styles.css?v=20260907-3">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -38,7 +38,8 @@
 </head>
 
 <body class="app-body bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
-    <div id="app" class="min-h-screen" :class="`mobile-${mobileView}`">
+    <div id="app" class="min-h-screen">
+      <div :class="`mobile-${mobileView}`">
         <!-- Toast Notification -->
         <div class="toast" :class="{ show: toastVisible }" role="status" aria-live="polite">
             <span>{{ toastMessage }}</span>
@@ -981,99 +982,6 @@
                             </div>
                         </div>
 
-                        <!-- Statistics Block -->
-                        <div v-if="activeEntities.length > 0"
-                            class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow mb-6 transition-colors overflow-hidden">
-
-                            <!-- Header & Auto-Refresh Indicator -->
-                            <div
-                                class="px-4 py-3 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-750">
-                                <h3 class="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                                    📊 Аналітика
-                                </h3>
-                                <div v-if="autoRefreshEnabled && lastRefreshTime"
-                                    class="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
-                                    <span class="animate-pulse">●</span> Оновлено: {{ lastRefreshTime }}
-                                </div>
-                            </div>
-
-                            <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <!-- Key Metrics -->
-                                <div class="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg text-center">
-                                    <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{
-                                        scheduleStats.totalPairs }}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Пар
-                                    </div>
-                                </div>
-                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-center">
-                                    <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{
-                                        scheduleStats.totalHours }}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Годин
-                                    </div>
-                                </div>
-                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg text-center">
-                                    <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{
-                                        scheduleStats.avgPairsPerDay }}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Пар /
-                                        День
-                                    </div>
-                                </div>
-                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg text-center">
-                                    <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{
-                                        scheduleStats.totalFreeWindows }}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Вікон
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="px-4 pb-4 grid md:grid-cols-2 gap-6">
-                                <!-- Type Distribution -->
-                                <div>
-                                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">За типами</h4>
-                                    <div class="space-y-2">
-                                        <div v-for="type in scheduleStats.typeDistribution" :key="type.name"
-                                            class="flex items-center text-sm">
-                                            <div class="w-8 text-xl text-center">{{ getLessonTypeIcon(type.name) }}
-                                            </div>
-                                            <div class="flex-1">
-                                                <div class="flex justify-between mb-1">
-                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{{
-                                                        type.name
-                                                        }}</span>
-                                                    <span class="text-gray-500 dark:text-gray-400 text-xs">{{ type.count
-                                                        }}
-                                                        ({{ type.percent }}%)</span>
-                                                </div>
-                                                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                                                    <div class="h-1.5 rounded-full transition-all duration-1000"
-                                                        :class="getLessonTypeClass(type.name).replace('lesson-type-', 'bg-').replace('default', 'gray-400')"
-                                                        :style="{ width: type.percent + '%' }"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Top Subjects -->
-                                <div>
-                                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">Топ дисциплін</h4>
-                                    <div class="space-y-3">
-                                        <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
-                                            <div class="flex justify-between text-xs mb-1">
-                                                <span class="truncate pr-2 font-medium text-gray-700 dark:text-gray-300"
-                                                    :title="subj.name">{{ subj.name }}</span>
-                                                <span class="text-gray-500 dark:text-gray-400">{{ subj.count }}</span>
-                                            </div>
-                                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                                                <div class="bg-amber-500 dark:bg-amber-400 h-1.5 rounded-full transition-all duration-1000"
-                                                    :style="{ width: subj.percent + '%' }"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Helper message if empty -->
                         <div v-if="activeEntities.length === 0"
                             aria-live="polite" class="bg-white dark:bg-gray-800 p-8 md:p-12 rounded-xl shadow text-center text-gray-500 dark:text-gray-400 transition-colors">
@@ -1086,100 +994,6 @@
                             </ol>
                             <a href="#schedule-search" @click="sidebarOpen = true"
                                 class="inline-block mt-5 bg-amber-600 hover:bg-amber-700 text-white font-bold px-5 py-2 rounded-lg">Почати пошук</a>
-                        </div>
-
-                        <!-- Global Controls (Discipline Filter) -->
-                        <div v-if="activeEntities.length > 0"
-                            class="mobile-expanded-only bg-white dark:bg-gray-800 p-4 rounded-xl shadow transition-colors">
-                            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                <div class="font-bold text-gray-700 dark:text-gray-200">Фільтр (Предмети, Викладачі):
-                                </div>
-                                <div class="flex min-w-0 flex-wrap gap-2 sm:justify-end">
-                                    <button @click="selectedDisciplines = []"
-                                        :disabled="selectedDisciplines.length === 0"
-                                        :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
-                                        Скинути фільтр
-                                    </button>
-                                    <button @click="clearAll"
-                                        class="text-xs text-gray-400 hover:text-red-600 font-medium underline">
-                                        Очистити все
-                                    </button>
-                                    <button @click="showChangeHistoryModal = true"
-                                        class="text-xs bg-sky-100 text-sky-700 hover:bg-sky-200 font-bold px-2 py-1 rounded transition">
-                                        Історія змін ({{ (scheduleChangeLog || []).length }})
-                                    </button>
-                                    <button v-if="activeEntities.length > 1" @click="findCommonFreeSlots"
-                                        class="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold px-2 py-1 rounded transition">
-                                        🔍 Знайти вікна
-                                    </button>
-                                    <button @click="openFreeRoomsNow"
-                                        class="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-bold px-2 py-1 rounded transition">
-                                        🟢 Вільні аудиторії зараз
-                                    </button>
-                                    <button @click="shareFavoritesSet"
-                                        class="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold px-2 py-1 rounded transition">
-                                        🔗 Поділитися обраним
-                                    </button>
-                                    <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())"
-                                        class="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1 rounded transition">
-                                        📆 Додати в календар
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2 mb-3">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">Формат пар:</span>
-                                <button @click="setDeliveryMode && setDeliveryMode('')" :aria-pressed="deliveryModeFilter === ''"
-                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === '' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Усі</button>
-                                <button @click="setDeliveryMode && setDeliveryMode('offline')" :aria-pressed="deliveryModeFilter === 'offline'"
-                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'offline' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки офлайн</button>
-                                <button @click="setDeliveryMode && setDeliveryMode('online')" :aria-pressed="deliveryModeFilter === 'online'"
-                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'online' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки онлайн</button>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <!-- "All" Chip -->
-                                <button @click="selectedDisciplines = []" :class="['px-3 py-1 rounded-full text-sm border transition', 
-                                    selectedDisciplines.length === 0 
-                                    ? 'bg-amber-600 text-white border-amber-600 font-bold shadow-md' 
-                                    : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200']">
-                                    Всі предмети
-                                </button>
-
-                                <!-- Discipline Chips -->
-                                <button v-for="disc in availableDisciplines.filter(item => !hiddenDisciplines.includes(item))" :key="disc" @click="toggleDiscipline(disc)"
-                                    :class="['px-3 py-1 rounded-full text-sm border transition text-left', 
-                                    selectedDisciplines.includes(disc) 
-                                    ? 'bg-amber-100 text-amber-800 border-amber-300 font-semibold shadow-sm ring-1 ring-amber-300' 
-                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50']">
-                                    {{ disc }}
-                                </button>
-                            </div>
-
-                            <div v-if="availableSubjects.length > 0" class="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
-                                <div class="mb-2 flex items-center justify-between gap-2">
-                                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Приховати непотрібні предмети</span>
-                                    <button v-if="hiddenDisciplines.length" @click="restoreAllDisciplines"
-                                        class="text-xs font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-300">
-                                        Відновити всі
-                                    </button>
-                                </div>
-                                <div class="flex flex-wrap gap-2">
-                                    <button v-for="disc in availableSubjects.filter(item => !hiddenDisciplines.includes(item))"
-                                        :key="`hide-${disc}`" @click="hideDiscipline(disc)"
-                                        class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-left text-xs text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                                        :aria-label="`Приховати предмет ${disc}`">
-                                        🙈 {{ disc }}
-                                    </button>
-                                </div>
-                                <div v-if="hiddenDisciplines.length" class="mt-3 rounded-lg bg-gray-50 p-2 dark:bg-gray-700/60">
-                                    <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Приховані</div>
-                                    <button v-for="disc in hiddenDisciplines" :key="`restore-${disc}`"
-                                        @click="restoreDiscipline(disc)"
-                                        class="mr-2 mt-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-gray-800 dark:text-amber-300"
-                                        :aria-label="`Повернути предмет ${disc}`">
-                                        ↩ {{ disc }}
-                                    </button>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- Active Entities List -->
@@ -1213,59 +1027,6 @@
                             </div>
                         </div>
 
-                        <section id="teacher-calendar" v-if="mode === 'teacher' && activeEntities.length > 0"
-                            class="mobile-expanded-only rounded-xl border border-indigo-100 bg-white p-4 shadow dark:border-indigo-900 dark:bg-gray-800">
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <div class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Персональний календар</div>
-                                    <h2 class="text-xl font-black text-gray-900 dark:text-gray-100">Заняття викладача</h2>
-                                </div>
-                                <button @click="printTeacherSchedule"
-                                    class="min-h-10 rounded-lg bg-gray-800 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:bg-indigo-600 dark:hover:bg-indigo-700">
-                                    🖨️ Друк тижня
-                                </button>
-                            </div>
-
-                            <div class="mt-4 grid gap-4 lg:grid-cols-2">
-                                <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
-                                    <h3 class="font-bold text-indigo-900 dark:text-indigo-200">Сьогодні</h3>
-                                    <div v-if="teacherTodayLessons.length" class="mt-2 space-y-2">
-                                        <div v-for="(lesson, index) in teacherTodayLessons" :key="`today-${index}`"
-                                            class="rounded-lg border border-indigo-100 bg-white p-3 dark:border-indigo-800 dark:bg-gray-800">
-                                            <div class="flex items-start justify-between gap-3">
-                                                <div class="font-bold text-gray-900 dark:text-gray-100">{{ lesson.discipline }}</div>
-                                                <span class="shrink-0 text-sm font-bold text-indigo-700 dark:text-indigo-300">{{ lesson.start }}–{{ lesson.end }}</span>
-                                            </div>
-                                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ lesson.group || 'Групу не вказано' }} · 📍 {{ lesson.cabinet || '—' }}</div>
-                                            <a v-if="getGlobalLink(lesson, 'onlineUrl')" :href="getGlobalLink(lesson, 'onlineUrl')"
-                                                target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex rounded bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">📹 Онлайн</a>
-                                        </div>
-                                    </div>
-                                    <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">На сьогодні занять немає.</p>
-                                </div>
-
-                                <div class="space-y-3">
-                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
-                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Групи викладача</h3>
-                                        <div v-if="teacherGroups.length" class="mt-2 flex flex-wrap gap-2">
-                                            <span v-for="group in teacherGroups" :key="group" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">{{ group }}</span>
-                                        </div>
-                                        <p v-else class="mt-2 text-sm text-gray-400">Групи не знайдено.</p>
-                                    </div>
-                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
-                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Вікна між парами</h3>
-                                        <div v-if="teacherFreeWindows.length" class="mt-2 space-y-2 text-sm">
-                                            <div v-for="day in teacherFreeWindows" :key="day.date">
-                                                <span class="font-semibold">{{ day.dayName }}, {{ day.date }}:</span>
-                                                {{ day.missing.map(item => `${item.pair} пара`).join(', ') }}
-                                            </div>
-                                        </div>
-                                        <p v-else class="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Вікон у вибраному періоді немає.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
                         <nav v-if="activeEntities.length > 0 && groupedSchedule.length > 0"
                             class="schedule-day-tabs" aria-label="Швидкий перехід між днями">
                             <button v-for="dayData in groupedSchedule" :key="`day-tab-${dayData.date}`"
@@ -1297,90 +1058,6 @@
                                     :class="['px-3 py-1 rounded-md text-xs font-semibold transition', viewMode === 'table' ? 'bg-white dark:bg-gray-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700']">
                                     📋 Таблиця
                                 </button>
-                            </div>
-                        </div>
-
-                        <!-- Conflicts & Analytics -->
-                        <div v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="mobile-expanded-only grid lg:grid-cols-2 gap-4 mb-4">
-                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-red-100 dark:border-gray-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <h4 class="font-bold text-red-700 dark:text-red-300">Конфлікти розкладу</h4>
-                                    <span class="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-full">
-                                        {{ (conflictSlots || []).length }}
-                                    </span>
-                                </div>
-                                <div v-if="(conflictSlots || []).length === 0" class="text-sm text-gray-500 dark:text-gray-400">
-                                    Конфліктів не знайдено.
-                                </div>
-                                <div v-else class="space-y-2 max-h-44 overflow-y-auto">
-                                    <div v-for="(conf, cidx) in (conflictSlots || []).slice(0, 12)" :key="'conf-' + cidx"
-                                        class="bg-red-50 dark:bg-red-900/20 rounded-lg p-2">
-                                        <div class="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
-                                            {{ conf.dayName }}, {{ conf.date }} · {{ conf.time }}
-                                        </div>
-                                        <div class="text-xs text-gray-700 dark:text-gray-300" v-for="(item, iidx) in conf.items" :key="'item-' + iidx">
-                                            {{ item.entityName }}: {{ item.discipline }} ({{ item.cabinet }})
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-indigo-100 dark:border-gray-700">
-                                <h4 class="font-bold text-indigo-700 dark:text-indigo-300 mb-2">Аналітика навантаження</h4>
-                                <div class="grid grid-cols-2 gap-2 text-sm">
-                                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded p-2">
-                                        <div class="text-xs text-gray-500 dark:text-gray-400">Середнє/день</div>
-                                        <div class="font-bold">{{ (advancedAnalytics && advancedAnalytics.avgDaily) || '0.0' }}</div>
-                                    </div>
-                                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded p-2">
-                                        <div class="text-xs text-gray-500 dark:text-gray-400">Найзавантаженіший</div>
-                                        <div class="font-bold text-xs" :title="advancedAnalytics?.busiest?.name">{{ advancedAnalytics?.busiest?.count || 0 }} пар</div>
-                                    </div>
-                                </div>
-                                <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 truncate" :title="advancedAnalytics?.busiest?.name">
-                                    Пік: {{ advancedAnalytics?.busiest?.name || '—' }}
-                                </div>
-                                <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 truncate" :title="advancedAnalytics?.lightest?.name">
-                                    Найвільніший: {{ advancedAnalytics?.lightest?.name || '—' }}
-                                </div>
-                                <div class="mt-2">
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Найчастіші пари:</div>
-                                    <div class="flex gap-2 flex-wrap">
-                                        <span v-for="p in (advancedAnalytics?.topPairs || [])" :key="'pair-'+p.pair"
-                                            class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                            {{ p.pair }} пара · {{ p.count }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="smart-day" v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-amber-100 dark:border-gray-700 mb-4 scroll-mt-4">
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="font-bold text-amber-700 dark:text-amber-300">Мій день</span>
-                                <span class="text-2xl font-black">{{ smartDayInsights.score }}/100</span>
-                            </div>
-                            <div class="text-xs text-gray-500">Вікна: {{ smartDayInsights.windows }} · Пізні: {{ smartDayInsights.latePairs }} · Переходи: {{ smartDayInsights.moves }}</div>
-                            <div v-if="smartHeatmap.length" class="overflow-x-auto mt-3">
-                                <div class="grid grid-cols-8 gap-1 min-w-[520px] text-xs text-center">
-                                    <div class="font-bold">Дата</div><div v-for="pair in 7" :key="'hh'+pair" class="font-bold">{{ pair }}</div>
-                                    <template v-for="day in smartHeatmap" :key="day.date">
-                                        <div class="font-bold py-1">{{ day.dateDmy }}</div>
-                                        <div v-for="(count, pairIndex) in day.pairs" :key="day.date + pairIndex" class="rounded py-1" :class="count ? (count > 1 ? 'bg-rose-200 dark:bg-rose-900/40' : 'bg-emerald-200 dark:bg-emerald-900/40') : 'bg-gray-100 dark:bg-gray-700'">{{ count }}</div>
-                                    </template>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                                <select v-model="smartSimulationIndex" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-xs md:col-span-2">
-                                    <option value="">What-if: оберіть пару</option>
-                                    <option v-for="(lesson, index) in smartLessonOptions" :key="index" :value="String(index)">{{ lesson.dateDmy }} · {{ lesson.pair }} пара · {{ lesson.discipline }}</option>
-                                </select>
-                                <select v-model.number="smartSimulationDelta" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-xs">
-                                    <option :value="-1">−1 пара</option><option :value="1">+1 пара</option>
-                                </select>
-                            </div>
-                            <div v-if="smartSimulationResult" class="text-xs mt-2 font-bold" :class="smartSimulationResult.delta >= 0 ? 'text-emerald-600' : 'text-rose-600'">
-                                {{ smartSimulationResult.before }} → {{ smartSimulationResult.after }} ({{ smartSimulationResult.delta >= 0 ? '+' : '' }}{{ smartSimulationResult.delta }})
                             </div>
                         </div>
 
@@ -1609,6 +1286,336 @@
                         </div>
                     </div>
 
+                    <section v-show="mobileView === 'expanded' && mode !== 'occupancy'" class="schedule-details" aria-label="Аналітика та інструменти">
+                        <!-- Statistics Block -->
+                        <div v-if="activeEntities.length > 0"
+                            class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow mb-6 transition-colors overflow-hidden">
+
+                            <!-- Header & Auto-Refresh Indicator -->
+                            <div
+                                class="px-4 py-3 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-750">
+                                <h3 class="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                    📊 Аналітика
+                                </h3>
+                                <div v-if="autoRefreshEnabled && lastRefreshTime"
+                                    class="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                                    <span class="animate-pulse">●</span> Оновлено: {{ lastRefreshTime }}
+                                </div>
+                            </div>
+
+                            <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <!-- Key Metrics -->
+                                <div class="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{
+                                        scheduleStats.totalPairs }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Пар
+                                    </div>
+                                </div>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{
+                                        scheduleStats.totalHours }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Годин
+                                    </div>
+                                </div>
+                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{
+                                        scheduleStats.avgPairsPerDay }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Пар /
+                                        День
+                                    </div>
+                                </div>
+                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{
+                                        scheduleStats.totalFreeWindows }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Вікон
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="px-4 pb-4 grid md:grid-cols-2 gap-6">
+                                <!-- Type Distribution -->
+                                <div>
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">За типами</h4>
+                                    <div class="space-y-2">
+                                        <div v-for="type in scheduleStats.typeDistribution" :key="type.name"
+                                            class="flex items-center text-sm">
+                                            <div class="w-8 text-xl text-center">{{ getLessonTypeIcon(type.name) }}
+                                            </div>
+                                            <div class="flex-1">
+                                                <div class="flex justify-between mb-1">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{{
+                                                        type.name
+                                                        }}</span>
+                                                    <span class="text-gray-500 dark:text-gray-400 text-xs">{{ type.count
+                                                        }}
+                                                        ({{ type.percent }}%)</span>
+                                                </div>
+                                                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                                    <div class="h-1.5 rounded-full transition-all duration-1000"
+                                                        :class="getLessonTypeClass(type.name).replace('lesson-type-', 'bg-').replace('default', 'gray-400')"
+                                                        :style="{ width: type.percent + '%' }"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Top Subjects -->
+                                <div>
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">Топ дисциплін</h4>
+                                    <div class="space-y-3">
+                                        <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
+                                            <div class="flex justify-between text-xs mb-1">
+                                                <span class="truncate pr-2 font-medium text-gray-700 dark:text-gray-300"
+                                                    :title="subj.name">{{ subj.name }}</span>
+                                                <span class="text-gray-500 dark:text-gray-400">{{ subj.count }}</span>
+                                            </div>
+                                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                                <div class="bg-amber-500 dark:bg-amber-400 h-1.5 rounded-full transition-all duration-1000"
+                                                    :style="{ width: subj.percent + '%' }"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- Global Controls (Discipline Filter) -->
+                        <div v-if="activeEntities.length > 0"
+                            class="mobile-expanded-only bg-white dark:bg-gray-800 p-4 rounded-xl shadow transition-colors">
+                            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div class="font-bold text-gray-700 dark:text-gray-200">Фільтр (Предмети, Викладачі):
+                                </div>
+                                <div class="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+                                    <button @click="selectedDisciplines = []"
+                                        :disabled="selectedDisciplines.length === 0"
+                                        :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
+                                        Скинути фільтр
+                                    </button>
+                                    <button @click="clearAll"
+                                        class="text-xs text-gray-400 hover:text-red-600 font-medium underline">
+                                        Очистити все
+                                    </button>
+                                    <button @click="showChangeHistoryModal = true"
+                                        class="text-xs bg-sky-100 text-sky-700 hover:bg-sky-200 font-bold px-2 py-1 rounded transition">
+                                        Історія змін ({{ (scheduleChangeLog || []).length }})
+                                    </button>
+                                    <button v-if="activeEntities.length > 1" @click="findCommonFreeSlots"
+                                        class="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold px-2 py-1 rounded transition">
+                                        🔍 Знайти вікна
+                                    </button>
+                                    <button @click="openFreeRoomsNow"
+                                        class="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-bold px-2 py-1 rounded transition">
+                                        🟢 Вільні аудиторії зараз
+                                    </button>
+                                    <button @click="shareFavoritesSet"
+                                        class="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold px-2 py-1 rounded transition">
+                                        🔗 Поділитися обраним
+                                    </button>
+                                    <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())"
+                                        class="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1 rounded transition">
+                                        📆 Додати в календар
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mb-3">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">Формат пар:</span>
+                                <button @click="setDeliveryMode && setDeliveryMode('')" :aria-pressed="deliveryModeFilter === ''"
+                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === '' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Усі</button>
+                                <button @click="setDeliveryMode && setDeliveryMode('offline')" :aria-pressed="deliveryModeFilter === 'offline'"
+                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'offline' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки офлайн</button>
+                                <button @click="setDeliveryMode && setDeliveryMode('online')" :aria-pressed="deliveryModeFilter === 'online'"
+                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'online' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки онлайн</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <!-- "All" Chip -->
+                                <button @click="selectedDisciplines = []" :class="['px-3 py-1 rounded-full text-sm border transition', 
+                                    selectedDisciplines.length === 0 
+                                    ? 'bg-amber-600 text-white border-amber-600 font-bold shadow-md' 
+                                    : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200']">
+                                    Всі предмети
+                                </button>
+
+                                <!-- Discipline Chips -->
+                                <button v-for="disc in availableDisciplines.filter(item => !hiddenDisciplines.includes(item))" :key="disc" @click="toggleDiscipline(disc)"
+                                    :class="['px-3 py-1 rounded-full text-sm border transition text-left', 
+                                    selectedDisciplines.includes(disc) 
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300 font-semibold shadow-sm ring-1 ring-amber-300' 
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50']">
+                                    {{ disc }}
+                                </button>
+                            </div>
+
+                            <div v-if="availableSubjects.length > 0" class="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Приховати непотрібні предмети</span>
+                                    <button v-if="hiddenDisciplines.length" @click="restoreAllDisciplines"
+                                        class="text-xs font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-300">
+                                        Відновити всі
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button v-for="disc in availableSubjects.filter(item => !hiddenDisciplines.includes(item))"
+                                        :key="`hide-${disc}`" @click="hideDiscipline(disc)"
+                                        class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-left text-xs text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                                        :aria-label="`Приховати предмет ${disc}`">
+                                        🙈 {{ disc }}
+                                    </button>
+                                </div>
+                                <div v-if="hiddenDisciplines.length" class="mt-3 rounded-lg bg-gray-50 p-2 dark:bg-gray-700/60">
+                                    <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Приховані</div>
+                                    <button v-for="disc in hiddenDisciplines" :key="`restore-${disc}`"
+                                        @click="restoreDiscipline(disc)"
+                                        class="mr-2 mt-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-gray-800 dark:text-amber-300"
+                                        :aria-label="`Повернути предмет ${disc}`">
+                                        ↩ {{ disc }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <section id="teacher-calendar" v-if="mode === 'teacher' && activeEntities.length > 0"
+                            class="mobile-expanded-only rounded-xl border border-indigo-100 bg-white p-4 shadow dark:border-indigo-900 dark:bg-gray-800">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Персональний календар</div>
+                                    <h2 class="text-xl font-black text-gray-900 dark:text-gray-100">Заняття викладача</h2>
+                                </div>
+                                <button @click="printTeacherSchedule"
+                                    class="min-h-10 rounded-lg bg-gray-800 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:bg-indigo-600 dark:hover:bg-indigo-700">
+                                    🖨️ Друк тижня
+                                </button>
+                            </div>
+
+                            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                                <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
+                                    <h3 class="font-bold text-indigo-900 dark:text-indigo-200">Сьогодні</h3>
+                                    <div v-if="teacherTodayLessons.length" class="mt-2 space-y-2">
+                                        <div v-for="(lesson, index) in teacherTodayLessons" :key="`today-${index}`"
+                                            class="rounded-lg border border-indigo-100 bg-white p-3 dark:border-indigo-800 dark:bg-gray-800">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="font-bold text-gray-900 dark:text-gray-100">{{ lesson.discipline }}</div>
+                                                <span class="shrink-0 text-sm font-bold text-indigo-700 dark:text-indigo-300">{{ lesson.start }}–{{ lesson.end }}</span>
+                                            </div>
+                                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ lesson.group || 'Групу не вказано' }} · 📍 {{ lesson.cabinet || '—' }}</div>
+                                            <a v-if="getGlobalLink(lesson, 'onlineUrl')" :href="getGlobalLink(lesson, 'onlineUrl')"
+                                                target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex rounded bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">📹 Онлайн</a>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">На сьогодні занять немає.</p>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
+                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Групи викладача</h3>
+                                        <div v-if="teacherGroups.length" class="mt-2 flex flex-wrap gap-2">
+                                            <span v-for="group in teacherGroups" :key="group" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">{{ group }}</span>
+                                        </div>
+                                        <p v-else class="mt-2 text-sm text-gray-400">Групи не знайдено.</p>
+                                    </div>
+                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
+                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Вікна між парами</h3>
+                                        <div v-if="teacherFreeWindows.length" class="mt-2 space-y-2 text-sm">
+                                            <div v-for="day in teacherFreeWindows" :key="day.date">
+                                                <span class="font-semibold">{{ day.dayName }}, {{ day.date }}:</span>
+                                                {{ day.missing.map(item => `${item.pair} пара`).join(', ') }}
+                                            </div>
+                                        </div>
+                                        <p v-else class="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Вікон у вибраному періоді немає.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+
+                        <!-- Conflicts & Analytics -->
+                        <div v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="mobile-expanded-only grid lg:grid-cols-2 gap-4 mb-4">
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-red-100 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="font-bold text-red-700 dark:text-red-300">Конфлікти розкладу</h4>
+                                    <span class="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-full">
+                                        {{ (conflictSlots || []).length }}
+                                    </span>
+                                </div>
+                                <div v-if="(conflictSlots || []).length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+                                    Конфліктів не знайдено.
+                                </div>
+                                <div v-else class="space-y-2 max-h-44 overflow-y-auto">
+                                    <div v-for="(conf, cidx) in (conflictSlots || []).slice(0, 12)" :key="'conf-' + cidx"
+                                        class="bg-red-50 dark:bg-red-900/20 rounded-lg p-2">
+                                        <div class="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
+                                            {{ conf.dayName }}, {{ conf.date }} · {{ conf.time }}
+                                        </div>
+                                        <div class="text-xs text-gray-700 dark:text-gray-300" v-for="(item, iidx) in conf.items" :key="'item-' + iidx">
+                                            {{ item.entityName }}: {{ item.discipline }} ({{ item.cabinet }})
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-indigo-100 dark:border-gray-700">
+                                <h4 class="font-bold text-indigo-700 dark:text-indigo-300 mb-2">Аналітика навантаження</h4>
+                                <div class="grid grid-cols-2 gap-2 text-sm">
+                                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded p-2">
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">Середнє/день</div>
+                                        <div class="font-bold">{{ (advancedAnalytics && advancedAnalytics.avgDaily) || '0.0' }}</div>
+                                    </div>
+                                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded p-2">
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">Найзавантаженіший</div>
+                                        <div class="font-bold text-xs" :title="advancedAnalytics?.busiest?.name">{{ advancedAnalytics?.busiest?.count || 0 }} пар</div>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 truncate" :title="advancedAnalytics?.busiest?.name">
+                                    Пік: {{ advancedAnalytics?.busiest?.name || '—' }}
+                                </div>
+                                <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 truncate" :title="advancedAnalytics?.lightest?.name">
+                                    Найвільніший: {{ advancedAnalytics?.lightest?.name || '—' }}
+                                </div>
+                                <div class="mt-2">
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Найчастіші пари:</div>
+                                    <div class="flex gap-2 flex-wrap">
+                                        <span v-for="p in (advancedAnalytics?.topPairs || [])" :key="'pair-'+p.pair"
+                                            class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                            {{ p.pair }} пара · {{ p.count }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="smart-day" v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-amber-100 dark:border-gray-700 mb-4 scroll-mt-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-amber-700 dark:text-amber-300">Мій день</span>
+                                <span class="text-2xl font-black">{{ smartDayInsights.score }}/100</span>
+                            </div>
+                            <div class="text-xs text-gray-500">Вікна: {{ smartDayInsights.windows }} · Пізні: {{ smartDayInsights.latePairs }} · Переходи: {{ smartDayInsights.moves }}</div>
+                            <div v-if="smartHeatmap.length" class="overflow-x-auto mt-3">
+                                <div class="grid grid-cols-8 gap-1 min-w-[520px] text-xs text-center">
+                                    <div class="font-bold">Дата</div><div v-for="pair in 7" :key="'hh'+pair" class="font-bold">{{ pair }}</div>
+                                    <template v-for="day in smartHeatmap" :key="day.date">
+                                        <div class="font-bold py-1">{{ day.dateDmy }}</div>
+                                        <div v-for="(count, pairIndex) in day.pairs" :key="day.date + pairIndex" class="rounded py-1" :class="count ? (count > 1 ? 'bg-rose-200 dark:bg-rose-900/40' : 'bg-emerald-200 dark:bg-emerald-900/40') : 'bg-gray-100 dark:bg-gray-700'">{{ count }}</div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                <select v-model="smartSimulationIndex" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-xs md:col-span-2">
+                                    <option value="">What-if: оберіть пару</option>
+                                    <option v-for="(lesson, index) in smartLessonOptions" :key="index" :value="String(index)">{{ lesson.dateDmy }} · {{ lesson.pair }} пара · {{ lesson.discipline }}</option>
+                                </select>
+                                <select v-model.number="smartSimulationDelta" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-xs">
+                                    <option :value="-1">−1 пара</option><option :value="1">+1 пара</option>
+                                </select>
+                            </div>
+                            <div v-if="smartSimulationResult" class="text-xs mt-2 font-bold" :class="smartSimulationResult.delta >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+                                {{ smartSimulationResult.before }} → {{ smartSimulationResult.after }} ({{ smartSimulationResult.delta >= 0 ? '+' : '' }}{{ smartSimulationResult.delta }})
+                            </div>
+                        </div>
+
+                    </section>
+
                     <div v-if="!loadingSchedule && ((activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0) || (activeEntities.length === 0 && ['offline', 'api-error', 'invalid-range'].includes(scheduleLoadState)))"
                         class="mx-auto my-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-5 py-6 text-center text-gray-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-gray-200">
                         <template v-if="scheduleHiddenByFilters">
@@ -1676,6 +1683,7 @@
 
         </div> <!-- End of content wrapper -->
 
+      </div> <!-- End of responsive mode -->
     </div> <!-- End of #app -->
 
     <script src="js/utils.js?v=20260410-1"></script>

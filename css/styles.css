@@ -401,8 +401,7 @@
 }
 
 .schedule-day {
-    content-visibility: auto;
-    contain-intrinsic-size: 240px;
+    content-visibility: visible;
 }
 
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
@@ -756,11 +755,28 @@
         padding-inline: 7px;
     }
 
-    .mobile-minimal .week-navigation {
-        display: none !important;
-    }
+    .mobile-minimal .week-navigation .week-nav-label { display: none; }
 
     .mobile-minimal .essential-status {
         margin: 3px 0 0 !important;
     }
+}
+
+/* Schedule is the primary surface on every screen. */
+.mobile-view-switch { display: inline-flex; gap: 4px; }
+.mobile-view-switch button { min-height: 40px; padding: 6px 12px; border-radius: 6px; }
+.mobile-view-switch button.active { color: white; }
+.mobile-minimal .countdown-banner,
+.mobile-minimal #schedule-week { display: none !important; }
+.schedule-details { display: grid; gap: 16px; }
+.countdown-banner { background: var(--academic-accent-soft); color: var(--academic-ink); box-shadow: none; animation: none; }
+.lesson-card > .flex { flex-wrap: wrap; gap: 8px; }
+.lesson-card > .flex > div { min-width: 0; }
+.lesson-card h4 { overflow-wrap: anywhere; }
+.schedule-slot-range { white-space: normal !important; }
+@media (max-width: 1023px) {
+    .mobile-minimal .mobile-expanded-only,
+    .mobile-minimal .mobile-expanded-action,
+    .mobile-minimal .mobile-overview-card { display: none !important; }
+    .app-header > div { flex-wrap: wrap; }
 }

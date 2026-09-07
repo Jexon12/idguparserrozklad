@@ -356,7 +356,7 @@ describe('UI links/buttons regression', () => {
         expect(html).toContain('@click="runToastAction"');
         expect(html).toContain("viewMode === 'table' ? 'md:hidden' : ''");
         expect(js).toContain("label: 'Скасувати'");
-        expect(css).toContain('content-visibility: auto');
+        expect(css).toContain('content-visibility: visible');
         expect(css).toContain('@media (prefers-reduced-motion: reduce)');
         expect(css).toContain(':focus-visible');
     });
