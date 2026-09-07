@@ -110,6 +110,17 @@
         staffLink.className = 'ml-auto px-2 py-1 rounded-lg text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white';
         shell.append(audienceLabel, links, badge, retryButton, staffLink);
         document.body.insertBefore(shell, document.body.firstChild);
+        // Keep the same navigation and freshness state inside the mobile drawer.
+        const mobileHost = document.getElementById('mobile-shell-navigation');
+        if (mobileHost) {
+            const mobileViewport = root.matchMedia('(max-width: 1023px)');
+            const placeNavigation = () => {
+                if (mobileViewport.matches) mobileHost.append(shell);
+                else document.body.insertBefore(shell, document.body.firstChild);
+            };
+            mobileViewport.addEventListener('change', placeNavigation);
+            placeNavigation();
+        }
         renderFreshness(SA.DataFreshness.state);
     });
 

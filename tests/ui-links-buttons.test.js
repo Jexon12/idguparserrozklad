@@ -309,6 +309,20 @@ describe('UI links/buttons regression', () => {
         expect(css).toContain('.schedule-board .lesson-card');
     });
 
+    test('minimal composition keeps navigation and search accessible without duplicate panels', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+        const shell = fs.readFileSync(path.resolve(__dirname, '..', 'js/app-shell.js'), 'utf8');
+        expect(html).toContain('<details class="search-disclosure"');
+        expect(html).toContain("mobileView === 'expanded' || sidebarOpen || activeEntities.length === 0");
+        expect(html).toContain('class="schedule-navigation"');
+        expect((html.match(/@click="shiftWeek\(-1\)"/g) || []).length).toBe(1);
+        expect((html.match(/@click="shiftWeek\(1\)"/g) || []).length).toBe(1);
+        expect(html).toContain("timeSlot.time.split('(')[0].trim()");
+        expect(html).not.toContain('Float Settings Button');
+        expect(shell).toContain('mobileHost.append(shell)');
+        expect(shell).toContain("mobileViewport.addEventListener('change', placeNavigation)");
+    });
+
     test('hidden subjects persist and exports use the filtered schedule', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
         const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');

@@ -766,6 +766,50 @@
 .mobile-view-switch { display: inline-flex; gap: 4px; }
 .mobile-view-switch button { min-height: 40px; padding: 6px 12px; border-radius: 6px; }
 .mobile-view-switch button.active { color: white; }
+
+/* One compact date rail; secondary controls do not compete with lessons. */
+.schedule-navigation { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
+.schedule-navigation .schedule-day-tabs { flex: 1; min-width: 0; margin: 0; border: 0; background: transparent; padding: 0; }
+.schedule-navigation > .week-nav-btn { flex: 0 0 44px; min-height: 44px; }
+.schedule-navigation-empty { flex: 1; min-width: 0; color: var(--academic-muted); font-size: .875rem; }
+.schedule-day-tabs button span { font-size: .875rem; }
+.search-summary { cursor: pointer; font-size: 1rem; font-weight: 600; color: var(--academic-ink); padding: 8px 0; }
+.search-disclosure[open] > .search-summary { margin-bottom: 16px; }
+.search-summary:focus-visible { outline: 2px solid var(--academic-accent); outline-offset: 4px; }
+.sidebar-settings { display: none; }
+.app-sidebar button.bg-green-600,
+.app-sidebar button.bg-green-50,
+.app-sidebar button.bg-yellow-100,
+.app-sidebar button.bg-indigo-100,
+.app-sidebar .secondary-action {
+    background: var(--academic-surface-alt, var(--academic-surface)) !important;
+    color: var(--academic-ink) !important;
+    border: 1px solid var(--academic-rule);
+    border-radius: 6px;
+    min-height: 44px;
+}
+.app-sidebar button.bg-green-600:hover,
+.app-sidebar button.bg-green-50:hover,
+.app-sidebar button.bg-yellow-100:hover,
+.app-sidebar button.bg-indigo-100:hover,
+.app-sidebar .secondary-action:hover { background: var(--academic-accent-soft) !important; }
+.mobile-minimal .week-navigation { display: none !important; }
+.dark .mobile-view-switch button.active,
+.dark .schedule-day-tabs button.active,
+.dark .schedule-day-tabs button.active strong { color: #202832; }
+@media (min-width: 1024px) {
+    .mobile-minimal .schedule-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .mobile-minimal .schedule-main { grid-column: auto; }
+    .mobile-minimal .app-sidebar { padding: 8px 20px; box-shadow: none; }
+    .mobile-minimal .search-disclosure-content { max-width: 620px; padding-bottom: 12px; }
+    .mobile-expanded .search-summary { display: none; }
+}
+@media (max-width: 1023px) {
+    .search-summary { display: none; }
+    .sidebar-settings { display: block; width: 100%; margin-bottom: 16px; }
+    #mobile-shell-navigation nav { padding: 0 0 16px; margin-bottom: 16px; border-bottom: 1px solid var(--academic-rule); }
+    #mobile-shell-navigation nav a { min-height: 44px; display: inline-flex; align-items: center; font-size: .875rem; }
+}
 .mobile-minimal .countdown-banner,
 .mobile-minimal #schedule-week { display: none !important; }
 .schedule-details { display: grid; gap: 16px; }
