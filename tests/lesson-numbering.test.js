@@ -35,12 +35,18 @@ describe('semester lesson numbering', () => {
         expect(model.numberFor({ numberKey: model.key(entity, current) })).toBe(2);
         expect(model.numberFor({ numberKey: model.key(entity, history[3]) })).toBe(1);
         expect(SA.fetchApi.mock.calls[0][1].start).toBe('2026-09-01');
+        const previous = model.historyFor({ numberKey: model.key(entity, current), entityId: entity.id, entityType: entity.type });
+        expect(previous.map(item => item.full_date)).toEqual(['01.09.2026']);
+        expect(model.historyState.value).toBe('ready');
+        expect(model.historyFor({ numberKey: model.key(entity, history[0]), entityId: entity.id, entityType: entity.type })).toEqual([]);
+        expect(model.historyFor({ numberKey: model.key(entity, current), entityId: 'other', entityType: entity.type })).toEqual([]);
     });
     test('does not invent numbers when history fails; manual numbers persist and can be reset', async () => {
         const current = row('14.09.2026');
         const { model, entity } = await setup([current], null);
         const lesson = { numberKey: model.key(entity, current) };
         expect(model.numberFor(lesson)).toBeNull();
+        expect(model.historyState.value).toBe('error');
         window.prompt.mockReturnValue('7');
         model.editNumber(lesson);
         expect(model.numberFor(lesson)).toBe(7);

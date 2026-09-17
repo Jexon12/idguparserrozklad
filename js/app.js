@@ -78,6 +78,16 @@ try {
             // Active entities (multi-entity display)
             const activeEntities = ref([]);
             const lessonNumbering = SA.createLessonNumbering({ ref, watch }, { dateStart, dateEnd, activeEntities });
+            const lessonHistoryDialog = ref(null);
+            const selectedHistoryLesson = ref(null);
+            const previousLessons = computed(() => lessonNumbering.historyFor(selectedHistoryLesson.value));
+            const openLessonHistory = async (lesson, event) => {
+                // Notes, links and number editing retain their own actions.
+                if (event && event.target.closest('button, a, input, select, textarea')) return;
+                selectedHistoryLesson.value = lesson;
+                await nextTick();
+                if (!lessonHistoryDialog.value.open) lessonHistoryDialog.value.showModal();
+            };
 
             // Occupancy
             const occupancyDate = ref(SA.toLocalIsoDate(today));
@@ -346,6 +356,7 @@ try {
                     if (hiddenDisciplines.value.includes(lesson.discipline)) return;
                     const lessonData = {
                         numberKey: lessonNumbering.key({ id: lesson.entityId, type: lesson.entityType }, lesson),
+                        full_date: lesson.full_date,
                         discipline: lesson.discipline,
                         teacher: SA.getLessonTeacher(lesson),
                         cabinet: lesson.cabinet,
@@ -2259,6 +2270,8 @@ try {
                 lessonTypeFilter, lessonTypeOptions,
                 dateStart, dateEnd, activeEntities,
                 numberingStart: lessonNumbering.semesterStart, numberingStatus: lessonNumbering.status,
+                lessonHistoryDialog, selectedHistoryLesson, previousLessons, openLessonHistory,
+                lessonHistoryState: lessonNumbering.historyState,
                 lessonNumber: lessonNumbering.numberFor, editLessonNumber: lessonNumbering.editNumber,
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,

@@ -17,6 +17,8 @@
         const semesterStart = ref(localStorage.getItem('schedule_numbering_start') || defaultStart());
         const numbers = ref({});
         const status = ref('');
+        const historyRows = ref({});
+        const historyState = ref('idle');
         let saved = {};
         try { saved = JSON.parse(localStorage.getItem('schedule_number_overrides') || '{}'); } catch (_) { /* optional preference */ }
         const overrides = ref(saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {});
@@ -26,16 +28,21 @@
         watch(() => [semesterStart.value, refs.dateEnd.value, JSON.stringify(refs.activeEntities.value)], async () => {
             const request = ++generation;
             numbers.value = {};
+            historyRows.value = {};
+            historyState.value = 'idle';
             if (!refs.activeEntities.value.length) { status.value = ''; return; }
             const start = semesterStart.value;
             const end = refs.dateEnd.value;
             const span = (new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000;
             if (!start || !end || !Number.isFinite(span) || span < 0 || span > 366) {
                 status.value = 'Укажіть початок семестру до кінця вибраного періоду (не більше року).';
+                historyState.value = 'error';
                 return;
             }
             status.value = 'Завантажуємо історію для нумерації…';
+            historyState.value = 'loading';
             const result = {};
+            const allHistory = {};
             try {
                 for (const entity of refs.activeEntities.value) {
                     let history = [];
@@ -72,15 +79,31 @@
                         counters.set(group, number);
                         result[key(entity, row)] = number;
                     });
+                    allHistory[JSON.stringify([entity.type, entity.id])] = rows.map(row => ({
+                        ...row, numberKey: key(entity, row), series: series(row),
+                        teacher: SA.getLessonTeacher ? SA.getLessonTeacher({ ...row, entityType: entity.type, entityName: entity.name }) : (row.teacher || row.employee || '')
+                    }));
                 }
                 if (request !== generation) return;
                 numbers.value = result;
+                historyRows.value = allHistory;
+                historyState.value = 'ready';
                 status.value = 'Номери за розкладом від початку семестру; натисніть номер для уточнення.';
             } catch (_) {
-                if (request === generation) status.value = 'Історію не завантажено — автоматичні номери недоступні.';
+                if (request === generation) {
+                    status.value = 'Історію не завантажено — автоматичні номери недоступні.';
+                    historyState.value = 'error';
+                }
             }
         }, { immediate: true });
         const numberFor = lesson => overrides.value[lesson.numberKey] || numbers.value[lesson.numberKey] || null;
+        const historyFor = lesson => {
+            if (!lesson) return [];
+            const rows = historyRows.value[JSON.stringify([lesson.entityType, lesson.entityId])] || [];
+            const index = rows.findIndex(row => row.numberKey === lesson.numberKey);
+            if (index < 0) return [];
+            return rows.slice(0, index).filter(row => row.series === rows[index].series).reverse();
+        };
         const editNumber = lesson => {
             const input = window.prompt('Номер лише цього заняття. Порожнє поле — автоматичний номер.', numberFor(lesson) || '');
             if (input === null) return;
@@ -95,6 +118,6 @@
             overrides.value = next;
             localStorage.setItem('schedule_number_overrides', JSON.stringify(next));
         };
-        return { semesterStart, status, key, numberFor, editNumber };
+        return { semesterStart, status, key, numberFor, editNumber, historyFor, historyState };
     };
 })(window.ScheduleApp);

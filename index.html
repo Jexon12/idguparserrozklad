@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260917-3">
+    <link rel="stylesheet" href="css/styles.css?v=20260917-4">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -229,6 +229,30 @@
 
 
             <!-- Modal: Edit Note -->
+            <dialog ref="lessonHistoryDialog" class="lesson-history-dialog" aria-labelledby="lesson-history-title"
+                @click="($event.target === lessonHistoryDialog) && lessonHistoryDialog.close()">
+                <header class="flex items-center justify-between gap-3 mb-4">
+                    <h2 id="lesson-history-title" class="font-bold text-lg">Попередні заняття</h2>
+                    <button type="button" autofocus class="lesson-number" aria-label="Закрити історію" @click="lessonHistoryDialog.close()">×</button>
+                </header>
+                <template v-if="selectedHistoryLesson">
+                    <p class="font-semibold">{{ selectedHistoryLesson.discipline }}</p>
+                    <p class="text-sm mb-3">{{ selectedHistoryLesson.type }} · {{ selectedHistoryLesson.group || selectedHistoryLesson.entityName }}</p>
+                    <p class="text-sm mb-3">Попередні до {{ selectedHistoryLesson.full_date }} · {{ selectedHistoryLesson.timeStart }}</p>
+                    <p class="text-sm mb-4">За розкладом від {{ numberingStart }}. Скасовані заняття не враховано.</p>
+                    <p v-if="lessonHistoryState === 'loading'" role="status">Завантажуємо попередні заняття…</p>
+                    <p v-else-if="lessonHistoryState !== 'ready'" role="status">{{ numberingStatus || 'Історія ще недоступна.' }}</p>
+                    <ol v-else-if="previousLessons.length" class="lesson-history-list">
+                        <li v-for="previous in previousLessons" :key="previous.numberKey">
+                            <div class="font-semibold">{{ previous.full_date }} · №{{ lessonNumber(previous) }}</div>
+                            <div>{{ previous.study_time_begin }}–{{ previous.study_time_end }} · {{ previous.study_time }}</div>
+                            <div v-if="previous.teacher">{{ previous.teacher }}</div>
+                            <div v-if="previous.cabinet">Аудиторія: {{ previous.cabinet }}</div>
+                        </li>
+                    </ol>
+                    <p v-else>До цього заняття попередніх у вибраному семестрі не знайдено.</p>
+                </template>
+            </dialog>
             <app-modal-shell :open="showNoteModal" title="📝 Нотатка" max-width="max-w-md"
                 header-class="bg-yellow-50 dark:bg-yellow-900/20" @close="showNoteModal = false">
                     <div class="mb-3">
@@ -1124,7 +1148,8 @@
                                                     </div>
                                                 </td>
                                                 <td class="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">
-                                                    <div>{{ lesson.discipline }}</div>
+                                                    <button type="button" class="lesson-history-trigger" @click.stop="openLessonHistory(lesson)"
+                                                        :aria-label="`Попередні заняття: ${lesson.discipline}`">{{ lesson.discipline }}</button>
                                                     <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" compact class="mt-1"></schedule-status-badges>
                                                 </td>
                                                 <td class="px-3 py-2 text-center"><span
@@ -1187,6 +1212,7 @@
                                         <!-- Classes Column -->
                                         <div class="col-span-12 md:col-span-10 grid gap-4">
                                             <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
+                                                @click="openLessonHistory(lesson, $event)"
                                                 class="lesson-card bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg p-3 shadow-sm relative pl-4 border-l-4 transition-all duration-500 text-gray-800 dark:text-gray-200"
                                                 :class="[
                                                 getColorClass(lesson.entityId),
@@ -1221,7 +1247,8 @@
 
                                                         <!-- 1. Discipline + Group -->
                                                         <h4 class="font-bold text-gray-900 text-base mb-1">
-                                                            {{ lesson.discipline }}
+                                                            <button type="button" class="lesson-history-trigger" @click.stop="openLessonHistory(lesson)"
+                                                                :aria-label="`Попередні заняття: ${lesson.discipline}`">{{ lesson.discipline }}</button>
                                                             <span v-if="lesson.group"
                                                                 class="lesson-group mobile-expanded-only text-amber-600 font-normal">
                                                                 ({{ lesson.group }})
@@ -1748,8 +1775,8 @@
             try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
         })();
     </script>
-    <script src="js/lesson-numbering.js?v=20260917-1"></script>
-    <script src="js/app.js?v=20260917-3"></script>
+    <script src="js/lesson-numbering.js?v=20260917-4"></script>
+    <script src="js/app.js?v=20260917-4"></script>
 
     <!-- Service Worker Registration -->
     <script>
