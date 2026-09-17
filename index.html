@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="css/tailwind.generated.css?v=20260902-4" onerror="window.__loadTailwindFallback()">
-    <link rel="stylesheet" href="css/styles.css?v=20260907-6">
+    <link rel="stylesheet" href="css/styles.css?v=20260917-1">
     <link rel="stylesheet" href="css/ui-kit.css?v=20260412-1">
 
     <script>
@@ -1218,7 +1218,7 @@
                                                         <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" compact class="essential-status mb-2"></schedule-status-badges>
 
                                                         <!-- 2. Type Badge -->
-                                                        <div class="mobile-expanded-only mb-1" v-if="lesson.type">
+                                                        <div class="lesson-type mb-1" v-if="lesson.type">
                                                             <span
                                                                 :class="['lesson-type-badge', getLessonTypeClass(lesson.type)]">
                                                                 {{ getLessonTypeIcon(lesson.type) }} {{ lesson.type }}
@@ -1228,7 +1228,7 @@
                                                         <!-- 3. Teacher -->
                                                         <div
                                                             class="lesson-meta text-sm text-gray-700 font-medium flex flex-wrap items-center gap-2">
-                                                            <span v-if="lesson.teacher" class="mobile-expanded-only flex items-center">
+                                                            <span v-if="lesson.teacher" class="lesson-teacher flex items-start">
                                                                 👨‍ <span class="ml-1">{{ lesson.teacher }}</span>
                                                             </span>
                                                             <span v-if="lesson.cabinet"

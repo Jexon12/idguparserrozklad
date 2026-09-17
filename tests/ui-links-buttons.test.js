@@ -4,6 +4,12 @@ const path = require('path');
 const fs = require('fs');
 
 const PORT = 4018;
+test('minimal lesson cards keep teacher and lesson type visible', () => {
+    const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+    expect(html).toContain('class="lesson-type mb-1" v-if="lesson.type"');
+    expect(html).toContain('v-if="lesson.teacher" class="lesson-teacher flex items-start"');
+    expect(html).not.toContain('v-if="lesson.teacher" class="mobile-expanded-only');
+});
 let proc = null;
 
 const PAGES = [
