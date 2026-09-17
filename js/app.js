@@ -345,7 +345,7 @@ try {
                     if (hiddenDisciplines.value.includes(lesson.discipline)) return;
                     const lessonData = {
                         discipline: lesson.discipline,
-                        teacher: SA.stripHtml(lesson.teacher || lesson.employee || ''),
+                        teacher: SA.getLessonTeacher(lesson),
                         cabinet: lesson.cabinet,
                         type: lesson.study_type || '',
                         group: lesson.contingent || lesson.study_group || lesson.groupName || '',

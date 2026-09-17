@@ -15,6 +15,13 @@ function loadUtils() {
 }
 
 describe('utility regressions', () => {
+    test('teacher schedule supplies a missing teacher without treating a group as a teacher', () => {
+        const SA = loadUtils();
+        expect(SA.getLessonTeacher({ entityType: 'Викладач', entityName: 'Абросімов Євгеній' })).toBe('Абросімов Євгеній');
+        expect(SA.getLessonTeacher({ teacher: 'Інший викладач', entityType: 'Викладач', entityName: 'Абросімов' })).toBe('Інший викладач');
+        expect(SA.getLessonTeacher({ teacher: ' ', employee: 'Шевченко' })).toBe('Шевченко');
+        expect(SA.getLessonTeacher({ entityType: 'Група', entityName: '42У' })).toBe('');
+    });
     test('escapeHtml neutralizes markup and attribute delimiters', () => {
         const SA = loadUtils();
         expect(SA.escapeHtml(`<img src=x onerror="alert(1)">'`))

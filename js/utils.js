@@ -125,6 +125,14 @@ window.ScheduleApp = window.ScheduleApp || {};
      * @param {Object} refs - { dateStart, dateEnd, selectedStudyType } (Vue refs)
      * @param {Object} options - { startDate, endDate } overrides
      */
+    SA.getLessonTeacher = (lesson = {}) => {
+        const explicit = [lesson.teacher, lesson.employee, lesson.teacherName]
+            .map((value) => SA.stripHtml(String(value || '')).trim())
+            .find(Boolean);
+        return explicit || (lesson.entityType === 'Викладач'
+            ? SA.stripHtml(String(lesson.entityName || '')).trim() : '');
+    };
+
     SA.buildSchedulePayload = (entity, refs, options = {}) => {
         const startDate = (options.startDate || refs.dateStart.value).split('-').reverse().join('.');
         const endDate = (options.endDate || refs.dateEnd.value).split('-').reverse().join('.');
