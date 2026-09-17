@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-v68';
+const CACHE_NAME = 'schedule-v69';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
     '/css/tailwind.generated.css',
     '/css/styles.css',
     '/js/utils.js',
+    '/js/lesson-numbering.js',
     '/js/app-shell.js',
     '/js/staff-portal.js',
     '/js/schedule-model.js',

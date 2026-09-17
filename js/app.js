@@ -77,6 +77,7 @@ try {
 
             // Active entities (multi-entity display)
             const activeEntities = ref([]);
+            const lessonNumbering = SA.createLessonNumbering({ ref, watch }, { dateStart, dateEnd, activeEntities });
 
             // Occupancy
             const occupancyDate = ref(SA.toLocalIsoDate(today));
@@ -344,6 +345,7 @@ try {
                 merged.forEach(lesson => {
                     if (hiddenDisciplines.value.includes(lesson.discipline)) return;
                     const lessonData = {
+                        numberKey: lessonNumbering.key({ id: lesson.entityId, type: lesson.entityType }, lesson),
                         discipline: lesson.discipline,
                         teacher: SA.getLessonTeacher(lesson),
                         cabinet: lesson.cabinet,
@@ -2256,6 +2258,8 @@ try {
                 selectedStudyType,
                 lessonTypeFilter, lessonTypeOptions,
                 dateStart, dateEnd, activeEntities,
+                numberingStart: lessonNumbering.semesterStart, numberingStatus: lessonNumbering.status,
+                lessonNumber: lessonNumbering.numberFor, editLessonNumber: lessonNumbering.editNumber,
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,
                 groupListQuery, employeeListQuery, filteredGroups, filteredEmployees, advancedFiltersOpen,
