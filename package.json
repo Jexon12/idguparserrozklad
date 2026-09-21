@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "build": "npm run build:css && node scripts/build-assets.js",
+    "build": "npm run build:css && node scripts/build-assets.js && node scripts/build-public.js",
     "test:browser": "playwright test -c playwright.config.cjs",
     "test": "jest --testPathPattern=tests/",
     "test:smoke": "jest tests/smoke-pages.test.js --runInBand",

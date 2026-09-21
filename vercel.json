@@ -1,4 +1,7 @@
 {
+  "framework": null,
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
   "headers": [
     {
       "source": "/index.html",
