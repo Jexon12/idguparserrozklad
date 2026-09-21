@@ -9,6 +9,15 @@ const vendor = path.join(root, 'js/vendor');
 fs.mkdirSync(vendor, { recursive: true });
 fs.copyFileSync(require.resolve('vue/dist/vue.global.prod.js'), path.join(vendor, 'vue.global.prod.js'));
 const assets = new Map();
+const analyticsFile = path.join(path.dirname(require.resolve('@vercel/analytics/package.json')), 'dist/index.mjs');
+const analytics = fs.readFileSync(analyticsFile);
+fs.writeFileSync(path.join(vendor, 'vercel-analytics.mjs'), analytics);
+const analyticsUrl = `/js/vendor/vercel-analytics.mjs?v=${digest(analytics)}`;
+assets.set('js/vendor/vercel-analytics.mjs', analyticsUrl);
+const analyticsEntry = path.join(root, 'js/web-analytics.js');
+const analyticsSource = fs.readFileSync(analyticsEntry, 'utf8');
+fs.writeFileSync(analyticsEntry, analyticsSource.replace(/from '[^']*vendor\/vercel-analytics\.mjs(?:\?[^']*)?'/,
+    `from '${analyticsUrl}'`));
 for (const filename of fs.readdirSync(root).filter(name => name.endsWith('.html'))) {
     const target = path.join(root, filename);
     let html = fs.readFileSync(target, 'utf8');

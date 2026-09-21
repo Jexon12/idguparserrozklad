@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-33d6507046c6';
+const CACHE_NAME = 'schedule-670c1556b7fe';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -81,7 +81,9 @@ const VERSIONED_ASSETS = [
   "/js/session-page.js?v=a8cda74f922c",
   "/js/staff-portal.js?v=1e7e39408c24",
   "/js/utils.js?v=46456b71272e",
-  "/js/vendor/vue.global.prod.js?v=4963101441de"
+  "/js/vendor/vercel-analytics.mjs?v=c3026b63c92a",
+  "/js/vendor/vue.global.prod.js?v=4963101441de",
+  "/js/web-analytics.js?v=b852ccdc0a1d"
 ];
 
 // Network-first only for known same-origin static assets. API responses and

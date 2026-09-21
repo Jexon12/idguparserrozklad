@@ -180,6 +180,20 @@ npm run lint:encoding
 
 ## Деплой (Vercel)
 
+### Web Analytics
+
+У Vercel відкрийте проєкт → Analytics → Enable, потім виконайте новий деплой.
+Підключено `@vercel/analytics` через `inject()` для статичних HTML-сторінок,
+без React/Next.js. `npm run build` копіює SDK локально та версіонує його.
+Збираються лише перегляди сторінок: query-параметри й hash прибираються
+через `beforeSend`, власні події не надсилаються. Локальні HTTP-запуски та
+відвідувачі з Do Not Track не враховуються.
+Після публікації перевірте запит `/_vercel/insights/script.js` та появу відвідування
+в Analytics. Блокувальники реклами можуть блокувати статистику.
+Документація: https://vercel.com/docs/analytics/quickstart
+
+### Публікація
+
 1. Пуш у GitHub.
 2. Імпорт репозиторію у Vercel.
 3. Додати env vars (`ADMIN_PASSWORD` мінімум).
