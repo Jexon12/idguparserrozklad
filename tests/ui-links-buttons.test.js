@@ -4,6 +4,13 @@ const path = require('path');
 const fs = require('fs');
 
 const PORT = 4018;
+test('mobile minimum keeps the daily pair number above its time', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '..', 'css/styles.css'), 'utf8');
+    const rule = css.match(/\.mobile-minimal \.schedule-pair-badge\s*\{([^}]+)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toContain('display: inline-block');
+    expect(rule[1]).not.toContain('display: none');
+});
 test('minimal lesson cards keep teacher and lesson type visible', () => {
     const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
     expect(html).toContain('class="lesson-type mb-1" v-if="lesson.type"');

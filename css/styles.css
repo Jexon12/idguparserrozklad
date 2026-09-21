@@ -208,7 +208,13 @@
     }
 
     .mobile-minimal .schedule-pair-badge {
-        display: none;
+        display: inline-block;
+        max-width: 100%;
+        padding: 3px 5px;
+        font-size: 0.75rem;
+        line-height: 1.3;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 
     .mobile-minimal .schedule-slot-range {
