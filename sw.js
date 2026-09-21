@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-3b46d0b7bea1';
+const CACHE_NAME = 'schedule-33d6507046c6';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -39,7 +39,7 @@ self.addEventListener('install', (event) => {
     );
 });
 self.addEventListener('message', event => {
-    if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+    if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
@@ -57,7 +57,7 @@ const VERSIONED_ASSETS = [
   "/js/admin.js?v=87687c891a18",
   "/js/api.js?v=98d2faac2c8d",
   "/js/app-shell.js?v=b0a972f19457",
-  "/js/app-updates.js?v=6d2c782b2479",
+  "/js/app-updates.js?v=759bcf41962e",
   "/js/app.js?v=225c717ca3e1",
   "/js/builder.js?v=f2c2a3d4e746",
   "/js/components/app-modal-shell.js?v=1d43109ecd59",

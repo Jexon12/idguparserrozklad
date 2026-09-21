@@ -1792,12 +1792,12 @@
     <script src="/js/lesson-numbering.js?v=6b98381091bd"></script>
     <script src="/js/app.js?v=225c717ca3e1"></script>
 
-        <script src="/js/app-updates.js?v=6d2c782b2479"></script>
+        <script src="/js/app-updates.js?v=759bcf41962e"></script>
         <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js?v=20260902-1')
+            navigator.serviceWorker.register('/sw.js?v=20260902-1', { updateViaCache: 'none' })
                         .then(registration => window.ScheduleApp.watchForUpdate(registration))
                     .catch(registrationError => console.log('SW registration failed: ', registrationError));
             });
