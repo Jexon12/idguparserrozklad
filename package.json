@@ -4,6 +4,8 @@
   "description": "",
   "main": "server.js",
   "scripts": {
+    "build": "npm run build:css && node scripts/build-assets.js",
+    "test:browser": "playwright test -c playwright.config.cjs",
     "test": "jest --testPathPattern=tests/",
     "test:smoke": "jest tests/smoke-pages.test.js --runInBand",
     "test:ui": "jest tests/ui-links-buttons.test.js --runInBand",
@@ -22,9 +24,11 @@
     "exceljs": "^4.4.0",
     "ioredis": "^5.9.2",
     "node-fetch": "^2.7.0",
-    "redis": "^5.10.0"
+    "redis": "^5.10.0",
+    "vue": "3.4.21"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "jest": "^29.7.0",
     "tailwindcss": "^3.4.17"
   }

@@ -19,22 +19,29 @@
         const status = ref('');
         const historyRows = ref({});
         const historyState = ref('idle');
+        const entityStates = ref({});
+        const retryTick = ref(0);
+        const intervalCache = new Map();
+        const entityKey = entity => JSON.stringify([entity.type || entity.entityType, entity.id || entity.entityId]);
+        const retry = () => { intervalCache.clear(); retryTick.value += 1; };
         let saved = {};
         try { saved = JSON.parse(localStorage.getItem('schedule_number_overrides') || '{}'); } catch (_) { /* optional preference */ }
         const overrides = ref(saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {});
         const key = (entity, row) => JSON.stringify([semesterStart.value, entity.type, entity.id, occurrence(row)]);
         let generation = 0;
         watch(semesterStart, value => localStorage.setItem('schedule_numbering_start', value));
-        watch(() => [semesterStart.value, refs.dateEnd.value, JSON.stringify(refs.activeEntities.value)], async () => {
+        watch(() => [semesterStart.value, refs.dateEnd.value, JSON.stringify(refs.activeEntities.value.map(({ id, type, name, scheduleData }) => ({ id, type, name, scheduleData }))), retryTick.value], async () => {
             const request = ++generation;
-            numbers.value = {};
-            historyRows.value = {};
             historyState.value = 'idle';
-            if (!refs.activeEntities.value.length) { status.value = ''; return; }
+            if (!refs.activeEntities.value.length) {
+                numbers.value = {}; historyRows.value = {}; entityStates.value = {};
+                status.value = ''; return;
+            }
             const start = semesterStart.value;
             const end = refs.dateEnd.value;
             const span = (new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000;
             if (!start || !end || !Number.isFinite(span) || span < 0 || span > 366) {
+                numbers.value = {}; historyRows.value = {}; entityStates.value = {};
                 status.value = 'Укажіть початок семестру до кінця вибраного періоду (не більше року).';
                 historyState.value = 'error';
                 return;
@@ -43,8 +50,13 @@
             historyState.value = 'loading';
             const result = {};
             const allHistory = {};
+            const states = {};
+            refs.activeEntities.value.forEach(entity => { states[entityKey(entity)] = 'loading'; });
+            entityStates.value = { ...states };
             try {
                 for (const entity of refs.activeEntities.value) {
+                    const id = entityKey(entity);
+                    try {
                     let history = [];
                     if (String(entity.id).startsWith('demo-')) history = entity.scheduleData || [];
                     else {
@@ -54,11 +66,19 @@
                             const last = new Date(`${cursor}T12:00:00`);
                             last.setDate(last.getDate() + 27);
                             const chunkEnd = SA.toLocalIsoDate(last) < end ? SA.toLocalIsoDate(last) : end;
-                            const { action, payload } = SA.buildSchedulePayload(entity, {
-                                dateStart: { value: cursor }, dateEnd: { value: chunkEnd }, selectedStudyType: { value: '' }
-                            });
-                            const rows = await SA.fetchApi(action, payload, { silent: true });
-                            if (!Array.isArray(rows)) throw new Error('History unavailable');
+                            const cacheKey = JSON.stringify([id, cursor, chunkEnd]);
+                            const cached = intervalCache.get(cacheKey);
+                            let rows = cached && Date.now() - cached.at < 15 * 60 * 1000 ? cached.rows : null;
+                            if (!rows) {
+                                const { action, payload } = SA.buildSchedulePayload(entity, {
+                                    dateStart: { value: cursor }, dateEnd: { value: chunkEnd }, selectedStudyType: { value: '' }
+                                });
+                                rows = await SA.fetchApi(action, payload, { silent: true, useCache: retryTick.value === 0 });
+                                if (!Array.isArray(rows)) throw new Error('History unavailable');
+                                if (request !== generation) return;
+                                intervalCache.set(cacheKey, { rows, at: Date.now() });
+                                while (intervalCache.size > 120) intervalCache.delete(intervalCache.keys().next().value);
+                            }
                             history.push(...rows);
                             last.setTime(new Date(`${chunkEnd}T12:00:00`).getTime());
                             last.setDate(last.getDate() + 1);
@@ -83,12 +103,23 @@
                         ...row, numberKey: key(entity, row), series: series(row),
                         teacher: SA.getLessonTeacher ? SA.getLessonTeacher({ ...row, entityType: entity.type, entityName: entity.name }) : (row.teacher || row.employee || '')
                     }));
+                    states[id] = 'ready';
+                    } catch (_) {
+                        states[id] = 'error';
+                    }
+                    if (request !== generation) return;
+                    entityStates.value = { ...states };
+                    // Publish successful groups immediately, without waiting for the others.
+                    numbers.value = { ...numbers.value, ...result };
+                    historyRows.value = { ...historyRows.value, ...allHistory };
                 }
                 if (request !== generation) return;
                 numbers.value = result;
                 historyRows.value = allHistory;
-                historyState.value = 'ready';
-                status.value = 'Номери за розкладом від початку семестру; натисніть номер для уточнення.';
+                historyState.value = Object.values(states).some(state => state === 'error') ? 'error' : 'ready';
+                status.value = historyState.value === 'ready'
+                    ? 'Номери за розкладом від початку семестру; натисніть номер для уточнення.'
+                    : 'Не всі розклади завантажено. Доступні групи показано; повторіть завантаження.';
             } catch (_) {
                 if (request === generation) {
                     status.value = 'Історію не завантажено — автоматичні номери недоступні.';
@@ -97,6 +128,7 @@
             }
         }, { immediate: true });
         const numberFor = lesson => overrides.value[lesson.numberKey] || numbers.value[lesson.numberKey] || null;
+        const stateFor = lesson => lesson ? entityStates.value[entityKey(lesson)] || historyState.value : historyState.value;
         const historyFor = lesson => {
             if (!lesson) return [];
             const rows = historyRows.value[JSON.stringify([lesson.entityType, lesson.entityId])] || [];
@@ -118,6 +150,12 @@
             overrides.value = next;
             localStorage.setItem('schedule_number_overrides', JSON.stringify(next));
         };
-        return { semesterStart, status, key, numberFor, editNumber, historyFor, historyState };
+        const isManual = lesson => Object.prototype.hasOwnProperty.call(overrides.value, lesson.numberKey);
+        const resetNumber = lesson => {
+            const next = { ...overrides.value };
+            delete next[lesson.numberKey]; overrides.value = next;
+            localStorage.setItem('schedule_number_overrides', JSON.stringify(next));
+        };
+        return { semesterStart, status, key, numberFor, editNumber, historyFor, historyState, stateFor, retry, isManual, resetNumber };
     };
 })(window.ScheduleApp);

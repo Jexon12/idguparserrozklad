@@ -256,21 +256,21 @@ describe('API routing', () => {
     });
 
     test('GET /api/monitor returns snapshot', async () => {
-        const res = await makeRequest('/api/monitor');
+        const res = await makeRequest('/api/monitor', { headers: { 'X-Admin-Password': 'admin123' } });
         expect(res.status).toBe(200);
         expect(res.json).not.toBeNull();
         expect(res.json.status).toBe('ok');
     });
 
     test('GET /api/audit returns list', async () => {
-        const res = await makeRequest('/api/audit?limit=10');
+        const res = await makeRequest('/api/audit?limit=10', { headers: { 'X-Admin-Password': 'admin123' } });
         expect(res.status).toBe(200);
         expect(res.json).not.toBeNull();
         expect(Array.isArray(res.json.items)).toBe(true);
     });
 
     test('GET /api/versions returns list', async () => {
-        const res = await makeRequest('/api/versions?scope=session');
+        const res = await makeRequest('/api/versions?scope=session', { headers: { 'X-Admin-Password': 'admin123' } });
         expect(res.status).toBe(200);
         expect(res.json).not.toBeNull();
         expect(Array.isArray(res.json.items)).toBe(true);
@@ -279,6 +279,20 @@ describe('API routing', () => {
     test('OPTIONS /api/times returns 204', async () => {
         const res = await makeRequest('/api/times', { method: 'OPTIONS' });
         expect(res.status).toBe(204);
+    });
+    test('private diagnostics reject unauthenticated readers', async () => {
+        for (const route of ['/api/monitor', '/api/audit', '/api/versions']) {
+            const res = await makeRequest(route);
+            expect(res.status).toBe(403);
+            expect(res.headers['cache-control']).toBe('no-store');
+        }
+    });
+    test('admin preflight rejects untrusted origins', async () => {
+        const denied = await makeRequest('/api/times', { method: 'OPTIONS', headers: { Origin: 'https://untrusted.example' } });
+        expect(denied.status).toBe(403);
+        expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+        const allowed = await makeRequest('/api/times', { method: 'OPTIONS', headers: { Origin: `http://localhost:${PORT}` } });
+        expect(allowed.status).toBe(204);
     });
 
     test('POST /api/occupancy is disabled without a cache token', async () => {

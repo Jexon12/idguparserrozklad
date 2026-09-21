@@ -1,12 +1,16 @@
 (function () {
   const byId = (id) => document.getElementById(id);
   const state = { health: null, monitor: null, versions: null, audit: null, loadedAt: null };
+  let staffPassword = '';
+  let statusGeneration = 0;
 
   async function getJson(url) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+      const headers = { Accept: 'application/json' };
+      if (url !== '/api/health' && staffPassword) headers['X-Admin-Password'] = staffPassword;
+      const response = await fetch(url, { signal: controller.signal, headers });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
     } finally { clearTimeout(timeout); }
@@ -24,13 +28,14 @@
     items.forEach((event) => {
       const item = document.createElement('li');
       item.className = 'rounded-lg bg-gray-50 p-2 dark:bg-gray-700';
-      const at = event.at ? new Date(event.at).toLocaleString('uk-UA') : '—';
+      const at = event.at || event.ts ? new Date(event.at || event.ts).toLocaleString('uk-UA') : '—';
       item.textContent = `${at} · ${event.action || event.type || 'дія'} · ${event.scope || event.term || ''}`;
       list.appendChild(item);
     });
   }
 
   async function loadStatus() {
+    const generation = ++statusGeneration;
     const button = byId('refreshStaffStatus');
     button.disabled = true;
     button.textContent = 'Оновлення…';
@@ -38,6 +43,7 @@
       const results = await Promise.allSettled([
         getJson('/api/health'), getJson('/api/monitor'), getJson('/api/versions?scope=session'), getJson('/api/audit?limit=20')
       ]);
+      if (generation !== statusGeneration) return;
       state.health = results[0].status === 'fulfilled' ? results[0].value : { error: results[0].reason?.message };
       state.monitor = results[1].status === 'fulfilled' ? results[1].value : { error: results[1].reason?.message };
       state.versions = results[2].status === 'fulfilled' ? results[2].value : { error: results[2].reason?.message };
@@ -46,7 +52,8 @@
       byId('staffHealth').textContent = state.health.error ? `Помилка: ${state.health.error}` : 'Працює';
       byId('staffMonitor').textContent = state.monitor.error ? `Недоступний: ${state.monitor.error}` : `${state.monitor.status || 'ok'} · подій: ${state.monitor.lastEventsCount || 0}`;
       byId('staffVersions').textContent = state.versions.error ? `Недоступні: ${state.versions.error}` : String(state.versions.count || 0);
-      renderAudit(Array.isArray(state.audit.items) ? state.audit.items : []);
+      if (state.audit.error) byId('staffAuditLog').textContent = 'Увійдіть як адміністратор для перегляду журналу.';
+      else renderAudit(Array.isArray(state.audit.items) ? state.audit.items : []);
     } finally {
       button.disabled = false;
       button.textContent = 'Оновити';
@@ -86,6 +93,20 @@
   }
 
   byId('refreshStaffStatus')?.addEventListener('click', loadStatus);
+  byId('staffLogin')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    staffPassword = byId('staffPassword').value;
+    byId('staffPassword').value = '';
+    loadStatus();
+  });
+  byId('staffLogout')?.addEventListener('click', () => {
+    statusGeneration += 1;
+    staffPassword = '';
+    state.monitor = state.versions = state.audit = null;
+    byId('staffMonitor').textContent = 'Потрібен вхід';
+    byId('staffVersions').textContent = 'Потрібен вхід';
+    byId('staffAuditLog').replaceChildren();
+  });
   byId('downloadDiagnostics')?.addEventListener('click', downloadDiagnostics);
   loadStatus().catch((error) => {
     byId('staffHealth').textContent = `Помилка: ${error.message}`;

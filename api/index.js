@@ -531,12 +531,31 @@ async function appendMonitorEvent(type, payload) {
 }
 
 const apiHandler = async (req, res) => {
+    const accessPath = new URL(req.url, `http://${req.headers.host}`).pathname.toLowerCase();
+    const protectedRead = ['/api/monitor', '/api/audit', '/api/versions'].includes(accessPath);
+    const restrictedOrigin = protectedRead || ['POST', 'OPTIONS'].includes(req.method);
+    const suppliedOrigin = req.headers.origin;
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
+    const sameOrigin = suppliedOrigin === `https://${req.headers.host}` ||
+        (process.env.NODE_ENV !== 'production' && suppliedOrigin === `http://${req.headers.host}`);
+    if (restrictedOrigin && suppliedOrigin && !sameOrigin && !allowedOrigins.includes(suppliedOrigin)) {
+        res.status(403).json({ error: 'Origin not allowed' });
+        return;
+    }
+    if (protectedRead && req.method !== 'OPTIONS') {
+        res.setHeader('Cache-Control', 'no-store');
+        if (!enforceRateLimit(req, res, 'staff-read', RATE_LIMITS.adminPost)) return;
+        if (!ADMIN_PASSWORD || req.headers['x-admin-password'] !== ADMIN_PASSWORD) {
+            res.status(403).json({ error: 'Administrator authentication required' });
+            return;
+        }
+    }
     if (req.method === 'OPTIONS') {
         const requestOrigin = req.headers.origin || '*';
         res.setHeader('Access-Control-Allow-Origin', requestOrigin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token, X-Admin-Password');
         res.status(204).end();
         return;
     }
@@ -562,7 +581,7 @@ const apiHandler = async (req, res) => {
         pathname === '/api/session'
     );
 
-    if (isAdminPost) {
+    if (isAdminPost || protectedRead) {
         // For admin endpoints, only allow same-origin or specific origins
         if (origin) {
             res.setHeader('Access-Control-Allow-Origin', origin);
@@ -573,7 +592,7 @@ const apiHandler = async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token, X-Admin-Password');
 
     console.log(`[Vercel API] Method: ${req.method} Path: ${pathname}`);
 

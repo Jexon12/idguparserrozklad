@@ -218,8 +218,18 @@ try {
             const activeFavoriteKey = ref(localStorage.getItem('schedule_activeFavoriteKey') || '');
             const viewMode = ref(localStorage.getItem('schedule_viewMode') || 'cards');
             const mobileView = ref(localStorage.getItem('schedule_mobile_view') === 'expanded' ? 'expanded' : 'minimal');
+            if (!localStorage.getItem('schedule_mobile_view')) {
+                mobileView.value = localStorage.getItem('schedule_student_week_focus') !== 'false' ? 'minimal' : 'expanded';
+            }
             const selectedDayDate = ref('');
-            const studentWeekFocus = ref(localStorage.getItem('schedule_student_week_focus') !== 'false');
+            // Compatibility alias: one density setting now controls both old modes.
+            const studentWeekFocus = computed({
+                get: () => mobileView.value === 'minimal',
+                set: enabled => {
+                    mobileView.value = enabled ? 'minimal' : 'expanded';
+                    localStorage.setItem('schedule_mobile_view', mobileView.value);
+                }
+            });
             const deliveryModeFilter = ref(localStorage.getItem('schedule_delivery_mode') || '');
             const datePreset = ref('');
             const sidebarOpen = ref(false);
@@ -821,7 +831,7 @@ try {
             });
 
             const allNotesList = computed(() => {
-                return Object.entries(notesMap.value).map(([key, text]) => ({ key, text }));
+                return Object.entries(notesMap.value).filter(([, text]) => !!text).map(([key, text]) => ({ key, text }));
             });
 
             // --- Actions (delegated to modules) ---
@@ -925,12 +935,13 @@ try {
 
                 if (existingIndex !== -1) {
                     activeEntities.value[existingIndex].scheduleData = data;
+                    activeEntities.value[existingIndex].checkedAt = new Date().toISOString();
                     errorMessage.value = "Розклад оновлено!";
                     setTimeout(() => errorMessage.value = '', 2000);
                     return;
                 }
 
-                activeEntities.value.push({ id, name, type, scheduleData: data });
+                activeEntities.value.push({ id, name, type, scheduleData: data, checkedAt: new Date().toISOString() });
             };
 
             const removeEntity = (index) => {
@@ -999,6 +1010,7 @@ try {
                     const newData = await fetchApi(action, payload, { silent: true, useCache: false });
                     if (!newData) continue;
                     if (!Array.isArray(newData)) continue;
+                    entity.checkedAt = new Date().toISOString();
                     const fingerprint = (items) => JSON.stringify((items || []).map((l) => [
                         l.full_date || '', l.study_time || '', l.study_time_begin || '', l.study_time_end || '',
                         l.discipline || '', l.teacher || l.employee || '', l.group || '',
@@ -1251,6 +1263,27 @@ try {
             };
 
             // --- Persistence ---
+            const exportPersonalData = () => {
+                saveState();
+                try {
+                    const url = URL.createObjectURL(new Blob([JSON.stringify(SA.PersonalData.export(), null, 2)], { type: 'application/json' }));
+                    const link = document.createElement('a'); link.href = url;
+                    link.download = `schedule-backup-${SA.toLocalIsoDate(new Date())}.json`; link.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (_) { showToast('Не вдалося створити резервну копію'); }
+            };
+            const restorePersonalData = async event => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                try {
+                    if (file.size > 5 * 1024 * 1024) throw new Error('Файл завеликий (максимум 5 МБ)');
+                    const backup = JSON.parse(await file.text());
+                    const data = SA.PersonalData.validate(backup);
+                    if (!window.confirm(`Відновити ${Object.keys(data.notes || {}).length} нотаток і ${data.favorites?.length || 0} обраних? Наявні записи буде збережено; збіги замінено з копії. Сторінка перезавантажиться.`)) return;
+                    saveState(); SA.PersonalData.restore(backup); window.location.reload();
+                } catch (error) { showToast(error.message || 'Не вдалося відновити дані'); }
+            };
             const saveState = () => {
                 try {
                     localStorage.setItem(SA.STORAGE_KEY, JSON.stringify({
@@ -1363,6 +1396,8 @@ try {
                     selectedEmployee.value = item.value;
                 }
                 await addEntity();
+                const selected = activeEntities.value.find(entity => String(entity.id) === String(item.value.Key) && entity.type === (item.type === 'group' ? 'Група' : 'Викладач'));
+                if (selected) selected.selectionDetail = item.detail || item.label || '';
             };
 
             const ensureReportModule = async () => {
@@ -1601,6 +1636,7 @@ try {
 
                 // Keyboard shortcuts
                 document.addEventListener('keydown', (e) => {
+                    if (document.querySelector('dialog[open]')) return;
                     if (e.key === 'Escape') {
                         sidebarOpen.value = false;
                         showNoteModal.value = false;
@@ -1608,7 +1644,7 @@ try {
                         showSettingsModal.value = false;
                         return;
                     }
-                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                    if (e.ctrlKey || e.metaKey || e.altKey || e.target.isContentEditable || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
                     if (e.key === 'd' || e.key === 'в') { toggleDarkMode(); }
                     if (e.key === 't' || e.key === 'е') { viewMode.value = viewMode.value === 'cards' ? 'table' : 'cards'; localStorage.setItem('schedule_viewMode', viewMode.value); }
                     if (e.key === 'ArrowLeft') { shiftWeek(-1); }
@@ -2248,7 +2284,9 @@ try {
 
             // Start timer: every second for smooth progress bar when lesson is active
             if (nextLessonTimer) clearInterval(nextLessonTimer);
-            nextLessonTimer = setInterval(updateTimeBasedInfo, 1000);
+            nextLessonTimer = setInterval(() => {
+                if (!document.hidden) updateTimeBasedInfo();
+            }, 15000);
             setTimeout(updateTimeBasedInfo, 300); // Initial check
 
             // #17: cleanup on unmount to prevent timer leaks during HMR / reinit
@@ -2269,9 +2307,11 @@ try {
                 selectedStudyType,
                 lessonTypeFilter, lessonTypeOptions,
                 dateStart, dateEnd, activeEntities,
+                exportPersonalData, restorePersonalData,
                 numberingStart: lessonNumbering.semesterStart, numberingStatus: lessonNumbering.status,
                 lessonHistoryDialog, selectedHistoryLesson, previousLessons, openLessonHistory,
-                lessonHistoryState: lessonNumbering.historyState,
+                lessonHistoryState: computed(() => lessonNumbering.stateFor(selectedHistoryLesson.value)),
+                retryLessonHistory: lessonNumbering.retry, isManualNumber: lessonNumbering.isManual, resetLessonNumber: lessonNumbering.resetNumber,
                 lessonNumber: lessonNumbering.numberFor, editLessonNumber: lessonNumbering.editNumber,
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,

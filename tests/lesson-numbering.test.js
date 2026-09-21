@@ -55,4 +55,18 @@ describe('semester lesson numbering', () => {
         model.editNumber(lesson);
         expect(model.numberFor(lesson)).toBeNull();
     });
+    test('reuses history intervals and isolates failure of an additional group', async () => {
+        const current = row('14.09.2026');
+        const { model, entity, refs, run } = await setup([current]);
+        expect(SA.fetchApi).toHaveBeenCalledTimes(1);
+        await run();
+        expect(SA.fetchApi).toHaveBeenCalledTimes(1);
+        refs.activeEntities.value.push({ id: 'broken', type: 'Група', scheduleData: [] });
+        SA.fetchApi.mockResolvedValue(null);
+        await run();
+        const lesson = { numberKey: model.key(entity, current), entityType: entity.type, entityId: entity.id };
+        expect(model.numberFor(lesson)).toBe(1);
+        expect(model.stateFor(lesson)).toBe('ready');
+        expect(model.stateFor({ entityType: 'Група', entityId: 'broken' })).toBe('error');
+    });
 });
