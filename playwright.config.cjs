@@ -3,7 +3,8 @@ module.exports = defineConfig({
     testDir: './tests/browser',
     testMatch: '**/*.e2e.cjs',
     fullyParallel: false,
-    use: { baseURL: 'http://127.0.0.1:4020', trace: 'retain-on-failure' },
+    use: { baseURL: 'http://127.0.0.1:4020', trace: 'retain-on-failure',
+        ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) },
     webServer: { command: 'node server.js', env: { PORT: '4020' }, url: 'http://127.0.0.1:4020/api/health', reuseExistingServer: false },
     projects: [
         { name: 'phone-360', use: { viewport: { width: 360, height: 800 } } },

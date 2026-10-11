@@ -11,11 +11,11 @@ test('mobile minimum keeps the daily pair number above its time', () => {
     expect(rule[1]).toContain('display: inline-block');
     expect(rule[1]).not.toContain('display: none');
 });
-test('minimal lesson cards keep teacher and lesson type visible', () => {
-    const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
-    expect(html).toContain('class="lesson-type mb-1" v-if="lesson.type"');
-    expect(html).toContain('v-if="lesson.teacher" class="lesson-teacher flex items-start"');
-    expect(html).not.toContain('v-if="lesson.teacher" class="mobile-expanded-only');
+test('campus cards preserve subject, short teacher and type color in minimum', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, '..', 'js/campus-schedule.js'), 'utf8');
+    expect(source).toContain('lesson-history-trigger');
+    expect(source).toContain('lesson-teacher campus-teacher');
+    expect(source).toContain("'kind-'+kind(lesson.type)");
 });
 let proc = null;
 
@@ -272,7 +272,7 @@ describe('UI links/buttons regression', () => {
         expect(html).toContain('id="schedule-week"');
         expect(html).toContain('@click="scrollToTodaySchedule(true)"');
         expect(html).toContain("activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)");
-        expect(html).toContain(':data-schedule-date="dayData.date"');
+        expect(html).toContain('@select="selectedDayDate = $event"');
         expect(js).toContain("localStorage.getItem('schedule_student_week_focus') !== 'false'");
         expect(js).toContain("prefers-reduced-motion: reduce");
         expect(shell).toContain("['Мій тиждень', '/index.html#schedule-week']");
@@ -300,7 +300,7 @@ describe('UI links/buttons regression', () => {
         expect(html).toContain("@click=\"setMobileView('minimal')\"");
         expect(html).toContain("@click=\"setMobileView('expanded')\"");
         expect(html).toContain('mobile-expanded-only');
-        expect(html).toContain('lesson-card');
+        expect(html).toContain('<campus-schedule-board');
         expect(js).toContain("localStorage.getItem('schedule_mobile_view') === 'expanded' ? 'expanded' : 'minimal'");
         expect(js).toContain("localStorage.setItem('schedule_mobile_view', mobileView.value)");
         expect(css).toContain('.mobile-minimal .mobile-expanded-only');
@@ -314,9 +314,10 @@ describe('UI links/buttons regression', () => {
         const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
         const css = fs.readFileSync(path.resolve(__dirname, '..', 'css/styles.css'), 'utf8');
 
-        expect(html).toContain('class="schedule-day-tabs"');
-        expect(html).toContain('@click="scrollToScheduleDate(dayData.date)"');
-        expect(html).toContain('compact class="essential-status mb-2"');
+        const campus = fs.readFileSync(path.resolve(__dirname, '..', 'js/campus-schedule.js'), 'utf8');
+        expect(campus).toContain('class="campus-days"');
+        expect(campus).toContain("$emit('select',day.date)");
+        expect(campus).toContain('<schedule-status-badges');
         expect(js).toContain('const scrollToScheduleDate = async (date) =>');
         expect(js).toContain('element.offsetParent !== null');
         expect(css).toContain('--academic-accent');
@@ -328,10 +329,10 @@ describe('UI links/buttons regression', () => {
         const shell = fs.readFileSync(path.resolve(__dirname, '..', 'js/app-shell.js'), 'utf8');
         expect(html).toContain('<details class="search-disclosure"');
         expect(html).toContain("mobileView === 'expanded' || sidebarOpen || activeEntities.length === 0");
-        expect(html).toContain('class="schedule-navigation"');
+        expect(html).toContain('class="schedule-navigation campus-navigation"');
         expect((html.match(/@click="shiftWeek\(-1\)"/g) || []).length).toBe(1);
         expect((html.match(/@click="shiftWeek\(1\)"/g) || []).length).toBe(1);
-        expect(html).toContain("timeSlot.time.split('(')[0].trim()");
+        expect(html).toContain(':selected-date="selectedDayDate"');
         expect(html).not.toContain('Float Settings Button');
         expect(shell).toContain('mobileHost.append(shell)');
         expect(shell).toContain("mobileViewport.addEventListener('change', placeNavigation)");
@@ -376,13 +377,15 @@ describe('UI links/buttons regression', () => {
         expect(js).toContain('useCache: false');
     });
 
-    test('destructive personal actions offer undo and mobile table falls back to cards', () => {
+    test('destructive personal actions offer undo and week grid stays available on mobile', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
         const js = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
         const css = fs.readFileSync(path.resolve(__dirname, '..', 'css/styles.css'), 'utf8');
         expect(html).toContain('toastActionLabel');
         expect(html).toContain('@click="runToastAction"');
-        expect(html).toContain("viewMode === 'table' ? 'md:hidden' : ''");
+        expect(html).toContain(':view="viewMode"');
+        const campusCss = fs.readFileSync(path.resolve(__dirname, '..', 'css/campus.css'), 'utf8');
+        expect(campusCss).toContain('.campus-week-wrap{overflow-x:auto');
         expect(js).toContain("label: 'Скасувати'");
         expect(css).toContain('content-visibility: visible');
         expect(css).toContain('@media (prefers-reduced-motion: reduce)');
@@ -413,7 +416,9 @@ describe('UI links/buttons regression', () => {
         const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
         const app = fs.readFileSync(path.resolve(__dirname, '..', 'js/app.js'), 'utf8');
         expect((html.match(/<app-modal-shell/g) || []).length).toBeGreaterThanOrEqual(2);
-        expect((html.match(/<schedule-status-badges/g) || []).length).toBeGreaterThanOrEqual(2);
+        expect(html).toContain('<campus-schedule-board');
+        const campus = fs.readFileSync(path.resolve(__dirname, '..', 'js/campus-schedule.js'), 'utf8');
+        expect(campus).toContain('<schedule-status-badges');
         expect(app).toContain("app.component('AppModalShell'");
         expect(app).toContain("app.component('ScheduleStatusBadges'");
     });

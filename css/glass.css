@@ -1,0 +1,140 @@
+/* Schedule-only presentation layer. No data, navigation or visibility rules
+   for functional controls are changed by this theme. */
+body.glass-schedule {
+    --academic-bg: #f5f5f7;
+    --academic-surface: #ffffff;
+    --academic-surface-muted: #efeff2;
+    --academic-ink: #1d1d1f;
+    --academic-muted: #626269;
+    --academic-rule: #dedee3;
+    --academic-accent: #303033;
+    --academic-accent-strong: #303033;
+    --academic-accent-soft: #ebebee;
+    --academic-shadow: 0 8px 32px #20202809;
+    --glass-chrome: #ffffffdc;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+.dark body.glass-schedule, body.glass-schedule.dark {
+    --academic-bg: #141416;
+    --academic-surface: #222225;
+    --academic-surface-muted: #303034;
+    --academic-ink: #f3f3f5;
+    --academic-muted: #b9b9c0;
+    --academic-rule: #3d3d43;
+    --academic-accent: #e5e5ea;
+    --academic-accent-strong: #e5e5ea;
+    --academic-accent-soft: #333337;
+    --academic-shadow: 0 8px 32px #00000020;
+    --glass-chrome: #222225e8;
+}
+.glass-schedule .app-content { max-width: 1280px; }
+.glass-schedule .app-header {
+    border-radius: 26px;
+    background: var(--glass-chrome);
+    border-color: var(--academic-surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: var(--academic-shadow);
+    margin-bottom: 22px;
+}
+.glass-schedule .app-title,
+.glass-schedule .schedule-board .day-header-sticky h3 {
+    font-family: inherit;
+    font-weight: 650;
+    letter-spacing: -.025em;
+}
+.glass-schedule .app-title { font-size: 1.65rem !important; }
+.glass-schedule .app-header > div > button,
+.glass-schedule .app-header > div > a { border-radius: 20px !important; }
+.glass-schedule .app-header > p { font-size: .8125rem; }
+.glass-schedule .mobile-view-switch {
+    padding: 4px;
+    border-radius: 24px;
+    background: var(--academic-surface-muted);
+}
+.glass-schedule .mobile-view-switch button { border-radius: 20px; }
+.glass-schedule .mobile-view-switch button.active {
+    background: var(--academic-surface) !important;
+    color: var(--academic-ink) !important;
+    box-shadow: 0 2px 6px #00000012;
+}
+.glass-schedule .app-sidebar { border-radius: 20px !important; }
+.glass-schedule .schedule-board {
+    border-radius: 24px !important;
+    border-color: var(--academic-surface);
+    box-shadow: var(--academic-shadow) !important;
+}
+.glass-schedule .schedule-board .day-header-sticky {
+    background: var(--academic-surface-muted) !important;
+    padding: 16px 22px;
+}
+.glass-schedule .schedule-board .schedule-slot { padding: 20px 22px; }
+.glass-schedule .schedule-board .schedule-slot:hover { background: transparent !important; }
+.glass-schedule .schedule-board .lesson-card {
+    border-radius: 0 !important;
+    border-left-width: 3px;
+    padding: 4px 12px;
+}
+.glass-schedule .schedule-board .lesson-card h4 { font-weight: 600; line-height: 1.45; }
+.glass-schedule .schedule-board .lesson-meta { font-weight: 400; }
+.glass-schedule .schedule-board .lesson-meta > span { color: var(--academic-muted); }
+.glass-schedule .schedule-pair-badge { border-radius: 7px; }
+.glass-schedule .schedule-day-tabs { border-radius: 22px; }
+.glass-schedule .schedule-day-tabs button { border-radius: 18px; min-height: 44px; }
+.glass-schedule .schedule-day-tabs button.active,
+.glass-schedule .schedule-day-tabs button.active strong {
+    background: var(--academic-accent);
+    color: var(--academic-surface);
+}
+.glass-schedule .active-schedules > div {
+    border-color: var(--academic-rule);
+    color: var(--academic-ink);
+    background: var(--academic-surface);
+    box-shadow: none;
+    border-radius: 16px;
+}
+.glass-schedule .lesson-history-dialog { border-radius: 24px; }
+.glass-schedule .lesson-history-dialog::backdrop { backdrop-filter: blur(5px); }
+.glass-schedule .week-nav-btn { border-radius: 18px; }
+@media (max-width: 767px) {
+    .glass-schedule .app-content { padding: 10px 12px 24px; }
+    .glass-schedule .app-header { border-radius: 22px; padding: 8px 10px; margin-bottom: 12px; }
+    .glass-schedule .app-title { font-size: 1.125rem !important; }
+    .glass-schedule .mobile-title-icon { display: none; }
+    .glass-schedule .active-schedules { margin-bottom: 8px; }
+    .glass-schedule .schedule-navigation { margin-bottom: 10px; }
+    .glass-schedule .schedule-day-tabs button { padding: 5px 8px; }
+    .glass-schedule .schedule-board { border-radius: 22px !important; }
+    .glass-schedule .schedule-board .day-header-sticky { padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
+    .glass-schedule .schedule-board .day-header-sticky h3 { font-size: .9375rem; }
+    .glass-schedule .schedule-board .schedule-slot {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px;
+    }
+    .glass-schedule .schedule-board .schedule-slot-time {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin: 0;
+        width: 100%;
+    }
+    .glass-schedule .schedule-board .schedule-pair-badge { order: 2; font-size: .75rem; padding: 3px 8px; }
+    .glass-schedule .schedule-board .schedule-slot-range { order: 1; font-size: .8125rem; line-height: 1.4; }
+    .glass-schedule .schedule-board .schedule-slot > .col-span-12:last-child { width: 100%; min-width: 0; gap: 14px; }
+    .glass-schedule .schedule-board .lesson-card { padding: 2px 0 2px 10px; }
+    .glass-schedule .schedule-board .lesson-card h4 { font-size: .9375rem; line-height: 1.45; }
+    .glass-schedule .lesson-type-badge { font-size: .75rem; }
+    .glass-schedule .lesson-meta { font-size: .8125rem; line-height: 1.4; }
+    .glass-schedule .lesson-teacher { flex-basis: 100%; overflow-wrap: anywhere; }
+    .glass-schedule .lesson-number { min-height: 44px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .glass-schedule .app-header { background: var(--academic-surface); backdrop-filter: none; }
+    .glass-schedule .lesson-history-dialog::backdrop { backdrop-filter: none; }
+}

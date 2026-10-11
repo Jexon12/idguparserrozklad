@@ -1,0 +1,178 @@
+/* Apple-inspired web study, not Apple's native Liquid Glass implementation. */
+body[data-style="apple"] {
+  --bg: #f5f5f7;
+  --surface: #fff;
+  --ink: #1d1d1f;
+  --muted: #636367;
+  --line: #dedee3;
+  --accent: #28282b;
+  --soft: #ededf0;
+  --glass: #ffffffc9;
+  --glass-line: #ffffffed;
+  --shadow: #22222a0b;
+  background: radial-gradient(ellipse at 95% 20%, #e9e4dd70, transparent 45%), var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+body[data-style="apple"].dark {
+  --bg: #111113;
+  --surface: #222225;
+  --ink: #f5f5f7;
+  --muted: #b4b4ba;
+  --line: #3b3b40;
+  --accent: #f0f0f3;
+  --soft: #323236;
+  --glass: #28282bdb;
+  --glass-line: #ffffff20;
+  --shadow: #00000030;
+  background: radial-gradient(ellipse at 95% 20%, #35312a50, transparent 45%), var(--bg);
+}
+body[data-style="apple"] .preview-bar { background: transparent; color: var(--muted); padding: 12px; font-size: 11px; }
+body[data-style="apple"] .preview-bar [aria-current] { color: var(--ink); }
+body[data-style="apple"] .shell { max-width: 1210px; }
+body[data-style="apple"] .topbar { position: sticky; top: 12px; z-index: 3; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2); padding: 12px 20px; border-radius: 24px; box-shadow: 0 8px 28px var(--shadow), inset 0 1px 0 var(--glass-line); }
+body[data-style="apple"] .brand { font-size: 19px; letter-spacing: -.6px; }
+body[data-style="apple"] .brand .eyebrow { font-size: 10px; color: var(--muted); }
+body[data-style="apple"] .logo { background: linear-gradient(140deg, #626266, #252529); color: #fff; border: 1px solid #ffffff40; box-shadow: inset 0 2px 3px #ffffff45, 0 3px 7px #00000018; border-radius: 11px; }
+body[data-style="apple"] button:not(.subject):not(.day) { border-radius: 24px; }
+body[data-style="apple"] .top-actions button { background: var(--glass); border-color: var(--glass-line); box-shadow: 0 2px 6px var(--shadow); font-size: 13px; }
+body[data-style="apple"] .heading { padding: 49px 8px 38px; }
+body[data-style="apple"] .heading .eyebrow { font-size: 10px; letter-spacing: 2px; color: var(--muted); }
+body[data-style="apple"] h1 { font-size: clamp(32px, 4vw, 48px); font-weight: 650; line-height: 1.09; letter-spacing: -2px; margin: 13px 0 18px; }
+body[data-style="apple"] h1 span { color: var(--muted); }
+body[data-style="apple"] .heading p { font-size: 13px; }
+body[data-style="apple"] .updated { margin-bottom: 3px; }
+body[data-style="apple"] .updated:before { display: none; }
+body[data-style="apple"] .workspace { grid-template-columns: 224px minmax(0,1fr); gap: 30px; align-items: start; }
+body[data-style="apple"] .sidebar { padding: 8px 8px 24px; }
+body[data-style="apple"] .person { background: transparent; border: 0; border-radius: 14px; padding: 14px 12px; }
+body[data-style="apple"] .person:nth-child(2) { background: var(--surface); box-shadow: 0 4px 16px var(--shadow); }
+body[data-style="apple"] .side-title { padding-left: 12px; letter-spacing: 1.2px; font-size: 10px; }
+body[data-style="apple"] .sidebar-note { padding: 0 12px; }
+body[data-style="apple"] .controls { padding: 0 5px; }
+body[data-style="apple"] .segment { border-radius: 25px; background: var(--soft); padding: 4px; }
+body[data-style="apple"] .segment button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 2px 5px #00000012; }
+body[data-style="apple"] .days { padding: 7px; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 23px; box-shadow: 0 5px 20px var(--shadow); }
+body[data-style="apple"] .day { border-radius: 17px; gap: 3px; }
+body[data-style="apple"] .day[aria-pressed="true"] { box-shadow: 0 4px 9px #00000018; }
+body[data-style="apple"] .day small { font-size: 10px; }
+body[data-style="apple"] .date-line { margin: 27px 5px 18px; }
+body[data-style="apple"] .slot { grid-template-columns: 68px minmax(0,1fr); gap: 14px; margin-bottom: 12px; }
+body[data-style="apple"] .lesson { padding: 20px 23px; border: 1px solid var(--glass-line); border-radius: 22px; box-shadow: 0 4px 18px var(--shadow); }
+body[data-style="apple"] .time { font-size: 15px; padding-top: 18px; }
+body[data-style="apple"] .time .pair { color: var(--muted); }
+body[data-style="apple"] .subject { font-weight: 600; font-size: 16px; letter-spacing: -.35px; }
+body[data-style="apple"] .badge { border-radius: 7px; font-size: 10px; }
+body[data-style="apple"] .metadata { font-size: 12px; }
+body[data-style="apple"] .room { background: var(--soft); border-radius: 6px; padding: 2px 7px; }
+body[data-style="apple"] dialog { border-radius: 28px; box-shadow: 0 25px 100px #00000030; }
+body[data-style="apple"] dialog::backdrop { background: #11111455; backdrop-filter: blur(7px); }
+body[data-style="apple"] .footer { border: 0; }
+@media(max-width:760px) {
+  body[data-style="apple"] .shell { padding: 0 12px 25px; }
+  body[data-style="apple"] .topbar { padding: 10px 12px; gap: 10px; border-radius: 22px; top: 8px; }
+  body[data-style="apple"] .brand { gap: 8px; font-size: 17px; }
+  body[data-style="apple"] .brand .eyebrow { display: none; }
+  body[data-style="apple"] .heading { padding: 32px 6px 27px; }
+  body[data-style="apple"] h1 { font-size: 32px; letter-spacing: -1.3px; }
+  body[data-style="apple"] .heading p { max-width: 270px; font-size: 12px; }
+  body[data-style="apple"] .workspace { display: block; }
+  body[data-style="apple"] .week-label { font-size: 12px; }
+  body[data-style="apple"] .segment button { font-size: 12px; padding: 7px 10px; }
+  body[data-style="apple"] .days { gap: 2px; padding: 5px; border-radius: 20px; }
+  body[data-style="apple"] .day { border-radius: 15px; }
+  body[data-style="apple"] .slot { grid-template-columns: 49px minmax(0,1fr); gap: 8px; }
+  body[data-style="apple"] .lesson { padding: 15px; border-radius: 19px; }
+  body[data-style="apple"] .subject { font-size: 15px; }
+  body[data-style="apple"] .time { font-size: 13px; }
+  body[data-style="apple"] .time small { font-size: 11px; }
+  body[data-style="apple"] .metadata { justify-items: start; }
+}
+@media(prefers-reduced-transparency:reduce) {
+  body[data-style="apple"] .topbar, body[data-style="apple"] .days { background: var(--surface); backdrop-filter: none; }
+}
+
+#density-menu { display: none; }
+/* Calendar-first revision: a single agenda surface and a date rail. */
+body[data-style="apple"] { background: radial-gradient(ellipse at 0 45%, #dedbd580, transparent 55%), var(--bg); }
+body[data-style="apple"].dark { background: radial-gradient(ellipse at 0 45%, #39363080, transparent 55%), var(--bg); }
+body[data-style="apple"] .shell { max-width: 1250px; padding-top: 10px; }
+body[data-style="apple"] .topbar { border-radius: 100px; margin: 0 auto 38px; }
+body[data-style="apple"] .workspace { grid-template-columns: 250px minmax(0,1fr); gap: 45px; }
+body[data-style="apple"] .sidebar { padding: 0 14px; }
+.calendar-panel { padding: 22px 12px 30px; margin-bottom: 10px; }
+.calendar-month { font-size: 11px; font-weight: 650; letter-spacing: 2px; color: var(--muted); }
+.calendar-number { font-size: 126px; font-weight: 250; line-height: 1.1; letter-spacing: -9px; margin: 10px 0 2px; }
+.calendar-weekday { font-size: 24px; font-weight: 500; letter-spacing: -.7px; }
+.calendar-caption { font-size: 12px; color: var(--muted); margin-top: 8px; }
+body[data-style="apple"] .person { padding-left: 12px; border-left: 3px solid var(--line); border-radius: 0; }
+body[data-style="apple"] .person:nth-child(3) { border-color: var(--green); }
+body[data-style="apple"] .person:nth-child(4) { border-color: var(--orange); }
+body[data-style="apple"] .person:nth-child(2) { background: transparent; box-shadow: none; }
+.agenda-heading { display: flex; align-items: end; justify-content: space-between; gap: 15px; padding: 15px 4px 22px; }
+body[data-style="apple"] .agenda-heading h1 { font-size: 44px; margin: 6px 0 0; letter-spacing: -1.8px; }
+.agenda-subtitle { font-size: 12px; color: var(--muted); padding-bottom: 8px; }
+body[data-style="apple"] .controls { justify-content: flex-end; margin-bottom: 14px; }
+body[data-style="apple"] .week-label { display: none; }
+body[data-style="apple"] .days { background: transparent; box-shadow: none; border: 0; padding: 0 0 18px; gap: 8px; }
+body[data-style="apple"] .day { border-radius: 100px; padding: 12px 4px; }
+body[data-style="apple"] .day[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 5px 18px var(--shadow), inset 0 0 0 1px var(--glass-line); }
+body[data-style="apple"] .day[aria-pressed="true"] strong { background: var(--ink); color: var(--surface); border-radius: 50%; width: 34px; height: 34px; display: grid; place-items: center; }
+body[data-style="apple"] .day strong { width: 34px; height: 34px; display: grid; place-items: center; }
+body[data-style="apple"] .date-line { margin: 5px 5px 15px; }
+body[data-style="apple"] #schedule { background: var(--surface); border-radius: 28px; padding: 8px 24px; box-shadow: 0 12px 45px var(--shadow); }
+body[data-style="apple"] .slot { margin: 0; gap: 20px; grid-template-columns: 67px minmax(0,1fr); border-bottom: 1px solid var(--line); padding: 19px 0; }
+body[data-style="apple"] .slot:last-child { border-bottom: 0; }
+body[data-style="apple"] .lesson { border: 0; border-radius: 0; padding: 0 0 0 16px; background: transparent; box-shadow: none; border-left: 3px solid var(--line); }
+body[data-style="apple"] .lesson:has(.practice) { border-left-color: var(--green); }
+body[data-style="apple"] .lesson:has(.lab) { border-left-color: var(--orange); }
+body[data-style="apple"] .time { padding-top: 0; }
+body[data-style="apple"] .badge { padding: 0; background: transparent; }
+body[data-style="apple"] .lesson-header { margin-bottom: 6px; }
+body[data-style="apple"] .metadata { margin-top: 8px; }
+body[data-style="apple"] .room { background: transparent; padding: 0; }
+body[data-style="apple"] .footer { padding-left: 4px; }
+@media(max-width:760px) {
+  body[data-style="apple"] .topbar { margin-bottom: 16px; }
+  body[data-style="apple"] .agenda-heading { padding: 12px 5px 18px; }
+  body[data-style="apple"] .agenda-heading h1 { font-size: 34px; }
+  .agenda-subtitle { max-width: 110px; text-align: right; }
+  body[data-style="apple"] #schedule { padding: 3px 14px; border-radius: 23px; }
+  body[data-style="apple"] .slot { grid-template-columns: 46px minmax(0,1fr); gap: 9px; padding: 19px 0; }
+  body[data-style="apple"] .lesson { padding-left: 11px; }
+  body[data-style="apple"] .days { gap: 3px; }
+  body[data-style="apple"] .day { padding: 9px 2px; }
+  body[data-style="apple"] .subject { font-size: 14px; }
+}
+
+/* Phone: give the agenda the width and vertical space, not the chrome. */
+@media(max-width:760px) {
+  body[data-style="apple"] .preview-bar { padding: 5px 10px; gap: 10px; }
+  body[data-style="apple"] .preview-bar a { display: none; }
+  body[data-style="apple"] .shell { padding-top: 0; }
+  body[data-style="apple"] .topbar { margin-bottom: 12px; padding: 6px 10px; }
+  body[data-style="apple"] .logo { display: none; }
+  body[data-style="apple"] .top-actions { gap: 4px; }
+  body[data-style="apple"] .top-actions button { padding: 8px 10px; min-width: 44px; }
+  body[data-style="apple"] #density-menu { display: block; }
+  body[data-style="apple"] .agenda-heading { display: none; }
+  body[data-style="apple"] .controls { display: none; }
+  body[data-style="apple"].view-controls-open .controls { display: flex; margin: 0 0 10px; }
+  body[data-style="apple"] .days { padding-bottom: 8px; }
+  body[data-style="apple"] .day { padding: 5px 2px; gap: 0; border-radius: 17px; }
+  body[data-style="apple"] .day small { display: none; }
+  body[data-style="apple"] .day span { font-size: 11px; }
+  body[data-style="apple"] .day strong { font-size: 16px; width: 30px; height: 30px; }
+  body[data-style="apple"] .day[aria-pressed="true"] strong { width: 30px; height: 30px; }
+  body[data-style="apple"] .date-line { margin: 8px 4px 10px; }
+  body[data-style="apple"] .date-line h2 { font-size: 14px; }
+  body[data-style="apple"] #schedule { padding: 0 15px; }
+  body[data-style="apple"] .slot { display: block; padding: 14px 0; }
+  body[data-style="apple"] .time { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin-bottom: 9px; font-size: 13px; }
+  body[data-style="apple"] .time small { display: inline; font-size: 13px; margin: 0; }
+  body[data-style="apple"] .time small::before { content: '– '; }
+  body[data-style="apple"] .time .pair { margin: 0 0 0 auto; font-size: 12px; color: var(--ink); background: var(--soft); padding: 2px 8px; border-radius: 6px; }
+  body[data-style="apple"] .lesson { padding-left: 10px; }
+  body[data-style="apple"] .subject { font-size: 15px; }
+  body[data-style="apple"] .metadata { gap: 4px; }
+}

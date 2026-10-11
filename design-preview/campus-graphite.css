@@ -1,0 +1,24 @@
+/* Neutral campus palette; planner and production styles remain unchanged. */
+body[data-style="campus"] {
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --ink: #242424;
+    --muted: #626262;
+    --line: #e2e2df;
+    --accent: #303030;
+    --soft: #eeeeec;
+}
+
+body[data-style="campus"].dark {
+    --bg: #171717;
+    --surface: #222222;
+    --ink: #f1f1ef;
+    --muted: #bcbcb8;
+    --line: #3b3b38;
+    --accent: #e5e5e1;
+    --soft: #333330;
+}
+
+body[data-style="campus"] dialog::backdrop {
+    background: #18181888;
+}

@@ -343,7 +343,7 @@ try {
                 return false;
             });
 
-            const groupedSchedule = computed(() => {
+            const buildGroupedSchedule = (applyFilters = true) => {
                 if (activeEntities.value.length === 0) return [];
 
                 const days = {};
@@ -363,7 +363,7 @@ try {
                 });
 
                 merged.forEach(lesson => {
-                    if (hiddenDisciplines.value.includes(lesson.discipline)) return;
+                    if (applyFilters && hiddenDisciplines.value.includes(lesson.discipline)) return;
                     const lessonData = {
                         numberKey: lessonNumbering.key({ id: lesson.entityId, type: lesson.entityType }, lesson),
                         full_date: lesson.full_date,
@@ -385,17 +385,17 @@ try {
                     lessonData.isMoved = lessonData.statusFlags.moved;
 
                     // Lesson type filter
-                    if (lessonTypeFilter.value) {
+                    if (applyFilters && lessonTypeFilter.value) {
                         const t = (lesson.study_type || '').toLowerCase();
                         if (!t.includes(lessonTypeFilter.value.toLowerCase())) return;
                     }
 
                     // Delivery mode filter
-                    if (deliveryModeFilter.value === 'online' && !lessonData.hasOnline) return;
-                    if (deliveryModeFilter.value === 'offline' && lessonData.hasOnline) return;
+                    if (applyFilters && deliveryModeFilter.value === 'online' && !lessonData.hasOnline) return;
+                    if (applyFilters && deliveryModeFilter.value === 'offline' && lessonData.hasOnline) return;
 
                     // Filtering
-                    if (selectedDisciplines.value.length > 0) {
+                    if (applyFilters && selectedDisciplines.value.length > 0) {
                         const matchDiscipline = selectedDisciplines.value.includes(lesson.discipline);
                         let matchTeacher = false;
                         if (lesson.teacher || lesson.employee) {
@@ -491,7 +491,10 @@ try {
                     const [d2, m2, y2] = b.date.split('.');
                     return new Date(`${y1}-${m1}-${d1}`) - new Date(`${y2}-${m2}-${d2}`);
                 });
-            });
+            };
+
+            const groupedSchedule = computed(() => buildGroupedSchedule());
+            const conflictSchedule = computed(() => buildGroupedSchedule(false));
 
             const sourceScheduleLessonCount = computed(() => activeEntities.value.reduce(
                 (total, entity) => total + (Array.isArray(entity.scheduleData) ? entity.scheduleData.length : 0),
@@ -657,27 +660,15 @@ try {
             });
 
             const conflictSlots = computed(() => {
-                if (activeEntities.value.length < 2) return [];
-                const out = [];
-                groupedSchedule.value.forEach((day) => {
-                    day.slots.forEach((slot) => {
-                        const uniqueEntities = new Set(slot.lessons.map((l) => `${l.entityType}:${l.entityId}`));
-                        if (uniqueEntities.size < 2) return;
-                        out.push({
-                            date: day.date,
-                            dayName: day.dayName,
-                            time: slot.time,
-                            items: slot.lessons.map((l) => ({
-                                entityName: l.entityName,
-                                discipline: getDisplayDiscipline(l),
-                                teacher: getDisplayTeacher(l),
-                                cabinet: l.cabinet || '—',
-                                type: l.type || '—'
-                            }))
-                        });
-                    });
-                });
-                return out;
+                const combined = SA.CampusSchedule.aggregateDays(conflictSchedule.value, lessonNumbering.numberFor);
+                const issues = SA.CampusSchedule.findConflicts(combined);
+                return combined.flatMap(day => day.slots.filter(slot => slot.lessons.some(l => issues.has(l.displayKey))).map(slot => ({
+                    date: day.date, dayName: day.dayName, time: slot.time,
+                    items: slot.lessons.filter(l => issues.has(l.displayKey)).map(l => ({
+                        entityName: l.entityName, discipline: getDisplayDiscipline(l), teacher: getDisplayTeacher(l),
+                        cabinet: l.cabinet || '—', type: l.type || '—'
+                    }))
+                })));
             });
 
             const advancedAnalytics = computed(() => {
@@ -1489,6 +1480,7 @@ try {
             const isTodayDate = (date) => date === todayDmy();
             const scrollToScheduleDate = async (date) => {
                 if (!date) return false;
+                selectedDayDate.value = date;
                 await nextTick();
                 const targets = Array.from(document.querySelectorAll(`[data-schedule-date="${date}"]`));
                 const target = targets.find((element) => element.offsetParent !== null) || targets[0];
@@ -2316,7 +2308,8 @@ try {
                 refreshAllSchedules, onSearchInput, searchQuery, searchResults,
                 isSearching, isCacheLoaded, cacheStatus, selectSearchResult,
                 groupListQuery, employeeListQuery, filteredGroups, filteredEmployees, advancedFiltersOpen,
-                availableDisciplines, availableSubjects, canAdd, groupedSchedule, scheduleStats,
+                availableDisciplines, availableSubjects, canAdd, groupedSchedule, conflictSchedule, scheduleStats,
+                campusTeacherColor: SA.CampusSchedule.teacherColor, campusTeacherInitials: SA.CampusSchedule.teacherInitials,
                 teacherTodayLessons, teacherGroups, teacherFreeWindows, printTeacherSchedule,
                 activeScheduleFilters, scheduleHiddenByFilters, clearScheduleFilters,
                 hiddenDisciplines, hideDiscipline, restoreDiscipline, restoreAllDisciplines,
@@ -2380,6 +2373,8 @@ try {
     if (window.AppModalShellComponent) {
         app.component('AppModalShell', window.AppModalShellComponent);
     }
+    app.component('CampusScheduleBoard', window.CampusScheduleBoardComponent);
+    app.component('CampusIcon', window.CampusIconComponent);
     app.mount('#app');
 } catch (e) {
     alert("CRITICAL ERROR: " + e.message + "\nCheck console for details.");

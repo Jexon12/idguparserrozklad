@@ -24,9 +24,10 @@
     <link rel="preconnect" href="https://vnz.osvita.net" crossorigin>
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="/js/vendor/vue.global.prod.js?v=4963101441de"></script>
-    <link rel="stylesheet" href="/css/tailwind.generated.css?v=e77c0eb5ffac" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="/css/tailwind.generated.css?v=af1e6ae4b011" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="/css/styles.css?v=ba40711332ed">
     <link rel="stylesheet" href="/css/ui-kit.css?v=b0580bc1a952">
+    <link rel="stylesheet" href="/css/campus.css?v=3e7461d34b6e">
 
     <script>
         // Auto-detect dark mode
@@ -38,7 +39,7 @@
     <script type="module" src="/js/web-analytics.js?v=b852ccdc0a1d"></script>
 </head>
 
-<body class="app-body bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
+<body class="app-body fuaid-schedule bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
     <div id="app" class="min-h-screen">
       <div :class="`mobile-${mobileView}`">
         <!-- Toast Notification -->
@@ -60,14 +61,14 @@
                     <button @click="sidebarOpen = true"
                         type="button" aria-label="Відкрити пошук і фільтри"
                         class="mobile-menu-btn items-center justify-center p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl">
-                        ☰
+                        <campus-icon name="Menu"></campus-icon>
                     </button>
                     <h1 class="app-title text-2xl md:text-4xl font-bold text-amber-700 dark:text-amber-400 mb-0 md:mb-2">
-                        <span class="mobile-title-icon" aria-hidden="true">📅</span>
+                        <campus-icon name="CalendarDays" class="mobile-title-icon"></campus-icon>
                         <span class="mobile-title-full">Розклад</span>
                         <span class="mobile-title-short">Розклад</span>
                     </h1>
-                    <div class="mobile-view-switch" role="group" aria-label="Щільність мобільного розкладу">
+                    <div class="mobile-view-switch" role="group" aria-label="Щільність розкладу">
                         <button type="button" @click="setMobileView('minimal')"
                             :aria-pressed="mobileView === 'minimal'" :class="{ active: mobileView === 'minimal' }">Мінімум</button>
                         <button type="button" @click="setMobileView('expanded')"
@@ -76,22 +77,12 @@
                     <button @click="toggleDarkMode"
                         class="mobile-expanded-action p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl"
                         :title="isDark ? 'Світла тема' : 'Темна тема'">
-                        {{ isDark ? '☀️' : '🌙' }}
+                        <campus-icon :name="isDark ? 'Sun' : 'Moon'"></campus-icon>
                     </button>
-                    <a href="/session.html"
-                        class="mobile-expanded-action p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition text-xs font-bold text-emerald-700 dark:text-emerald-300"
-                        title="Розклад сесії">
-                        Сесія
-                    </a>
-                    <a v-if="mode !== 'student' || !studentWeekFocus" href="#smart-day"
-                        class="mobile-expanded-action p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition text-xs font-bold text-indigo-700 dark:text-indigo-300"
-                        title="Перейти до огляду дня">
-                        Мій день
-                    </a>
                     <button @click="showSettingsModal = true"
                         class="mobile-expanded-action p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl"
                         title="Налаштування">
-                        ⚙️
+                        <campus-icon name="Settings"></campus-icon>
                     </button>
                 </div>
                 <p class="text-gray-600 dark:text-gray-400 hidden md:block mt-1">Групи · викладачі · аудиторії</p>
@@ -1050,6 +1041,7 @@
                         <div v-if="activeEntities.length > 0" class="active-schedules flex min-w-0 flex-wrap gap-3" aria-label="Вибрані розклади">
                             <div v-for="(entity, index) in activeEntities" :key="index"
                                 class="flex min-w-0 max-w-full items-center bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-2xl shadow-sm">
+                                <span v-if="entity.type === 'Викладач'" class="campus-avatar campus-selection-avatar" :style="{'--teacher-color': campusTeacherColor(entity.name)}">{{ campusTeacherInitials(entity.name) }}</span>
                                 <span class="min-w-0 break-words font-medium mr-2" :title="entity.selectionDetail || entity.name">{{ entity.name }}
                                     <small v-if="entity.selectionDetail" class="block text-xs font-normal">{{ entity.selectionDetail }}</small>
                                     <small v-if="entity.checkedAt && mobileView === 'expanded'" class="block text-xs font-normal">Перевірено: {{ new Date(entity.checkedAt).toLocaleString('uk-UA') }}</small>
@@ -1060,293 +1052,26 @@
                             </div>
                         </div>
 
-                        <div id="schedule-week" v-if="mode === 'student' && activeEntities.length > 0"
-                            class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
-                            <div>
-                                <div class="font-bold text-amber-800 dark:text-amber-200">Мій тиждень</div>
-                                <div class="text-xs text-gray-600 dark:text-gray-300">
-                                    {{ studentWeekFocus ? 'Тільки потрібне для щоденного перегляду' : 'Повний огляд зі статистикою' }}
-                                </div>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <button @click="scrollToTodaySchedule(true)"
-                                    class="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 dark:bg-gray-800 dark:text-amber-200">
-                                    Сьогодні
-                                </button>
+                        <div v-if="activeEntities.length > 0" id="schedule-week" class="schedule-navigation campus-navigation">
+                            <button type="button" @click="shiftWeek(-1)" class="week-nav-btn" aria-label="Попередній тиждень"><campus-icon name="ChevronLeft"></campus-icon></button>
+                            <span>{{ dateStart }} — {{ dateEnd }}</span>
+                            <button type="button" @click="shiftWeek(1)" class="week-nav-btn" aria-label="Наступний тиждень"><campus-icon name="ChevronRight"></campus-icon></button>
+                            <button type="button" @click="scrollToTodaySchedule(true)" class="week-nav-btn">Сьогодні</button>
+                            <div class="campus-view-toggle" role="group" aria-label="Період перегляду">
+                                <button type="button" @click="viewMode = 'cards'" :aria-pressed="viewMode === 'cards'">День</button>
+                                <button type="button" @click="viewMode = 'table'" :aria-pressed="viewMode === 'table'">Тиждень</button>
                             </div>
                         </div>
 
-                        <div v-if="activeEntities.length > 0" class="schedule-navigation">
-                        <button type="button" @click="shiftWeek(-1)" class="week-nav-btn" aria-label="Попередній тиждень">←</button>
-                        <nav v-if="groupedSchedule.length > 0"
-                            class="schedule-day-tabs" aria-label="Швидкий перехід між днями">
-                            <button v-for="dayData in groupedSchedule" :key="`day-tab-${dayData.date}`"
-                                type="button" @click="scrollToScheduleDate(dayData.date)"
-                                :aria-current="selectedDayDate === dayData.date || (!selectedDayDate && isTodayDate(dayData.date)) ? 'date' : null"
-                                :class="{ active: selectedDayDate === dayData.date || (!selectedDayDate && isTodayDate(dayData.date)) }">
-                                <span>{{ dayData.dayName }}</span>
-                                <strong>{{ dayData.date.split('.')[0] }}</strong>
-                            </button>
-                        </nav>
-
-                        <span v-else class="schedule-navigation-empty">{{ dateStart }} — {{ dateEnd }}</span>
-                        <button type="button" @click="shiftWeek(1)" class="week-nav-btn" aria-label="Наступний тиждень">→</button>
-                        </div>
-                        <!-- Week Navigation + View Toggle -->
-                        <div v-if="activeEntities.length > 0"
-                            class="week-navigation flex flex-wrap items-center justify-between gap-2 mb-4">
-                            <div class="flex gap-2">
-                                <button v-if="favorites.length > 1" @click="quickSwitchFavorite(-1)"
-                                    class="mobile-expanded-only week-nav-btn">Обране ←</button>
-                                <button v-if="favorites.length > 1" @click="quickSwitchFavorite(1)"
-                                    class="mobile-expanded-only week-nav-btn">Обране →</button>
-                            </div>
-                            <div v-if="mode !== 'student' || !studentWeekFocus" class="mobile-expanded-only flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                                <button @click="viewMode = 'cards'"
-                                    :class="['px-3 py-1 rounded-md text-xs font-semibold transition', viewMode === 'cards' ? 'bg-white dark:bg-gray-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700']">
-                                    🃏 Картки
-                                </button>
-                                <button @click="viewMode = 'table'"
-                                    :class="['px-3 py-1 rounded-md text-xs font-semibold transition', viewMode === 'table' ? 'bg-white dark:bg-gray-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700']">
-                                    📋 Таблиця
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- COMPACT TABLE VIEW -->
-                        <div v-if="viewMode === 'table' && Object.keys(groupedSchedule).length > 0"
-                            class="hidden md:block bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
-                            <table class="schedule-table w-full text-sm">
-                                <thead>
-                                    <tr class="bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
-                                        <th class="text-gray-500 dark:text-gray-400 text-left px-3 py-2 w-28">Дата</th>
-                                        <th class="text-gray-500 dark:text-gray-400 text-center px-3 py-2 w-40">Пара
-                                        </th>
-                                        <th class="text-gray-500 dark:text-gray-400 text-left px-3 py-2">Дисципліна</th>
-                                        <th class="text-gray-500 dark:text-gray-400 text-center px-3 py-2 w-28">Тип</th>
-                                        <th class="text-gray-500 dark:text-gray-400 text-left px-3 py-2 w-40">Викладач
-                                        </th>
-                                        <th class="text-gray-500 dark:text-gray-400 text-center px-3 py-2 w-24">Каб.
-                                        </th>
-                                        <th class="text-gray-500 dark:text-gray-400 text-left px-3 py-2 w-36">Група</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template v-for="dayData in groupedSchedule" :key="'t-'+dayData.date">
-                                        <template v-for="(timeSlot, si) in dayData.slots" :key="'ts-'+dayData.date+si">
-                                            <tr v-for="(lesson, li) in timeSlot.lessons" :key="'tl-'+dayData.date+si+li"
-                                                :data-schedule-date="si === 0 && li === 0 ? dayData.date : null"
-                                                class="scroll-mt-20 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition"
-                                                :class="[isActiveLesson(dayData.date, timeSlot.start, timeSlot.end) ? 'bg-green-50 dark:bg-green-900/20' : '']">
-                                                <td v-if="si === 0 && li === 0"
-                                                    :rowspan="dayData.slots.reduce((sum, s) => sum + s.lessons.length, 0)"
-                                                    class="px-3 py-2 whitespace-nowrap font-semibold text-gray-700 dark:text-gray-300 border-r dark:border-gray-700 align-top bg-gray-50/50 dark:bg-gray-800">
-                                                    <div>{{ dayData.dayName }}</div>
-                                                    <div class="text-xs text-gray-400 font-normal">{{ dayData.date }}
-                                                    </div>
-                                                    <div v-if="isTodayDate(dayData.date)" class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">Сьогодні</div>
-                                                </td>
-                                                <td class="px-3 py-2 whitespace-nowrap text-center align-middle">
-                                                    <div class="flex flex-col items-center">
-                                                        <span
-                                                            class="inline-block bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 text-xs font-semibold px-2 py-0.5 rounded">
-                                                            {{ timeSlot.time }}
-                                                        </span>
-                                                        <!-- Progress Bar in Table -->
-                                                        <div v-if="isActiveLesson(dayData.date, timeSlot.start, timeSlot.end)"
-                                                            class="w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-1 mt-1 overflow-hidden">
-                                                            <div class="bg-green-500 h-1 rounded-full transition-all duration-1000"
-                                                                :style="{ width: getLessonProgress(dayData.date, timeSlot.start, timeSlot.end)?.percent + '%' }">
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td class="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">
-                                                    <button type="button" class="lesson-history-trigger" @click.stop="openLessonHistory(lesson)"
-                                                        :aria-label="`Попередні заняття: ${lesson.discipline}`">{{ lesson.discipline }}</button>
-                                                    <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" compact class="mt-1"></schedule-status-badges>
-                                                </td>
-                                                <td class="px-3 py-2 text-center"><span
-                                                        :class="['lesson-type-badge text-xs', getLessonTypeClass(lesson.type)]">{{
-                                                        lesson.type || '—' }}</span>
-                                                    <button v-if="lesson.type" type="button" class="lesson-number" @click.stop="editLessonNumber(lesson)"
-                                                        :aria-label="`Змінити номер заняття: ${lesson.discipline}`" :title="numberingStatus">
-                                                        {{ lessonNumber(lesson) ? `№${lessonNumber(lesson)}` : '№—' }}
-                                                    </button>
-                                                </td>
-                                                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ lesson.teacher
-                                                    }}
-                                                </td>
-                                                <td class="px-3 py-2 text-center text-gray-500 dark:text-gray-400">{{
-                                                    lesson.cabinet }}</td>
-                                                <td
-                                                    class="px-3 py-2 text-amber-600 dark:text-amber-400 font-medium text-sm">
-                                                    {{ lesson.group || lesson.entityName }}</td>
-                                            </tr>
-                                        </template>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- CARD VIEW (Schedule Grid) -->
-                        <div v-if="(viewMode === 'cards' || viewMode === 'table') && Object.keys(groupedSchedule).length > 0"
-                            :class="viewMode === 'table' ? 'md:hidden' : ''"
-                            class="schedule-board bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden transition-colors">
-                            <div v-for="dayData in groupedSchedule" :key="dayData.date"
-                                :data-schedule-date="dayData.date"
-                                :class="isTodayDate(dayData.date) ? 'ring-2 ring-inset ring-amber-400' : ''"
-                                class="schedule-day scroll-mt-20 border-b dark:border-gray-700 last:border-b-0">
-                                <div
-                                    class="day-header-sticky bg-gray-50/95 dark:bg-gray-700/95 px-6 py-3 border-b border-gray-100 dark:border-gray-600 flex justify-between items-center transition-colors">
-                                    <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">{{ dayData.dayName
-                                        }}, {{
-                                        dayData.date }}</h3>
-                                    <span class="schedule-day-count text-xs text-gray-400 dark:text-gray-500">{{ dayData.slots.length }}
-                                        пар</span>
-                                    <span v-if="isTodayDate(dayData.date)" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">Сьогодні</span>
-                                </div>
-
-                                <div class="divide-y divide-gray-100 dark:divide-gray-700">
-                                    <div v-for="timeSlot in dayData.slots" :key="timeSlot.time"
-                                        class="schedule-slot grid grid-cols-12 hover:bg-gray-50 dark:hover:bg-gray-750 transition p-4">
-                                        <!-- Time Column -->
-                                        <div
-                                            class="schedule-slot-time col-span-12 md:col-span-2 text-center md:text-left mb-2 md:mb-0 flex flex-row md:flex-col items-center md:items-start gap-2 md:gap-1">
-                                            <span
-                                                class="schedule-pair-badge inline-block bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded whitespace-nowrap">
-                                                {{ timeSlot.start ? timeSlot.time.split('(')[0].trim() : timeSlot.time }}
-                                            </span>
-                                            <span v-if="timeSlot.start"
-                                                class="schedule-slot-range text-sm text-gray-500 dark:text-gray-400 font-medium">
-                                                {{ timeSlot.start }} - {{ timeSlot.end }}
-                                            </span>
-                                        </div>
-
-                                        <!-- Classes Column -->
-                                        <div class="col-span-12 md:col-span-10 grid gap-4">
-                                            <div v-for="(lesson, idx) in timeSlot.lessons" :key="idx"
-                                                @click="openLessonHistory(lesson, $event)"
-                                                class="lesson-card bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg p-3 shadow-sm relative pl-4 border-l-4 transition-all duration-500 text-gray-800 dark:text-gray-200"
-                                                :class="[
-                                                getColorClass(lesson.entityId),
-                                                isActiveLesson(dayData.date, timeSlot.start, timeSlot.end) ? 'ring-4 ring-green-400 scale-[1.02] z-10' : ''
-                                            ]">
-
-                                                <div class="flex justify-between items-start">
-                                                    <div>
-                                                        <div v-if="isActiveLesson(dayData.date, timeSlot.start, timeSlot.end)"
-                                                            class="inline-block bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 animate-pulse">
-                                                            ЗАРАЗ
-                                                        </div>
-
-                                                        <!-- Progress Bar -->
-                                                        <div v-if="isActiveLesson(dayData.date, timeSlot.start, timeSlot.end)"
-                                                            class="mb-2">
-                                                            <div
-                                                                class="flex justify-between text-[10px] text-gray-500 mb-1">
-                                                                <span>Прогрес: {{ getLessonProgress(dayData.date,
-                                                                    timeSlot.start, timeSlot.end)?.percent
-                                                                    }}%</span>
-                                                                <span>Залишилось: {{ getLessonProgress(dayData.date,
-                                                                    timeSlot.start, timeSlot.end)?.timeLeft }}
-                                                                    хв</span>
-                                                            </div>
-                                                            <div class="w-full bg-gray-200 rounded-full h-1.5">
-                                                                <div class="bg-amber-600 h-1.5 rounded-full transition-all duration-1000"
-                                                                    :style="{ width: getLessonProgress(dayData.date, timeSlot.start, timeSlot.end)?.percent + '%' }">
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 1. Discipline + Group -->
-                                                        <h4 class="font-bold text-gray-900 text-base mb-1">
-                                                            <button type="button" class="lesson-history-trigger" @click.stop="openLessonHistory(lesson)"
-                                                                :aria-label="`Попередні заняття: ${lesson.discipline}`">{{ lesson.discipline }}</button>
-                                                            <span v-if="lesson.group"
-                                                                class="lesson-group mobile-expanded-only text-amber-600 font-normal">
-                                                                ({{ lesson.group }})
-                                                            </span>
-                                                        </h4>
-
-                                                        <schedule-status-badges v-if="lesson.statusFlags" :flags="lesson.statusFlags" compact class="essential-status mb-2"></schedule-status-badges>
-
-                                                        <!-- 2. Type Badge -->
-                                                        <div class="lesson-type mb-1" v-if="lesson.type">
-                                                            <span
-                                                                :class="['lesson-type-badge', getLessonTypeClass(lesson.type)]">
-                                                                {{ getLessonTypeIcon(lesson.type) }} {{ lesson.type }}
-                                                            </span>
-                                                            <button type="button" class="lesson-number" @click.stop="editLessonNumber(lesson)"
-                                                                :aria-label="`Змінити номер заняття: ${lesson.discipline}`"
-                                                                :title="numberingStatus">{{ lessonNumber(lesson) ? `№${lessonNumber(lesson)}` : '№—' }}</button>
-                                                        </div>
-
-                                                        <!-- 3. Teacher -->
-                                                        <div
-                                                            class="lesson-meta text-sm text-gray-700 font-medium flex flex-wrap items-center gap-2">
-                                                            <span v-if="lesson.teacher" class="lesson-teacher flex items-start">
-                                                                👨‍ <span class="ml-1">{{ lesson.teacher }}</span>
-                                                            </span>
-                                                            <span v-if="lesson.cabinet"
-                                                                class="text-gray-400 text-xs ml-2">
-                                                                📍 {{ lesson.cabinet }}
-                                                            </span>
-                                                        </div>
-
-                                                    </div>
-
-                                                    <!-- Global Links Buttons -->
-                                                    <div class="mobile-expanded-only mt-2 flex gap-2">
-                                                        <a v-if="getGlobalLink(lesson, 'courseUrl')"
-                                                            :href="getGlobalLink(lesson, 'courseUrl')" target="_blank" rel="noopener noreferrer"
-                                                            class="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded hover:bg-amber-100 font-medium flex items-center gap-1">
-                                                            📘 Курс
-                                                        </a>
-                                                        <a v-if="getGlobalLink(lesson, 'onlineUrl')"
-                                                            :href="getGlobalLink(lesson, 'onlineUrl')" target="_blank" rel="noopener noreferrer"
-                                                            class="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded hover:bg-purple-100 font-medium flex items-center gap-1">
-                                                            📹 Онлайн
-                                                        </a>
-                                                    </div>
-
-                                                    <!-- Admin Edit Button -->
-                                                    <button v-if="adminMode" @click.stop="openAdminModal(lesson)"
-                                                        class="absolute top-2 right-2 text-xs bg-gray-600 text-white px-1 rounded opacity-50 hover:opacity-100 z-20">
-                                                        ✏️
-                                                    </button>
-
-                                                    <!-- Note Indicator/Button -->
-                                                    <div class="mobile-expanded-only mt-2 flex justify-end">
-                                                        <button v-if="lesson.discipline"
-                                                            @click.stop="hideDiscipline(lesson.discipline)"
-                                                            class="mr-1 rounded px-2 py-1 text-xs text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                                                            :aria-label="`Приховати предмет ${lesson.discipline}`">
-                                                            🙈 Приховати
-                                                        </button>
-                                                        <button
-                                                            @click.stop="openNote(lesson, dayData.date, timeSlot.time)"
-                                                            class="text-xs px-2 py-1 rounded transition flex items-center gap-1"
-                                                            :class="hasNote(lesson, dayData.date, timeSlot.time) ? 'bg-yellow-100 text-yellow-800 font-semibold' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'">
-                                                            <span v-if="hasNote(lesson, dayData.date, timeSlot.time)">📝
-                                                                Є
-                                                                нотатка</span>
-                                                            <span v-else>➕ Нотатка</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div v-if="activeEntities.length > 1 && lesson.entityName !== lesson.teacher && lesson.entityName !== lesson.group" class="mobile-expanded-only hidden md:block text-right">
-                                                    <span
-                                                        class="text-xs font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                                                        {{ lesson.entityName }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <campus-schedule-board v-if="activeEntities.length > 0 && mode !== 'occupancy'"
+                            :days="groupedSchedule" :conflict-days="conflictSchedule" :density="mobileView" :view="viewMode" :entities="activeEntities"
+                            :date-start="dateStart" :date-end="dateEnd" :selected-date="selectedDayDate"
+                            :times="customTimes" :number-for="lessonNumber" :is-active="isActiveLesson"
+                            :get-progress="getLessonProgress" :has-note="hasNote" :get-link="getGlobalLink" :admin="adminMode"
+                            @select="selectedDayDate = $event" @history="openLessonHistory" @note="openNote"
+                            @hide="hideDiscipline" @number="editLessonNumber" @admin="openAdminModal"
+                            @type-filter="lessonTypeFilter = lessonTypeFilter === $event ? '' : $event">
+                        </campus-schedule-board>
                     </div>
 
                     <section v-show="mobileView === 'expanded' && mode !== 'occupancy' && groupedSchedule.length > 0" class="schedule-details" aria-label="Аналітика та інструменти">
@@ -1750,7 +1475,7 @@
     </div> <!-- End of #app -->
 
     <script src="/js/utils.js?v=46456b71272e"></script>
-    <script src="/js/app-shell.js?v=b0a972f19457"></script>
+    <script src="/js/app-shell.js?v=2ddfd4abcf6e"></script>
     <script src="/js/schedule-model.js?v=db7f6f2c8ceb"></script>
     <script src="/js/reliability.js?v=8919b07a36bd"></script>
     <script src="/js/schedule-analytics.js?v=49e3959d2d38"></script>
@@ -1791,7 +1516,9 @@
     </script>
     <script src="/js/personal-data.js?v=88a1f71d733e"></script>
     <script src="/js/lesson-numbering.js?v=6b98381091bd"></script>
-    <script src="/js/app.js?v=225c717ca3e1"></script>
+    <script src="/js/vendor/lucide.min.js?v=3411692820cb"></script>
+    <script src="/js/campus-schedule.js?v=4546cf9912f2"></script>
+    <script src="/js/app.js?v=44b23dbaa5fa"></script>
 
         <script src="/js/app-updates.js?v=759bcf41962e"></script>
         <!-- Service Worker Registration -->

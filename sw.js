@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-670c1556b7fe';
+const CACHE_NAME = 'schedule-3d0dd111db31';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -51,15 +51,17 @@ self.addEventListener('activate', (event) => {
 });
 
 const VERSIONED_ASSETS = [
+  "/css/campus.css?v=3e7461d34b6e",
   "/css/styles.css?v=ba40711332ed",
-  "/css/tailwind.generated.css?v=e77c0eb5ffac",
+  "/css/tailwind.generated.css?v=af1e6ae4b011",
   "/css/ui-kit.css?v=b0580bc1a952",
   "/js/admin.js?v=87687c891a18",
   "/js/api.js?v=98d2faac2c8d",
-  "/js/app-shell.js?v=b0a972f19457",
+  "/js/app-shell.js?v=2ddfd4abcf6e",
   "/js/app-updates.js?v=759bcf41962e",
-  "/js/app.js?v=225c717ca3e1",
+  "/js/app.js?v=44b23dbaa5fa",
   "/js/builder.js?v=f2c2a3d4e746",
+  "/js/campus-schedule.js?v=4546cf9912f2",
   "/js/components/app-modal-shell.js?v=1d43109ecd59",
   "/js/components/current-lesson-banner.js?v=24bb9ebcc3cc",
   "/js/components/schedule-status-badges.js?v=050e17e61698",
@@ -81,6 +83,7 @@ const VERSIONED_ASSETS = [
   "/js/session-page.js?v=a8cda74f922c",
   "/js/staff-portal.js?v=1e7e39408c24",
   "/js/utils.js?v=46456b71272e",
+  "/js/vendor/lucide.min.js?v=3411692820cb",
   "/js/vendor/vercel-analytics.mjs?v=c3026b63c92a",
   "/js/vendor/vue.global.prod.js?v=4963101441de",
   "/js/web-analytics.js?v=b852ccdc0a1d"

@@ -66,8 +66,10 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         const shell = document.createElement('nav');
+        const campus = document.body.classList.contains('fuaid-schedule');
         shell.setAttribute('aria-label', 'Навігація за ролями');
         shell.className = 'mx-auto max-w-7xl px-3 md:px-6 pt-3 flex flex-wrap items-center gap-2';
+        if (campus) shell.classList.add('fuaid-navigation');
         const isStaff = staffPaths.has(location.pathname.toLowerCase()) || new URLSearchParams(location.search).get('staff') === '1';
         if (isStaff) {
             const label = document.createElement('span');
@@ -92,7 +94,7 @@
         }
 
         const audienceLabel = document.createElement('span');
-        audienceLabel.textContent = 'Студентам і викладачам';
+        audienceLabel.textContent = campus ? 'FUAID / CAMPUS' : 'Студентам і викладачам';
         audienceLabel.className = 'px-2 py-1 rounded-lg text-xs font-bold bg-white dark:bg-gray-800 border dark:border-gray-700';
         const links = document.createElement('div');
         links.className = 'flex flex-wrap gap-1';
@@ -108,7 +110,14 @@
         renderLinks(links, SA.UserRole.current);
         const staffLink = createLink(['Для персоналу', '/staff.html']);
         staffLink.className = 'ml-auto px-2 py-1 rounded-lg text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white';
-        shell.append(audienceLabel, links, badge, retryButton, staffLink);
+        if (campus) {
+            shell.append(audienceLabel, links, staffLink);
+            const footer = document.createElement('footer');
+            footer.className = 'campus-data-footer';
+            footer.setAttribute('aria-label', 'Стан даних');
+            footer.append(badge, retryButton);
+            document.body.append(footer);
+        } else shell.append(audienceLabel, links, badge, retryButton, staffLink);
         document.body.insertBefore(shell, document.body.firstChild);
         // Keep the same navigation and freshness state inside the mobile drawer.
         const mobileHost = document.getElementById('mobile-shell-navigation');
