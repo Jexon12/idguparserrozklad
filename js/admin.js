@@ -16,8 +16,9 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
 
-        const pwd = prompt('Введіть пароль адміністратора:');
-        if (!pwd) return;
+        const user = SA.StaffClient?.user;
+        const pwd = user ? '' : prompt('Введіть пароль адміністратора до налаштування особистих облікових записів:');
+        if (!pwd && !user) return;
 
         try {
             const res = await fetch('/api/times', {
@@ -32,7 +33,8 @@ window.ScheduleApp = window.ScheduleApp || {};
                 refs.adminPassword.value = '';
                 alert('Режим адміністратора активовано.');
             } else {
-                alert('Невірний пароль');
+                const error = await res.json();
+                alert(error.error || 'Доступ до адміністративних налаштувань не дозволено');
             }
         } catch (e) {
             alert('Помилка мережі при перевірці пароля');

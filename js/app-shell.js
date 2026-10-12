@@ -23,13 +23,14 @@
             return () => roleSubscribers.delete(listener);
         }
     };
-    const staffPaths = new Set(['/staff.html', '/builder.html', '/course-live.html', '/session-constructor.html', '/session-admin.html']);
+    const staffPaths = new Set(['/staff.html', '/staff-settings.html', '/builder.html', '/course-live.html', '/session-constructor.html', '/session-admin.html']);
     const staffLinks = [
         ['Огляд', '/staff.html'],
         ['Course Day', '/course-live.html'],
         ['Week Builder', '/builder.html'],
         ['Конструктор сесії', '/session-constructor.html'],
-        ['Адмін сесій', '/session-admin.html']
+        ['Адмін сесій', '/session-admin.html'],
+        ['Правила та доступ', '/staff-settings.html']
     ];
     let badge;
     let retryButton;

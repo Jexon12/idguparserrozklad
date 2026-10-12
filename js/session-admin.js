@@ -69,6 +69,8 @@
   };
 
   const ensureAdminContext = () => {
+    const user = window.ScheduleApp.StaffClient?.user;
+    if (user) return { password: '', actor: user.name };
     const password = clean(els.password.value);
     if (!password) {
       setStatus('Введіть ADMIN_PASSWORD', true);
@@ -338,7 +340,7 @@
         body: JSON.stringify({
           password: auth.password,
           actor: auth.actor,
-          expectedRevision: preview.revision, mode: 'upsert', data
+          expectedRevision: preview.revision, expectedRulesRevision: preview.rulesRevision, mode: 'upsert', data
         })
       });
       setStatus(`Успішно: додано ${safe.added || 0}, змінено ${safe.changed || 0}, всього ${safe.count || 0}`);

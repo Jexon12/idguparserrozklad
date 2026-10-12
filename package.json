@@ -7,6 +7,7 @@
     "build": "npm run build:css && node scripts/build-assets.js && node scripts/build-public.js",
     "test:browser": "playwright test -c playwright.config.cjs",
     "test": "jest --testPathPattern=tests/",
+    "check:staff-storage": "node scripts/check-staff-storage.js",
     "test:smoke": "jest tests/smoke-pages.test.js --runInBand",
     "test:ui": "jest tests/ui-links-buttons.test.js --runInBand",
     "start": "node server.js",

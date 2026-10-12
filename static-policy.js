@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const pages = new Set(['index.html', 'index2.html', 'staff.html', 'session.html', 'session-admin.html', 'session-constructor.html', 'session-prep.html', 'smart.html', 'builder.html', 'course-live.html']);
+const pages = new Set(['index.html', 'index2.html', 'staff.html', 'staff-settings.html', 'session.html', 'session-admin.html', 'session-constructor.html', 'session-prep.html', 'smart.html', 'builder.html', 'course-live.html']);
 const data = new Set(['data/demo-schedule.json', 'data/session-2025-26.json', 'data/links.json']);
 function publicFile(root, pathname) {
   let relative;

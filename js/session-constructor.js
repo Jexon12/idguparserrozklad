@@ -20,6 +20,8 @@
   const DRAFT_KEY = 'session_constructor_draft_v1';
   const VIEW_STATE_KEY = 'session_constructor_view_state_v1';
   const SNAPSHOT_KEY = 'session_constructor_snapshots_v1';
+  let activeDraftUser = null;
+  const localKey = key => activeDraftUser ? `${key}_${activeDraftUser}` : key;
 
   const els = {
     adminPassword: document.getElementById('adminPassword'),
@@ -162,6 +164,7 @@
   let conflictsWorker = null;
   let conflictRequestId = 0;
   const Domain = window.ScheduleApp.SessionDomain;
+  let institutionRules = Domain.normalizeRules({});
   let publicationPreview = null;
   let publicationBaseline = null;
   let previewGeneration = 0;
@@ -514,7 +517,7 @@
     }
     if (els.prevRowsPage) els.prevRowsPage.disabled = state.renderPage <= 0;
     if (els.nextRowsPage) els.nextRowsPage.disabled = state.renderPage >= maxPage;
-    els.uploadBtn.disabled = publicationBusy || !publicationPreview ||
+    els.uploadBtn.disabled = publicationBusy || window.ScheduleApp.StaffClient?.user?.role === 'methodist' || !publicationPreview ||
       publicationPreview.signature !== JSON.stringify(publicationData()) || !document.getElementById('publicationAcknowledged').checked;
     // Update discipline datalist
     const disciplines = Array.from(new Set(state.rows.map((r) => r.discipline).filter(Boolean)));
@@ -580,7 +583,7 @@
   function saveViewState() {
     try {
       const tableFilters = getTableFilters();
-      localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
+      localStorage.setItem(localKey(VIEW_STATE_KEY), JSON.stringify({
         q: clean(els.searchInput?.value),
         discipline: selectValues(els.disciplineFilter),
         group: selectValues(els.groupFilter),
@@ -609,7 +612,7 @@
 
   function restoreViewState() {
     try {
-      const raw = localStorage.getItem(VIEW_STATE_KEY);
+      const raw = localStorage.getItem(localKey(VIEW_STATE_KEY));
       if (!raw) return;
       const view = JSON.parse(raw);
       if (els.searchInput) els.searchInput.value = view.q || '';
@@ -869,25 +872,34 @@
 
   function renderCalendar() {
     if (!els.calendarPanel) return;
-    els.calendarPanel.classList.toggle('hidden', state.viewMode !== 'calendar');
-    const table = document.querySelector('table');
-    if (table) table.classList.toggle('hidden', state.viewMode === 'calendar');
-    if (state.viewMode !== 'calendar') return;
-    const byDate = new Map();
-    state.filteredRows.forEach((r) => {
-      const date = clean(r.date) || 'Без дати';
-      if (!byDate.has(date)) byDate.set(date, []);
-      byDate.get(date).push(r);
-    });
-    els.calendarPanel.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">${Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0], 'uk')).map(([date, rows]) => `
-      <div class="rounded border dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-700/50">
-        <div class="font-bold text-sm mb-2">${escapeHtml(date)} (${rows.length})</div>
-        <div class="space-y-2">${rows.sort((a, b) => clean(a.time).localeCompare(clean(b.time), 'uk')).map((r) => `<button data-detail-id="${escapeHtml(r.id)}" class="block w-full text-left rounded bg-white dark:bg-gray-800 border dark:border-gray-700 p-2 text-xs">
-          <div class="font-semibold">${escapeHtml(r.time || '—')} · ${escapeHtml(r.group || '—')}</div>
-          <div>${escapeHtml(r.discipline || '')}</div>
-          <div class="text-gray-500">${escapeHtml((r.teachers || []).join('; '))} ${r.room ? `· ${escapeHtml(r.room)}` : ''}</div>
-        </button>`).join('')}</div>
-      </div>`).join('')}</div>`;
+    const visible = state.viewMode === 'calendar';
+    els.calendarPanel.classList.toggle('hidden', !visible);
+    document.querySelector('#step-edit .overflow-x-auto')?.classList.toggle('hidden', visible);
+    if (!visible) return;
+    const monthInput = document.getElementById('calendarMonth'), groupInput = document.getElementById('calendarGroup');
+    if (!monthInput.value) monthInput.value = state.rows.find(row => /^\d{4}-\d{2}-\d{2}$/.test(row.date || ''))?.date.slice(0,7) || todayIso().slice(0,7);
+    const selectedGroup = groupInput.value;
+    groupInput.replaceChildren(new Option('Усі групи', ''));
+    [...new Set(state.rows.map(row => row.group).filter(Boolean))].sort().forEach(group => groupInput.add(new Option(group, group)));
+    groupInput.value = selectedGroup;
+    const projection = window.ScheduleApp.SessionCalendar.project(state.rows, monthInput.value, selectedGroup);
+    const check = Domain.validate(publicationData().items, institutionRules);
+    const problems = new Set(check.issues.flatMap(issue => issue.indices));
+    const card = row => {
+      const index = state.rows.indexOf(row);
+      return '<div class="rounded border dark:border-gray-600 p-2 bg-white dark:bg-gray-800 space-y-1">' +
+        '<button type="button" data-detail-id="'+escapeHtml(row.id)+'" class="text-left font-bold">'+escapeHtml(row.discipline || 'Без дисципліни')+'</button>' +
+        '<p class="text-xs">'+escapeHtml(row.group)+' · '+escapeHtml(row.time || 'Без часу')+' · '+escapeHtml(row.room || 'Без аудиторії')+'</p>' +
+        '<p class="text-xs text-gray-500">'+escapeHtml(row.teachers.join('; '))+'</p>' +
+        '<label class="text-xs block">Час<input type="text" data-calendar-field="time" data-calendar-id="'+escapeHtml(row.id)+'" value="'+escapeHtml(row.time)+'" placeholder="10:00-12:00" class="ui-input w-full dark:bg-gray-700"></label>' +
+        '<label class="text-xs block">Аудиторія<input type="text" data-calendar-field="room" data-calendar-id="'+escapeHtml(row.id)+'" value="'+escapeHtml(row.room)+'" class="ui-input w-full dark:bg-gray-700"></label>' +
+        (problems.has(index) ? '<p class="text-xs text-amber-700 dark:text-amber-300">Потребує перевірки</p>' : '') +
+        '<label class="text-xs block">Перенести на дату<input type="date" data-calendar-date="'+escapeHtml(row.id)+'" value="'+escapeHtml(row.date)+'" class="ui-input w-full dark:bg-gray-700"></label></div>';
+    };
+    const days = projection.days.map(day =>
+      '<div class="rounded border dark:border-gray-600 p-2 space-y-2 '+(!day.rows.length ? 'hidden md:block' : '')+'"><h3 class="font-bold text-sm">'+escapeHtml(new Date(day.date+'T12:00:00').toLocaleDateString('uk-UA',{day:'numeric',month:'short',weekday:'short'}))+' · '+day.rows.filter(row=>row.controlType==='іспит').length+' іспитів</h3>'+day.rows.map(card).join('')+'</div>');
+    els.calendarPanel.innerHTML = '<p class="text-sm mb-3">Календар охоплює всі записи чернетки. Виберіть групу для оцінки навантаження; перенесення змінює той самий запис і запускає перевірку.</p><div class="grid grid-cols-1 md:grid-cols-7 gap-2">'+days.join('')+'</div>' +
+      (projection.unscheduled.length ? '<h3 class="font-bold mt-3">Без дати</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-2">'+projection.unscheduled.map(card).join('')+'</div>' : '');
   }
 
   function applyColumnVisibility() {
@@ -937,6 +949,7 @@
   }
 
   function syncFromGrid() {
+    if (state.viewMode === 'calendar') return;
     const inputs = els.tableBody.querySelectorAll('[data-f][data-id]');
     const rowMap = new Map(state.rows.map(r => [String(r.id), r]));
     const pendingTeachers = new Map();
@@ -1063,7 +1076,7 @@
       rows: state.rows,
       rowIds: state.rows.map((r) => String(r.id)),
       requestId: conflictRequestId,
-      mode: clean(els.conflictMode?.value || 'soft')
+      mode: clean(els.conflictMode?.value || 'soft'), rules: institutionRules
     });
     if (withStatus) setStatus('Перевірка конфліктів виконана');
   }
@@ -1243,7 +1256,7 @@
   }
 
   function getSnapshots() {
-    try { return JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '[]'); } catch (e) { return []; }
+    try { return JSON.parse(localStorage.getItem(localKey(SNAPSHOT_KEY)) || '[]'); } catch (e) { return []; }
   }
 
   function renderSnapshotSelect() {
@@ -1262,7 +1275,7 @@
     syncFromGrid();
     const snapshots = getSnapshots();
     snapshots.unshift({ id: generateId(), ts: new Date().toISOString(), rows: state.rows });
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshots.slice(0, 12)));
+    localStorage.setItem(localKey(SNAPSHOT_KEY), JSON.stringify(snapshots.slice(0, 12)));
     renderSnapshotSelect();
     setStatus('Знімок версії збережено');
   }
@@ -1346,7 +1359,8 @@
   }
   function saveDraft() {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(getDraftPayload()));
+      localStorage.setItem(localKey(DRAFT_KEY), JSON.stringify(getDraftPayload()));
+      window.dispatchEvent(new Event('session-draft-changed'));
       if (els.draftInfo) {
         const time = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         els.draftInfo.innerHTML = `<span class="text-green-600 dark:text-green-400">●</span> Автозбереження: ${time}`;
@@ -1362,7 +1376,7 @@
   }
   function restoreDraft() {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY);
+      const raw = localStorage.getItem(localKey(DRAFT_KEY));
       if (!raw) return;
       const draft = JSON.parse(raw);
       publicationBaseline = draft.publicationBaseline || null;
@@ -1564,14 +1578,14 @@
     const data = publicationData();
     const signature = JSON.stringify(data);
     if (publicationPreview && publicationPreview.signature !== signature) invalidatePublication();
-    const check = Domain.validate(data.items);
+    const check = Domain.validate(data.items, institutionRules);
     summary.textContent = state.rows.length ? `${state.rows.length} записів · проблем: ${check.blockingCount}. ${check.blockingCount ? 'Виправте проблеми перед публікацією.' : 'Чернетка готова до серверної перевірки.'}${check.quality.unknownDuration ? ` Для ${check.quality.unknownDuration} іспитів вказано лише початок: додайте кінець часу для перевірки тривалості.` : ''}` : 'Додайте записи для перевірки.';
     const list = document.getElementById('reviewIssues');
     list.replaceChildren();
     check.issues.slice(0, 100).forEach(issue => {
       const li = document.createElement('li');
       const button = document.createElement('button');
-      button.type = 'button'; button.className = 'text-left underline text-rose-700 dark:text-rose-300';
+      button.type = 'button'; button.className = issue.severity === 'warning' ? 'text-left underline text-amber-700 dark:text-amber-300' : 'text-left underline text-rose-700 dark:text-rose-300';
       const row = state.rows[issue.index];
       button.textContent = `${row?.group || 'Без групи'} · ${row?.discipline || 'Без дисципліни'}: ${issue.message}`;
       button.addEventListener('click', () => {
@@ -1601,14 +1615,16 @@
     if (publicationBusy) return;
     syncFromGrid(); applyFilters(); invalidatePublication();
     const password = clean(els.adminPassword.value);
-    if (!password) throw new Error('Введіть пароль адміністратора у блоці публікації');
+    if (!password && !window.ScheduleApp.StaffClient?.user) throw new Error('Увійдіть у свій обліковий запис; до первинного налаштування можна використати спільний пароль');
     const data = publicationData();
     if (!data.items.length) throw new Error('Порожню чернетку не можна публікувати. Видалення сесії доступне в керуванні сесіями.');
     const generation = previewGeneration;
     publicationBusy = true;
     const button = document.getElementById('previewPublicationBtn'); button.disabled = true;
     try {
-      const result = await publicationRequest({ action: 'previewPublication', password, mode: 'replaceForm', data,
+      await loadInstitutionRules();
+      const cloud = await window.ScheduleApp.SessionWorkspace?.preparePublication() || {};
+      const result = await publicationRequest({ action: 'previewPublication', password, mode: 'replaceForm', data, ...cloud,
         expectedRevision: publicationBaseline?.term === clean(data.term).toLowerCase() ? publicationBaseline.revision : undefined });
       if (generation !== previewGeneration || JSON.stringify(publicationData()) !== JSON.stringify(data)) return;
       const summary = result.summary;
@@ -1621,22 +1637,26 @@
         ...result.changes.removed.map(item => `Видалено: ${item.groups.join(', ')} · ${item.discipline} · ${item.date} ${item.time}`)
       ];
       lines.forEach(line => { const li = document.createElement('li'); li.textContent = line; list.append(li); });
-      if (!result.validation.blockingCount) publicationPreview = { signature: JSON.stringify(data), revision: result.revision, summary };
+      if (!result.validation.blockingCount) publicationPreview = { signature: JSON.stringify(data), revision: result.revision, rulesRevision: result.rulesRevision, cloud, summary };
       document.getElementById('step-publish').scrollIntoView({ behavior: 'smooth' });
     } finally { publicationBusy = false; button.disabled = false; }
   }
 
   async function uploadToApi() {
     if (publicationBusy) return;
+    if (window.ScheduleApp.StaffClient?.user?.role === 'methodist') throw new Error('Передайте серверну чернетку відповідальному за публікацію');
     syncFromGrid(); applyFilters();
     const data = publicationData();
     if (!publicationPreview || publicationPreview.signature !== JSON.stringify(data)) throw new Error('Спочатку перевірте та перегляньте актуальні зміни');
     if (!document.getElementById('publicationAcknowledged').checked) throw new Error('Підтвердьте перегляд змін');
     publicationBusy = true; els.uploadBtn.disabled = true;
+    const generation = previewGeneration;
     try {
       const result = await publicationRequest({ password: clean(els.adminPassword.value), actor: clean(els.adminActor.value) || 'session-constructor',
-        mode: 'replaceForm', expectedRevision: publicationPreview.revision, data });
+        mode: 'replaceForm', expectedRevision: publicationPreview.revision, expectedRulesRevision: publicationPreview.rulesRevision, ...publicationPreview.cloud, data });
+      if (generation !== previewGeneration) return;
       publicationBaseline = { term: clean(data.term).toLowerCase(), revision: result.revision };
+      window.ScheduleApp.SessionWorkspace?.published(result);
       invalidatePublication(); saveDraft();
       document.getElementById('publicationSummary').textContent = `Опубліковано: додано ${result.added}, змінено ${result.changed}, видалено ${result.removed}. Перевірте публічний розклад.`;
       setStatus('Перевірену версію сесії опубліковано');
@@ -1865,7 +1885,7 @@
     document.getElementById('publicationSummary').textContent = e.message;
   }));
   document.getElementById('publicationAcknowledged').addEventListener('change', (event) => {
-    els.uploadBtn.disabled = publicationBusy || !publicationPreview || !event.target.checked;
+    els.uploadBtn.disabled = publicationBusy || window.ScheduleApp.StaffClient?.user?.role === 'methodist' || !publicationPreview || !event.target.checked;
   });
   document.addEventListener('input', event => {
     if (event.target.closest('#tableBody') || ['studyForm', 'sessionTerm', 'sessionTermSelect'].includes(event.target.id)) invalidatePublication();
@@ -2244,8 +2264,8 @@
   });
   els.clearDraftBtn?.addEventListener('click', () => {
     if (!confirm('Ви впевнені, що хочете видалити всі записи з таблиці та очистити чернетку?')) return;
-    localStorage.removeItem(DRAFT_KEY);
-    localStorage.removeItem(VIEW_STATE_KEY);
+    localStorage.removeItem(localKey(DRAFT_KEY));
+    localStorage.removeItem(localKey(VIEW_STATE_KEY));
     state.rows = [];
     state.filteredRows = [];
     renderFilters(state.rows);
@@ -2262,123 +2282,22 @@
   });
 
   // --- DOCX file parsing via mammoth.js ---
-  function parseDocxFile(file) {
-    if (!file) return;
-    if (!window.mammoth) {
-      showError('mammoth.js не завантажений. Перезавантажте сторінку.');
-      return;
-    }
-    setStatus('Парсинг DOCX файлу...');
-    const reader = new FileReader();
-    reader.onload = function (evt) {
-      mammoth.convertToHtml({ arrayBuffer: evt.target.result })
-        .then((result) => {
-          const html = result.value;
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, 'text/html');
-          const tables = doc.querySelectorAll('table');
-          if (!tables.length) {
-            showError('У DOCX файлі не знайдено таблиць.');
-            return;
-          }
-          const parsed = [];
-          tables.forEach((tbl) => {
-            const trs = tbl.querySelectorAll('tr');
-            trs.forEach((tr, ri) => {
-              if (ri === 0) return; // skip header
-              const cells = Array.from(tr.querySelectorAll('td')).map((td) => clean(td.textContent));
-              if (cells.length < 2) return;
-              // Try to extract: discipline, group, teachers, controlType, date, time, room
-              const imported = SharedImport?.fromCells(cells);
-              if (imported) {
-                parsed.push(imported);
-              } else {
-                const discipline = normalizeDiscipline(cells[1] || cells[0] || '');
-                const group = clean(cells[2] || cells[3] || '');
-                const teachers = splitTeachers(cells[3] || cells[4] || '');
-                let controlType = clean(cells[4] || cells[5] || '').toLowerCase();
-                if (!CONTROL_OPTIONS.includes(controlType)) controlType = 'залік';
-                const date = clean(cells[5] || cells[6] || '');
-                const time = clean(cells[6] || cells[7] || '');
-                const room = clean(cells[7] || cells[8] || '');
-                if (discipline) parsed.push({ discipline, group, teachers, controlType, date, time, room });
-              }
-            });
-          });
-          if (!parsed.length) {
-            showError('Не вдалося розпізнати записи з DOCX таблиць.');
-            return;
-          }
-          syncFromGrid();
-          state.rows = dedupeRows(state.rows.concat(parsed));
-          renderFilters(state.rows);
-          applyFilters();
-          saveDraftDebounced();
-          setStatus(`З DOCX файлу додано ${parsed.length} записів.`);
-          showError('');
-        })
-        .catch((err) => {
-          showError('Помилка парсингу DOCX: ' + (err.message || String(err)));
-        });
-    };
-    reader.onerror = () => showError('Помилка читання файлу.');
-    reader.readAsArrayBuffer(file);
+  async function parseDocxFile(file) {
+    try {
+      if (!window.mammoth) throw new Error('Не завантажений модуль Word');
+      const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+      const doc = new DOMParser().parseFromString(result.value, 'text/html');
+      const tables = [...doc.querySelectorAll('table')].map((table, index) => ({ name: 'Таблиця '+(index+1), heading: table.previousElementSibling?.textContent || '', rows: [...table.querySelectorAll('tr')].map(row => [...row.querySelectorAll('td,th')].map(cell => clean(cell.textContent))) }));
+      window.ScheduleApp.SessionImportUI.stage(tables, file.name);
+    } catch (error) { showError('Імпорт Word: '+error.message); }
   }
-
-  // --- XLSX/XLS file parsing via SheetJS ---
-  function parseExcelFile(file) {
-    if (!file) return;
-    if (!window.XLSX) {
-      showError('SheetJS не завантажений. Перезавантажте сторінку.');
-      return;
-    }
-    setStatus('Парсинг Excel файлу...');
-    const reader = new FileReader();
-    reader.onload = function (evt) {
-      try {
-        const wb = XLSX.read(evt.target.result, { type: 'array' });
-        const parsed = [];
-        wb.SheetNames.forEach((name) => {
-          const ws = wb.Sheets[name];
-          const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          if (!data.length) return;
-          // Skip header row, parse remaining
-          for (let ri = 1; ri < data.length; ri++) {
-            const cells = (data[ri] || []).map((c) => clean(String(c || '')));
-            if (cells.length < 2) continue;
-            const imported = SharedImport?.fromCells(cells);
-            if (imported) {
-              parsed.push(imported);
-            } else {
-              const discipline = normalizeDiscipline(cells[1] || cells[0] || '');
-              const group = clean(cells[2] || cells[3] || '');
-              const teachers = splitTeachers(cells[3] || cells[4] || '');
-              let controlType = clean(cells[4] || cells[5] || '').toLowerCase();
-              if (!CONTROL_OPTIONS.includes(controlType)) controlType = 'залік';
-              const date = clean(cells[5] || cells[6] || '');
-              const time = clean(cells[6] || cells[7] || '');
-              const room = clean(cells[7] || cells[8] || '');
-              if (discipline) parsed.push({ discipline, group, teachers, controlType, date, time, room });
-            }
-          }
-        });
-        if (!parsed.length) {
-          showError('Не вдалося розпізнати записи з Excel файлу.');
-          return;
-        }
-        syncFromGrid();
-        state.rows = dedupeRows(state.rows.concat(parsed));
-        renderFilters(state.rows);
-        applyFilters();
-        saveDraftDebounced();
-        setStatus(`З Excel файлу додано ${parsed.length} записів.`);
-        showError('');
-      } catch (err) {
-        showError('Помилка парсингу Excel: ' + (err.message || String(err)));
-      }
-    };
-    reader.onerror = () => showError('Помилка читання файлу.');
-    reader.readAsArrayBuffer(file);
+  async function parseExcelFile(file) {
+    try {
+      if (!window.XLSX) throw new Error('Не завантажений модуль Excel');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+      const tables = workbook.SheetNames.map(name => ({ name, rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: false, dateNF: 'yyyy-mm-dd', defval: '' }) }));
+      window.ScheduleApp.SessionImportUI.stage(tables, file.name);
+    } catch (error) { showError('Імпорт Excel: '+error.message); }
   }
 
   if (els.docxFiles) {
@@ -2396,6 +2315,73 @@
     });
   }
 
+  window.ScheduleApp.SessionEditor = {
+    getDraft() { syncFromGrid(); return getDraftPayload(); },
+    applyDraft(payload) {
+      pushUndo();
+      for (const [name, value] of Object.entries(payload.fields || {})) if (els[name] && typeof value === 'string') els[name].value = value;
+      publicationBaseline = payload.publicationBaseline || null;
+      state.rows = (payload.rows || []).map(row => ({ ...row, id: row.id || generateId(), teachers: Array.isArray(row.teachers) ? row.teachers : splitTeachers(row.teachers || '') }));
+      clearFilterControls(); invalidatePublication(); renderFilters(state.rows); applyFilters(); saveDraft();
+    }
+  };
+  async function loadInstitutionRules() {
+    const result = await window.ScheduleApp.StaffClient.request('/api/staff/rules');
+    institutionRules = Domain.normalizeRules(result.rules || {});
+    const summary = document.getElementById('institutionRulesSummary');
+    const details = `Тривалість: ${institutionRules.examDurationMinutes || 'не задана'} хв; інтервал між датами: ${institutionRules.minExamGapDays || 'не заданий'} днів; максимум групі: ${institutionRules.maxGroupExamsPerDay || 'не заданий'}, викладачу: ${institutionRules.maxTeacherExamsPerDay || 'не заданий'} іспитів/день; години: ${institutionRules.workdayStart ? institutionRules.workdayStart + '–' + institutionRules.workdayEnd : 'не задані'}. `;
+    summary.replaceChildren(document.createTextNode(institutionRules.configured ? details + (institutionRules.enforcePlanningRules ? 'Порушення блокують публікацію. ' : 'Порушення показуються як рекомендації. ') : 'Правила ще не погоджені: додаткові обмеження вимкнені. '));
+    const link = document.createElement('a'); link.href = '/staff-settings.html'; link.className = 'underline font-bold'; link.textContent = 'Переглянути та налаштувати правила'; summary.append(link); renderReview();
+  }
+  loadInstitutionRules().catch(error => { document.getElementById('institutionRulesSummary').textContent = 'Не вдалося завантажити правила: '+error.message; });
+  function onStaffAccountChanged() {
+    invalidatePublication();
+    const user = window.ScheduleApp.StaffClient.user;
+    if (activeDraftUser !== (user?.id || null)) {
+      syncFromGrid();
+      const previous = activeDraftUser;
+      els.rowDetailPanel.replaceChildren(); els.rowDetailPanel.classList.add('hidden');
+      if (previous) window.ScheduleApp.SessionImportUI?.clear();
+      if (previous) localStorage.setItem(localKey(DRAFT_KEY), JSON.stringify(getDraftPayload()));
+      activeDraftUser = user?.id || null;
+      if (previous && !user) {
+        state.rows = []; publicationBaseline = null; localStorage.removeItem(DRAFT_KEY);
+        clearFilterControls(); applyFilters();
+      } else if (user) {
+        const saved = localStorage.getItem(localKey(DRAFT_KEY));
+        if (saved) { state.rows = []; restoreDraft(); }
+        else saveDraft();
+        localStorage.removeItem(DRAFT_KEY);
+      }
+      renderSnapshotSelect();
+    }
+    for (const input of [els.adminPassword, els.adminActor]) input.closest('label')?.classList.toggle('hidden', !!user);
+    if (user?.role === 'methodist') document.getElementById('publicationSummary').textContent = 'Методист готує чернетку. Передайте її на перевірку відповідальному для публікації.';
+  }
+  window.addEventListener('staff-account-changed', onStaffAccountChanged);
+  window.ScheduleApp.StaffClient.ready.then(onStaffAccountChanged);
+  document.getElementById('calendarPrimaryBtn').onclick = () => { syncFromGrid(); state.viewMode = 'calendar'; renderCalendar(); };
+  document.getElementById('tablePrimaryBtn').onclick = () => { state.viewMode = 'table'; renderCalendar(); applyFilters(); };
+  document.getElementById('calendarMonth').onchange = renderCalendar;
+  document.getElementById('calendarGroup').onchange = renderCalendar;
+  els.calendarPanel.addEventListener('change', event => {
+    const input = event.target.closest('[data-calendar-date]'); if (!input) return;
+    const row = state.rows.find(value => value.id === input.dataset.calendarDate); if (!row) return;
+    pushUndo(); row.date = input.value; applyFilters(); saveDraftDebounced();
+  });
+
+  els.calendarPanel.addEventListener('input', event => {
+    const input = event.target.closest('[data-calendar-field]'); if (!input) return;
+    const row = state.rows.find(value => value.id === input.dataset.calendarId); if (!row) return;
+    if (!input.dataset.undoSaved) { pushUndo(); input.dataset.undoSaved = '1'; }
+    row[input.dataset.calendarField] = input.value; renderReview(); saveDraftDebounced();
+  });
+  els.calendarPanel.addEventListener('change', event => {
+    const input = event.target.closest('[data-calendar-field]'); if (!input) return;
+    delete input.dataset.undoSaved;
+    // Moving focus to the next card field must not replace the input being focused.
+    setTimeout(() => { if (!els.calendarPanel.contains(document.activeElement)) applyFilters(); }, 0);
+  });
   // --- Save on page unload to prevent data loss ---
   window.addEventListener('beforeunload', () => {
     syncFromGrid();

@@ -20,7 +20,7 @@
     </script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.generated.css?v=d99eae12762c" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="/css/tailwind.generated.css?v=a35e94436fcc" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="/css/styles.css?v=ba40711332ed">
     <link rel="stylesheet" href="/css/ui-kit.css?v=b0580bc1a952">
     <style>
@@ -78,6 +78,18 @@
 
         <section id="step-source" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-4 space-y-3 scroll-mt-4">
             <h2 class="font-black text-lg">1. Виберіть джерело та сформуйте чернетку</h2>
+            <aside id="institutionRulesSummary" class="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 text-sm" role="status">Правила установи завантажуються…</aside>
+            <section id="cloudWorkspace" class="hidden rounded-xl border dark:border-gray-700 p-3 space-y-3" aria-label="Серверні чернетки">
+                <h3 class="font-bold">Серверні чернетки та спільна робота</h3>
+                <div class="flex flex-wrap gap-2"><select id="cloudDraftSelect" class="ui-select dark:bg-gray-700"><option value="">Оберіть серверну чернетку</option></select><button id="refreshCloudDrafts" class="ui-btn">Оновити список</button><button id="openCloudDraft" class="ui-btn">Відкрити чернетку</button></div>
+                <label class="block">Назва чернетки<input id="cloudDraftTitle" class="ui-input block w-full dark:bg-gray-700" placeholder="Наприклад: зимова сесія, факультет"></label>
+                <label class="block">Колеги зі спільним доступом<select id="draftSharedWith" multiple class="ui-select block w-full dark:bg-gray-700" aria-label="Колеги зі спільним доступом"></select></label>
+                <div class="flex flex-wrap gap-2"><button id="saveCloudDraft" class="ui-btn ui-btn-primary">Зберегти на сервері</button><button id="copyCloudDraft" class="ui-btn">Зберегти як нову копію</button><button id="submitCloudDraft" class="ui-btn">Передати на перевірку</button></div>
+                <label class="flex gap-2"><input id="cloudAutosave" type="checkbox">Автозбереження відкритої серверної чернетки після правок</label>
+                <div class="flex flex-wrap gap-2"><select id="cloudDraftVersion" class="ui-select dark:bg-gray-700"><option value="">Попередні версії</option></select><button id="restoreCloudDraftVersion" class="ui-btn">Відкрити попередню версію</button></div>
+                <p id="cloudDraftStatus" role="status" class="text-sm"></p>
+            </section>
+
             <p class="text-sm text-gray-500">Виберіть сесію й форму навчання. Відкрийте опубліковані записи, імпортуйте Word / Excel або додайте дисципліни вручну.</p>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <select aria-label="Опублікована сесія" id="sessionTermSelect" class="rounded-xl border dark:border-gray-600 p-2 bg-white dark:bg-gray-700"></select>
@@ -156,9 +168,26 @@
 <div id="progressText" class="text-xs text-gray-500">Готово</div>
         </section>
 
+
+        <section id="importPreviewPanel" class="hidden rounded-2xl bg-white dark:bg-gray-800 p-4 shadow space-y-3" aria-labelledby="importPreviewTitle">
+            <h2 id="importPreviewTitle" class="font-bold text-lg">Перегляд імпорту перед додаванням</h2>
+            <p class="text-sm text-gray-500">Файл ще не змінює чернетку. Зіставте колонки, перевірте нерозпізнані рядки та дублікати. Рядки без дисципліни або групи спочатку не вибрані; їх можна включити для ручного виправлення.</p>
+            <label>Таблиця файлу<select id="importTableSelect" class="ui-select dark:bg-gray-700"></select></label>
+            <label>Номер останнього рядка заголовка; 0 — заголовка немає<input id="importHeaderRow" type="number" min="0" class="ui-input dark:bg-gray-700"></label>
+            <div id="importColumnMapping" class="grid grid-cols-1 md:grid-cols-4 gap-3"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3"><label>Група для рядків без колонки групи<input id="importDefaultGroup" class="ui-input block w-full dark:bg-gray-700"></label><label>Тип контролю, якщо не вказаний у файлі<select id="importDefaultControl" class="ui-select block w-full dark:bg-gray-700"><option value="залік">Залік</option><option value="іспит">Іспит</option><option value="захист">Захист</option><option value="диф.залік">Диф. залік</option></select></label></div>
+            <details><summary class="cursor-pointer font-bold">Перші рядки вихідної таблиці</summary><pre id="importRawRows" class="text-xs overflow-auto p-2"></pre></details>
+            <p id="importSummary" role="status"></p>
+
+            <div class="overflow-x-auto"><table class="text-sm min-w-full"><thead><tr><th>Додати</th><th>Таблиця:рядок</th><th>Дисципліна</th><th>Групи</th><th>Викладач</th><th>Контроль</th><th>Дата і час</th><th>Аудиторія</th><th>Проблеми</th></tr></thead><tbody id="importRows"></tbody></table></div>
+            <label class="flex gap-2"><input id="skipImportDuplicates" type="checkbox" checked>Пропустити точні дублікати</label>
+            <label class="flex gap-2"><input id="importReviewed" type="checkbox">Я перевірив зіставлення колонок і включені рядки всіх таблиць</label>
+            <button id="applyImport" disabled class="ui-btn ui-btn-primary disabled:opacity-40">Додати вибрані рядки до чернетки</button><button id="cancelImport" class="ui-btn">Скасувати імпорт</button>
+        </section>
         <section id="step-edit" class="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden scroll-mt-4">
             <div class="p-4 space-y-3">
                 <h2 class="font-black text-lg">2. Відредагуйте розклад</h2>
+                <div id="editorViewControls" class="flex flex-wrap gap-2"><button id="calendarPrimaryBtn" class="ui-btn">Календар сесії</button><button id="tablePrimaryBtn" class="ui-btn">Таблиця</button><input id="calendarMonth" type="month" class="ui-input dark:bg-gray-700" aria-label="Місяць календаря"><select id="calendarGroup" class="ui-select dark:bg-gray-700" aria-label="Група календаря"><option value="">Усі групи</option></select></div>
                 <p class="text-sm text-gray-500">Змінюйте записи в таблиці. Чернетка зберігається в цьому браузері; для передачі колезі завантажте файл.</p>
                 <!-- Group 3: Tools & Export -->
                 <div id="export-tools" class="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/50 scroll-mt-4">
@@ -338,12 +367,14 @@
 
 
             <div id="daySummaryPanel" class="p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 text-sm"></div>
-            <div id="calendarPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700"></div>
-            <div id="rowDetailPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm"></div>
+
+
 </div>
                 </details>
             </div>
 
+<div id="calendarPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700"></div>
+<div id="rowDetailPanel" class="hidden p-3 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm"></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-700 shadow-sm shadow-gray-200 dark:shadow-gray-800">
@@ -443,13 +474,18 @@
         </section>
     </div>
     <script src="/js/utils.js?v=46456b71272e"></script>
-    <script src="/js/app-shell.js?v=2ddfd4abcf6e"></script>
+    <script src="/js/app-shell.js?v=b5cbf8bdc9a7"></script>
+  <script src="/js/staff-client.js?v=cdb908eab8a2"></script>
     <script src="/js/api.js?v=98d2faac2c8d"></script>
     <script src="/js/schedule-model.js?v=db7f6f2c8ceb"></script>
     <script src="/js/schedule-catalog.js?v=8a290252c5ad"></script>
-    <script src="/js/session-domain.js?v=a96f5ac3278c"></script>
+    <script src="/js/session-domain.js?v=5d3f5b9a04a6"></script>
+    <script src="/js/session-calendar.js?v=eb890fbabe56"></script>
     <script src="/js/session-import.js?v=3dd1ff1cef17"></script>
-    <script src="/js/session-constructor.js?v=d58faba02d86"></script>
+    <script src="/js/session-import-preview.js?v=92c520c7c86b"></script>
+    <script src="/js/session-constructor.js?v=df4f98f66a3e"></script>
+    <script src="/js/session-workspace.js?v=59deda4537d9"></script>
+    <script src="/js/session-import-ui.js?v=aae667404c38"></script>
 </body>
 </html>
 

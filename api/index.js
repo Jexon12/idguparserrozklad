@@ -5,13 +5,14 @@ const ExcelJS = require('exceljs');
 const JobQueue = require('./job-queue');
 const SessionDomain = require('../js/session-domain');
 const { planPublication, revision: sessionRevision } = require('./session-publication');
+const { createStaffService } = require('./staff-service');
 const {
     createSearchIndex,
     searchIndex,
     buildSearchCatalog
 } = require('./search-index');
 
-const DB_FILE = path.join(__dirname, '../db.json');
+const DB_FILE = process.env.SCHEDULE_DB_FILE ? path.resolve(process.env.SCHEDULE_DB_FILE) : path.join(__dirname, '../db.json');
 const SESSION_FALLBACK_FILE = path.join(__dirname, '../data/session-2025-26.json');
 const _rawAdmin = process.env.ADMIN_PASSWORD || '';
 const ADMIN_PASSWORD = (_rawAdmin && _rawAdmin !== 'admin123' && _rawAdmin.length >= 8)
@@ -88,9 +89,8 @@ function checkRateLimit(bucket, key, config) {
     return { allowed: true, remaining: config.max - existing.count, resetAt: existing.resetAt };
 }
 
-function enforceRateLimit(req, res, bucket, config) {
-    const ip = getClientIp(req);
-    const result = checkRateLimit(bucket, ip, config);
+function enforceRateLimit(req, res, bucket, config, key = getClientIp(req)) {
+    const result = checkRateLimit(bucket, key, config);
     res.setHeader('X-RateLimit-Limit', config.max);
     res.setHeader('X-RateLimit-Remaining', Math.max(0, result.remaining));
     res.setHeader('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
@@ -487,6 +487,7 @@ async function appendAuditEvent(req, action, scope, meta = {}) {
             const list = Array.isArray(events) ? events : [];
             list.push({
                 ts: new Date().toISOString(), action, scope, ip: getClientIp(req),
+                actor: req.staffUser?.name, userId: req.staffUser?.id,
                 userAgent: String(req.headers['user-agent'] || '').slice(0, 180),
                 meta: sanitizePayloadForLog(meta)
             });
@@ -533,11 +534,36 @@ async function appendMonitorEvent(type, payload) {
     }
 }
 
+async function staffDb() {
+    const db = await getDb();
+    if (!db && process.env.NODE_ENV === 'production') throw Object.assign(new Error('Staff storage requires an available Redis/KV connection'), { statusCode: 503 });
+    return db;
+}
+const Staff = createStaffService({
+    read: async () => readJsonKey(await staffDb(), 'staff_state', {}),
+    storage: async () => (await staffDb())?.type || 'local-db',
+    mutate: async fn => {
+        const db = await staffDb();
+        return withStorageMutationLock(db, 'staff_state', async () => {
+            const state = await readJsonKey(db, 'staff_state', {});
+            const result = await fn(state);
+            await writeJsonKey(db, 'staff_state', state);
+            return result;
+        });
+    },
+    archive: async state => writeJsonKey(await staffDb(), 'staff_backup_previous', state),
+    previousArchive: async () => readJsonKey(await staffDb(), 'staff_backup_previous', null),
+    audit: (req, action, meta) => appendAuditEvent(req, action, 'staff', meta)
+}, () => ADMIN_PASSWORD);
+async function staffAccess(req, res, roles, password) {
+    try { req.staffUser = await Staff.authorize(req, roles, password); return true; }
+    catch (error) { res.status(error.statusCode === 401 ? 403 : error.statusCode || 503).json({ error: error.message }); return false; }
+}
 const apiHandler = async (req, res) => {
     const accessPath = new URL(req.url, `http://${req.headers.host}`).pathname.toLowerCase();
     const protectedRead = ['/api/monitor', '/api/audit', '/api/versions'].includes(accessPath) ||
         (accessPath === '/api/session' && new URL(req.url, `http://${req.headers.host}`).searchParams.get('admin') === '1');
-    const restrictedOrigin = protectedRead || ['POST', 'OPTIONS'].includes(req.method);
+    const restrictedOrigin = protectedRead || ['POST', 'DELETE', 'OPTIONS'].includes(req.method);
     const suppliedOrigin = req.headers.origin;
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
     const sameOrigin = suppliedOrigin === `https://${req.headers.host}` ||
@@ -549,16 +575,13 @@ const apiHandler = async (req, res) => {
     if (protectedRead && req.method !== 'OPTIONS') {
         res.setHeader('Cache-Control', 'no-store');
         if (!enforceRateLimit(req, res, 'staff-read', RATE_LIMITS.adminPost)) return;
-        if (!ADMIN_PASSWORD || req.headers['x-admin-password'] !== ADMIN_PASSWORD) {
-            res.status(403).json({ error: 'Administrator authentication required' });
-            return;
-        }
+        if (!await staffAccess(req, res, ['admin'], req.headers['x-admin-password'])) return;
     }
     if (req.method === 'OPTIONS') {
         const requestOrigin = req.headers.origin || '*';
         res.setHeader('Access-Control-Allow-Origin', requestOrigin);
         res.setHeader('Vary', 'Origin');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Occupancy-Cache-Token, X-Admin-Password');
         res.status(204).end();
         return;
@@ -575,6 +598,18 @@ const apiHandler = async (req, res) => {
     // Construct URL object to be safe.
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
     const pathname = (urlObj.pathname || '').toLowerCase();
+    if (pathname.startsWith('/api/staff/')) {
+        if (['/api/staff/auth/login', '/api/staff/auth/bootstrap'].includes(pathname) && req.method === 'POST') {
+            const username = String(req.body?.username || '').trim().toLowerCase().slice(0, 80);
+            if (!enforceRateLimit(req, res, 'staff-login-account', { windowMs: 15 * 60000, max: 10 }, username) ||
+                !enforceRateLimit(req, res, 'staff-login-global', RATE_LIMITS.proxy, 'instance')) return;
+        }
+        let user;
+        try { user = await Staff.currentUser(req); } catch (error) { res.status(503).json({ error: error.message }); return; }
+        if (!enforceRateLimit(req, res, 'staff-api', RATE_LIMITS.proxy, user?.id || getClientIp(req))) return;
+        await Staff.handle(req, res);
+        return;
+    }
 
     // Helper to allow CORS — restrict for admin mutations
     const origin = req.headers.origin || '';
@@ -693,11 +728,7 @@ const apiHandler = async (req, res) => {
         const payload = (req.body && typeof req.body === 'object') ? req.body : {};
         const password = payload.password || '';
         const scope = String(payload.scope || 'proxy');
-        if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
-            await appendAuditEvent(req, 'admin_auth_failed', 'cache_invalidate', { scope });
-            res.status(403).json({ error: 'Wrong password' });
-            return;
-        }
+        if (!await staffAccess(req, res, ['admin'], password)) return;
 
         let cleared = 0;
         if (scope === 'proxy' || scope === 'all') {
@@ -767,10 +798,6 @@ const apiHandler = async (req, res) => {
             if (!enforceRateLimit(req, res, 'admin-post-times', RATE_LIMITS.adminPost)) {
                 return;
             }
-            if (!ADMIN_PASSWORD) {
-                res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD (8+ chars, not admin123) in production' });
-                return;
-            }
             let payload;
             try {
                 payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
@@ -787,12 +814,7 @@ const apiHandler = async (req, res) => {
             }
 
             const { password, times } = payload;
-            if (password !== ADMIN_PASSWORD) {
-                console.log("Wrong password");
-                await appendAuditEvent(req, 'admin_auth_failed', 'times', { reason: 'wrong_password' });
-                res.status(403).json({ error: 'Wrong password' });
-                return;
-            }
+            if (!await staffAccess(req, res, ['admin'], password)) return;
 
             // #22: If 'times' is undefined, treat it as a password check only (don't overwrite)
             if (times === undefined) {
@@ -867,10 +889,6 @@ const apiHandler = async (req, res) => {
                 if (!enforceRateLimit(req, res, 'admin-post-links', RATE_LIMITS.adminPost)) {
                     return;
                 }
-                if (!ADMIN_PASSWORD) {
-                    res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD in production' });
-                    return;
-                }
                 const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
 
                 if (!payload) {
@@ -881,11 +899,7 @@ const apiHandler = async (req, res) => {
                 const { password, key } = payload;
                 let { value } = payload;
 
-                if (password !== ADMIN_PASSWORD) {
-                    await appendAuditEvent(req, 'admin_auth_failed', 'links', { reason: 'wrong_password' });
-                    res.status(403).json({ error: 'Wrong password' });
-                    return;
-                }
+                if (!await staffAccess(req, res, ['admin'], password)) return;
                 if (typeof key !== 'string' || !key.trim() || key.length > 200 || ['__proto__', 'prototype', 'constructor'].includes(key)) {
                     res.status(400).json({ error: 'Invalid link key' });
                     return;
@@ -988,11 +1002,8 @@ const apiHandler = async (req, res) => {
             }
 
             if (req.method === 'POST') {
-                if (!enforceRateLimit(req, res, 'admin-post-session', RATE_LIMITS.adminPost)) {
-                    return;
-                }
-                if (!ADMIN_PASSWORD) {
-                    res.status(503).json({ error: 'Admin panel disabled: set ADMIN_PASSWORD in production' });
+                const principal = await Staff.currentUser(req);
+                if (!enforceRateLimit(req, res, 'admin-post-session', RATE_LIMITS.adminPost, principal?.id || getClientIp(req))) {
                     return;
                 }
                 const dbForSession = await getDb();
@@ -1011,23 +1022,21 @@ const apiHandler = async (req, res) => {
 
                 const { password, data } = payload;
                 const action = payload.action || '';
-                const actor = String(payload.actor || 'unknown').replace(/\s+/g, ' ').trim();
+                let actor = String(payload.actor || 'unknown').replace(/\s+/g, ' ').trim();
                 if (action === 'validateOnly') {
                     if (!data || !Array.isArray(data.items) || data.items.length > MAX_SESSION_ITEMS) {
                         res.status(400).json({ error: 'Invalid session payload (items[])' });
                         return;
                     }
                     const normalized = data.items.map(normalizeSessionItem);
-                    const stats = computeValidationStats(normalized);
+                    const stats = computeValidationStats(normalized, await Staff.rules());
                     res.status(200).json(stats);
                     return;
                 }
-                if (password !== ADMIN_PASSWORD) {
-                    await appendAuditEvent(req, 'admin_auth_failed', 'session', { reason: 'wrong_password' });
-                    res.status(403).json({ error: 'Wrong password' });
-                    return;
-                }
-                await withStorageMutationLock(dbForSession, 'session_data', async () => {
+                if (!await staffAccess(req, res, action === 'previewPublication' ? ['methodist', 'publisher', 'admin'] : action ? ['admin'] : ['publisher', 'admin'], password)) return;
+                actor = req.staffUser.name;
+                if (payload.draftId && action === 'previewPublication') await Staff.checkDraft(req, payload);
+                const executePublication = () => withStorageMutationLock(dbForSession, 'session_data', async () => {
                 const loaded = await loadSessionData();
                 const store = ensureSessionStore(loaded.data);
 
@@ -1036,8 +1045,9 @@ const apiHandler = async (req, res) => {
                         res.status(400).json({ error: 'Invalid session payload (items[])' });
                         return;
                     }
-                    const plan = planPublication(store, payload);
-                    res.status(200).json({ revision: plan.currentRevision, validation: plan.validation, changes: plan.changes, summary: plan.summary });
+                    const rules = await Staff.rules();
+                    const plan = planPublication(store, payload, rules);
+                    res.status(200).json({ revision: plan.currentRevision, rulesRevision: sessionRevision(rules), validation: plan.validation, changes: plan.changes, summary: plan.summary });
                     return;
                 }
                 if (action) {
@@ -1072,7 +1082,12 @@ const apiHandler = async (req, res) => {
                     res.status(409).json({ error: 'Спочатку перегляньте зміни перед публікацією' });
                     return;
                 }
-                const plan = planPublication(store, payload);
+                const rules = await Staff.rules();
+                if (payload.expectedRulesRevision && payload.expectedRulesRevision !== sessionRevision(rules)) {
+                    res.status(409).json({ error: 'Правила установи змінилися. Повторіть перегляд перед публікацією' });
+                    return;
+                }
+                const plan = planPublication(store, payload, rules);
                 const { term, validation } = plan;
                 if (validation.blockingCount > 0) {
                     const error = new Error('Session validation failed before publication');
@@ -1122,9 +1137,10 @@ const apiHandler = async (req, res) => {
                 const total = store.sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
                 await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), term, added });
                 await appendAuditEvent(req, 'update', 'session', { term, added, total });
-                res.status(200).json({ success: true, storage, added, changed, removed, count: total, term, revision: sessionRevision(session) });
-                return;
+                return { success: true, storage, added, changed, removed, count: total, term, revision: sessionRevision(session) };
                 });
+                const publicationResult = payload.draftId && !action ? await Staff.withDraftPublication(req, payload, executePublication) : await executePublication();
+                if (publicationResult) res.status(200).json(publicationResult);
                 return;
             }
         } catch (e) {

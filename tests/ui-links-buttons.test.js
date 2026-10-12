@@ -172,12 +172,14 @@ describe('UI links/buttons regression', () => {
             const htmlPath = path.resolve(__dirname, '..', entry.page.replace(/^\//, ''));
             const jsPath = path.resolve(__dirname, '..', entry.jsFile);
             const html = fs.readFileSync(htmlPath, 'utf8');
-            const js = fs.readFileSync(jsPath, 'utf8');
+            const pageScripts = extractAttrValues(html, 'script', 'src').filter(isInternalPath)
+                .map(script => path.resolve(__dirname, '..', normalizeInternalPath(entry.page, script).replace(/^\//, '')));
+            const js = unique([jsPath, ...pageScripts]).map(script => fs.readFileSync(script, 'utf8')).join('\n');
             const buttonIds = extractButtonIds(html);
 
             for (const id of buttonIds) {
                 const idMentioned = js.includes(`'${id}'`) || js.includes(`\"${id}\"`);
-                const eventBound = js.includes(`addEventListener`) || js.includes('@click');
+                const eventBound = js.includes(`addEventListener`) || js.includes('@click') || js.includes('.onclick');
                 if (!idMentioned || !eventBound) {
                     failures.push(`${entry.page} button#${id} not clearly wired in ${entry.jsFile}`);
                 }

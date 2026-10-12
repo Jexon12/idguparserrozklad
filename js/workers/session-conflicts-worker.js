@@ -1,6 +1,6 @@
 importScripts('/js/session-domain.js');
 self.onmessage = function (e) {
-  const { rows, mode, requestId, rowIds } = e.data || {};
+  const { rows, mode, requestId, rowIds, rules } = e.data || {};
   const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
   const idxSet = new Set();
   const byGroupSlot = new Map();
@@ -71,7 +71,7 @@ self.onmessage = function (e) {
 
   [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((m) => m.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => idxSet.add(i)); }));
 
-  const sharedValidation = self.ScheduleApp.SessionDomain.validate(rows || []);
+  const sharedValidation = self.ScheduleApp.SessionDomain.validate(rows || [], rules || {});
   idxSet.clear();
   sharedValidation.conflictIndices.forEach(index => idxSet.add(index));
   if (mode === 'strict') {

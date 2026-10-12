@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const domain = require('../js/session-domain');
 const normalize = value => String(value || '').trim().toLowerCase();
 const revision = session => crypto.createHash('sha256').update(JSON.stringify(session || null)).digest('hex');
-function planPublication(store, payload) {
+function planPublication(store, payload, rules = {}) {
   const data = payload.data;
   const term = String(data.term || '').trim();
   if (!term) throw Object.assign(new Error('Вкажіть назву сесії'), { statusCode: 400 });
@@ -25,8 +25,10 @@ function planPublication(store, payload) {
   if (mode === 'replaceForm') next = before.filter(it => normalize(it.studyForm) !== normalize(data.studyForm)).concat(incoming);
   else {
     const incomingKeys = new Set(incoming.map(domain.identity));
+    const frequencies = rows => rows.reduce((map, item) => { const id = domain.identity(item); map.set(id, (map.get(id) || 0) + 1); return map; }, new Map());
+    const beforeCounts = frequencies(before), incomingCounts = frequencies(incoming);
     for (const id of incomingKeys) {
-      if (before.filter(it => domain.identity(it) === id).length > 1 || incoming.filter(it => domain.identity(it) === id).length > 1) {
+      if ((beforeCounts.get(id) || 0) > 1 || incomingCounts.get(id) > 1) {
         throw Object.assign(new Error('Імпорт неоднозначний: кілька подій однієї дисципліни для групи. Відкрийте сесію в конструкторі та перегляньте повну заміну форми.'), { statusCode: 422 });
       }
     }
@@ -34,10 +36,10 @@ function planPublication(store, payload) {
   }
   // Validate against other published sessions too: shared teachers and rooms are global resources.
   const others = store.sessions.filter(s => s !== current).flatMap(s => s.items || []).map(domain.normalizeItem);
-  const validation = domain.validate(next.concat(others));
+  const validation = domain.validate(next.concat(others), rules);
   const relevantIssues = validation.issues.filter(issue => issue.indices.some(index => index < next.length));
   validation.issues = relevantIssues;
-  validation.blockingCount = relevantIssues.filter(i => i.severity === 'error').length;
+  validation.blockingCount = validation.blockingIndices.filter(index => index < next.length).length;
   const changes = domain.diff(before, next);
   return { term, mode, currentRevision, items: next, validation, changes,
     summary: { added: changes.added.length, changed: changes.changed.length, removed: changes.removed.length, count: next.length } };

@@ -29,7 +29,7 @@
       const item = document.createElement('li');
       item.className = 'rounded-lg bg-gray-50 p-2 dark:bg-gray-700';
       const at = event.at || event.ts ? new Date(event.at || event.ts).toLocaleString('uk-UA') : '—';
-      item.textContent = `${at} · ${event.action || event.type || 'дія'} · ${event.scope || event.term || ''}`;
+      item.textContent = `${at} · ${event.actor || event.meta?.actor || '—'} · ${event.action || event.type || 'дія'} · ${event.scope || event.term || ''}`;
       list.appendChild(item);
     });
   }
@@ -108,6 +108,11 @@
     byId('staffAuditLog').replaceChildren();
   });
   byId('downloadDiagnostics')?.addEventListener('click', downloadDiagnostics);
+  window.addEventListener('staff-account-changed', () => {
+    staffPassword = '';
+    byId('staffLogin').classList.toggle('hidden', window.ScheduleApp.StaffClient.setupRequired === false);
+    loadStatus();
+  });
   loadStatus().catch((error) => {
     byId('staffHealth').textContent = `Помилка: ${error.message}`;
   });
