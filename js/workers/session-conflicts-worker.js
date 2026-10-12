@@ -1,3 +1,4 @@
+importScripts('/js/session-domain.js');
 self.onmessage = function (e) {
   const { rows, mode, requestId, rowIds } = e.data || {};
   const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
@@ -70,14 +71,19 @@ self.onmessage = function (e) {
 
   [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((m) => m.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => idxSet.add(i)); }));
 
+  const sharedValidation = self.ScheduleApp.SessionDomain.validate(rows || []);
+  idxSet.clear();
+  sharedValidation.conflictIndices.forEach(index => idxSet.add(index));
   if (mode === 'strict') {
     byGroupExamDay.forEach((arr) => {
       const parsed = arr.map((x) => ({ ...x, ts: new Date(`${x.date}T00:00:00`).getTime() })).filter((x) => !Number.isNaN(x.ts)).sort((a, b) => a.ts - b.ts);
       for (let i = 1; i < parsed.length; i++) {
         const daysDiff = Math.round((parsed[i].ts - parsed[i - 1].ts) / (24 * 3600 * 1000));
         if (daysDiff <= 1) {
-          idxSet.add(parsed[i - 1].idx);
-          idxSet.add(parsed[i].idx);
+          [parsed[i - 1].idx, parsed[i].idx].forEach(index => {
+            warningIdxSet.add(index);
+            warnings.push({ index, type: 'examSpacing', message: 'Іспити розташовані близько: перевірте час на підготовку' });
+          });
         }
       }
     });
@@ -126,6 +132,6 @@ self.onmessage = function (e) {
     overloadIndices: Array.from(overloadIdxSet),
     warningIndices: Array.from(warningIdxSet),
     warnings,
-    quality: { missingDate, missingTime, missingRoom, missingTeacher, teacherAliases, duplicateRows }
+    quality: sharedValidation.quality
   });
 };

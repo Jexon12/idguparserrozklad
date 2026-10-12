@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-3d0dd111db31';
+const CACHE_NAME = 'schedule-ffddd7c1152f';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -18,6 +18,8 @@ const STATIC_ASSETS = [
     '/js/components/app-modal-shell.js',
     '/js/schedule-analytics.js',
     '/js/session-import.js',
+    '/js/session-domain.js',
+    '/js/workers/session-conflicts-worker.js',
     '/js/schedule-catalog.js',
     '/js/api.js',
     '/js/search.js',
@@ -53,19 +55,19 @@ self.addEventListener('activate', (event) => {
 const VERSIONED_ASSETS = [
   "/css/campus.css?v=3e7461d34b6e",
   "/css/styles.css?v=ba40711332ed",
-  "/css/tailwind.generated.css?v=af1e6ae4b011",
+  "/css/tailwind.generated.css?v=d99eae12762c",
   "/css/ui-kit.css?v=b0580bc1a952",
   "/js/admin.js?v=87687c891a18",
   "/js/api.js?v=98d2faac2c8d",
   "/js/app-shell.js?v=2ddfd4abcf6e",
   "/js/app-updates.js?v=759bcf41962e",
-  "/js/app.js?v=44b23dbaa5fa",
-  "/js/builder.js?v=f2c2a3d4e746",
+  "/js/app.js?v=f9b40f241bcf",
+  "/js/builder.js?v=e134a26545ac",
   "/js/campus-schedule.js?v=4546cf9912f2",
   "/js/components/app-modal-shell.js?v=1d43109ecd59",
   "/js/components/current-lesson-banner.js?v=24bb9ebcc3cc",
   "/js/components/schedule-status-badges.js?v=050e17e61698",
-  "/js/course-live.js?v=de4800e7fb15",
+  "/js/course-live.js?v=7ab16bdb51ef",
   "/js/i18n.js?v=6a86b9c091b8",
   "/js/lesson-numbering.js?v=6b98381091bd",
   "/js/monitor.js?v=b3abc3883244",
@@ -77,16 +79,18 @@ const VERSIONED_ASSETS = [
   "/js/schedule-catalog.js?v=8a290252c5ad",
   "/js/schedule-model.js?v=db7f6f2c8ceb",
   "/js/search.js?v=103e7bdf53fa",
-  "/js/session-admin.js?v=6095bf5bfb57",
-  "/js/session-constructor.js?v=59514315132e",
+  "/js/session-admin.js?v=1bc502f735d3",
+  "/js/session-constructor.js?v=d58faba02d86",
+  "/js/session-domain.js?v=a96f5ac3278c",
   "/js/session-import.js?v=3dd1ff1cef17",
-  "/js/session-page.js?v=a8cda74f922c",
-  "/js/staff-portal.js?v=1e7e39408c24",
+  "/js/session-page.js?v=0b3322e3a0e7",
+  "/js/staff-portal.js?v=c073186279d1",
   "/js/utils.js?v=46456b71272e",
   "/js/vendor/lucide.min.js?v=3411692820cb",
   "/js/vendor/vercel-analytics.mjs?v=c3026b63c92a",
   "/js/vendor/vue.global.prod.js?v=4963101441de",
-  "/js/web-analytics.js?v=b852ccdc0a1d"
+  "/js/web-analytics.js?v=b852ccdc0a1d",
+  "/js/week-planner.js?v=a5ff12f18152"
 ];
 
 // Network-first only for known same-origin static assets. API responses and

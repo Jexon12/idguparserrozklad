@@ -980,76 +980,21 @@ window.ScheduleApp = window.ScheduleApp || {};
     }
 
     function optimizeFacultySchedule(lessons) {
-        const byGroupDay = new Map();
-        lessons.forEach((l) => {
-            const key = `${l.group}||${l.date}`;
-            if (!byGroupDay.has(key)) byGroupDay.set(key, []);
-            byGroupDay.get(key).push(l);
-        });
+        const planned = SA.WeekPlanner.simulate(lessons, state.verifiedTeacherBusy || {}, PAIR_TIMES);
+        state.unverifiedLessons = planned.unverified;
+        return planned.rows;
+    }
 
-        const tasks = Array.from(byGroupDay.entries()).map(([key, arr]) => ({
-            key,
-            // New schedule is built from scratch: do not prioritize old pair numbers.
-            lessons: arr.slice().sort((a, b) =>
-                a.discipline.localeCompare(b.discipline, 'uk') ||
-                a.teacher.localeCompare(b.teacher, 'uk') ||
-                a.group.localeCompare(b.group, 'uk')
-            )
-        }));
-        tasks.sort((a, b) => b.lessons.length - a.lessons.length);
-
-        const occupancy = {};
-        for (let d = 1; d <= 5; d++) {
-            occupancy[d] = {};
-            for (let p = 1; p <= 7; p++) occupancy[d][p] = 0;
+    async function verifyPlanningResources() {
+        await ensureTeacherIndexForSelectedFaculty();
+        state.verifiedTeacherBusy = {};
+        const names = [...new Set(state.baselineNormalized.map(row => row.teacher).filter(Boolean))];
+        for (const name of names) {
+            try {
+                const busy = await getTeacherBusyMap(name);
+                if (busy) state.verifiedTeacherBusy[SA.WeekPlanner.teacherKey(name)] = busy;
+            } catch (_) { /* Unverified lessons remain in their original slots. */ }
         }
-
-        const optimized = [];
-        tasks.forEach((task) => {
-            const dayDow = task.lessons[0].dow;
-            const n = task.lessons.length;
-            const originalMinPair = Math.max(1, Math.min(...task.lessons.map((x) => x.pair || 7)));
-            const maxStart = Math.max(1, 8 - n);
-            const preferredMaxPair = n <= 4 ? 4 : 5;
-            const preferredMaxStart = Math.max(1, preferredMaxPair - n + 1);
-
-            let startCandidates = [];
-            for (let s = 1; s <= maxStart; s++) startCandidates.push(s);
-            const preferred = startCandidates.filter((s) => s <= preferredMaxStart);
-            if (preferred.length) startCandidates = preferred;
-
-            let bestStart = 1;
-            let bestCost = Infinity;
-            for (const start of startCandidates) {
-                let load = 0;
-                for (let i = 0; i < n; i++) load += occupancy[dayDow][start + i] || 0;
-                const pairList = [];
-                for (let i = 0; i < n; i++) pairList.push(start + i);
-                const latePenalty = pairList.reduce((sum, p) => {
-                    if (p >= 7) return sum + 100;
-                    if (p === 6) return sum + 40;
-                    if (p === 5) return sum + 10;
-                    return sum;
-                }, 0);
-                const laterThanOriginalPenalty = Math.max(0, start - originalMinPair) * 18;
-                const startPenalty = (start - 1) * 4.5;
-                const cost = load * 1.3 + startPenalty + latePenalty + laterThanOriginalPenalty;
-                if (cost < bestCost) {
-                    bestCost = cost;
-                    bestStart = start;
-                }
-            }
-
-            task.lessons.forEach((l, idx) => {
-                const np = bestStart + idx;
-                const t = PAIR_TIMES[np] || {};
-                const nl = { ...l, pair: np, start: t.start || l.start, end: t.end || l.end };
-                optimized.push(nl);
-                occupancy[dayDow][np] = (occupancy[dayDow][np] || 0) + 1;
-            });
-        });
-
-        return optimized;
     }
 
     async function ensureFacultyLoaded() {
@@ -1059,6 +1004,8 @@ window.ScheduleApp = window.ScheduleApp || {};
         const key = `${facultyId}||${startDmy}||${endDmy}`;
         if (state.loadedFacultyKey === key && state.baselineNormalized.length) return;
 
+        state.teacherScheduleCache = {};
+        state.verifiedTeacherBusy = {};
         buildWeekDays();
         const weekDmySet = new Set(state.weekDays.map((d) => d.dmy));
         setStatus('Збір всіх груп факультету...');
@@ -1110,9 +1057,10 @@ window.ScheduleApp = window.ScheduleApp || {};
             return;
         }
         setStatus('Будую новий оптимізований розклад...');
+        await verifyPlanningResources();
         state.optimizedNormalized = optimizeFacultySchedule(state.baselineNormalized);
         state.normalized = state.optimizedNormalized.slice();
-        setDataModeBadge('новий оптимізований', true);
+        setDataModeBadge('перевірений варіант у межах завантажених даних', true);
         renderTable(state.normalized);
         renderOptimizedTable(state.optimizedNormalized);
         fillGroupsDaySelect();
@@ -1121,7 +1069,7 @@ window.ScheduleApp = window.ScheduleApp || {};
 
         const before = getWindowsSummary(state.baselineNormalized).reduce((s, x) => s + x.windowsWeek, 0);
         const after = getWindowsSummary(state.optimizedNormalized).reduce((s, x) => s + x.windowsWeek, 0);
-        setStatus(`Оптимізований розклад готовий: вікна ${before} → ${after}`);
+        setStatus(`Варіант для перевірки: вікна ${before} → ${after}. Занять без повної перевірки ресурсів: ${state.unverifiedLessons || 0} (залишено без переносу)`);
     }
 
     async function buildWeekSchedule() {

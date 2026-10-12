@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://vnz.osvita.net" crossorigin>
     <link rel="dns-prefetch" href="//vnz.osvita.net">
     <script src="/js/vendor/vue.global.prod.js?v=4963101441de"></script>
-    <link rel="stylesheet" href="/css/tailwind.generated.css?v=af1e6ae4b011" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="/css/tailwind.generated.css?v=d99eae12762c" onerror="window.__loadTailwindFallback()">
     <link rel="stylesheet" href="/css/styles.css?v=ba40711332ed">
     <link rel="stylesheet" href="/css/ui-kit.css?v=b0580bc1a952">
     <link rel="stylesheet" href="/css/campus.css?v=3e7461d34b6e">
@@ -948,6 +948,7 @@
                             </div>
 
                             <div v-if="showFreeNowOnly" class="mb-3 text-xs text-emerald-700 dark:text-emerald-300">
+                                <p v-if="scanErrors > 0 || isScanning" class="text-amber-700 dark:text-amber-300">Потрібне повне сканування без помилок за сьогодні. Неповні дані не підтверджують, що аудиторія вільна.</p>
                                 Поточна пара: <span class="font-bold">{{ currentPairNow || 'поза парами' }}</span>.
                                 Показано вільні аудиторії: {{ freeRoomsNow.length }}.
                             </div>
@@ -1518,7 +1519,7 @@
     <script src="/js/lesson-numbering.js?v=6b98381091bd"></script>
     <script src="/js/vendor/lucide.min.js?v=3411692820cb"></script>
     <script src="/js/campus-schedule.js?v=4546cf9912f2"></script>
-    <script src="/js/app.js?v=44b23dbaa5fa"></script>
+    <script src="/js/app.js?v=f9b40f241bcf"></script>
 
         <script src="/js/app-updates.js?v=759bcf41962e"></script>
         <!-- Service Worker Registration -->

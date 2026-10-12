@@ -756,6 +756,9 @@ try {
 
             const freeRoomsNow = computed(() => {
                 if (!showFreeNowOnly.value || !currentPairNow.value) return [];
+                const now = new Date();
+                const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                if (isScanning.value || scanErrors.value > 0 || occupancyDate.value !== today) return [];
                 return filteredOccupancyResults.value
                     .filter((cab) => !cab.slots?.[currentPairNow.value])
                     .slice(0, 200);

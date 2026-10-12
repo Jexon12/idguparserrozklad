@@ -265,7 +265,9 @@
   };
 
   const loadStore = async () => {
-    const data = await apiJson('/api/session');
+    const auth = ensureAdminContext();
+    if (!auth) throw new Error('Введіть пароль і натисніть «Оновити» для перегляду службових даних');
+    const data = await apiJson('/api/session?admin=1', { headers: { 'X-Admin-Password': auth.password } });
     state.sessions = Array.isArray(data.sessions) ? data.sessions : [];
     state.trash = Array.isArray(data.trash) ? data.trash : [];
     state.history = Array.isArray(data.history) ? data.history : [];
@@ -320,22 +322,26 @@
 
     setStatus('Завантажую дані в API...');
     try {
+      const data = {
+        sourceFile: state.filesParsed.join(', '), generatedAt: new Date().toISOString(),
+        term: clean(els.term.value) || 'Session', studyForm: clean(els.studyForm.value) || '', items: state.items
+      };
+      const preview = await apiJson('/api/session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: auth.password, action: 'previewPublication', mode: 'upsert', data })
+      });
+      if (preview.validation.blockingCount) throw new Error(preview.validation.issues.slice(0, 5).map(issue => issue.message).join('; '));
+      if (!window.confirm(`${data.term}: додати ${preview.summary.added}, змінити ${preview.summary.changed} записів? Інші записи збережуться. Для детального редагування відкрийте конструктор.`)) return;
       const safe = await apiJson('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           password: auth.password,
           actor: auth.actor,
-          data: {
-            sourceFile: state.filesParsed.join(', '),
-            generatedAt: new Date().toISOString(),
-            term: clean(els.term.value) || 'Session',
-            studyForm: clean(els.studyForm.value) || '',
-            items: state.items
-          }
+          expectedRevision: preview.revision, mode: 'upsert', data
         })
       });
-      setStatus(`Успішно: додано ${safe.added || 0}, всього ${safe.count || 0}`);
+      setStatus(`Успішно: додано ${safe.added || 0}, змінено ${safe.changed || 0}, всього ${safe.count || 0}`);
       await loadStore();
     } catch (e) {
       setStatus(`Помилка завантаження: ${e.message}`, true);
@@ -383,7 +389,7 @@
     const term = clean(els.existingTerms.value || els.term.value);
     const toTerm = clean(els.renameTermInput.value);
     if (!term || !toTerm) return setStatus('Оберіть сесію і введіть назву копії', true);
-    try { await sendTermAction('duplicateTerm', { term, toTerm }); setStatus(`Дубль створено: ${term} → ${toTerm}`); await loadStore(); } catch (e) { setStatus(e.message, true); }
+    location.href = `/session-constructor.html?copyFrom=${encodeURIComponent(term)}&newTerm=${encodeURIComponent(toTerm)}`;
   };
 
   const rollbackToSnapshot = async () => {

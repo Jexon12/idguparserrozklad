@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const JobQueue = require('./job-queue');
+const SessionDomain = require('../js/session-domain');
+const { planPublication, revision: sessionRevision } = require('./session-publication');
 const {
     createSearchIndex,
     searchIndex,
@@ -181,6 +183,7 @@ const getLocalDb = () => {
         }
     } catch (e) {
         console.error("Local DB Read Error", e);
+        throw Object.assign(new Error('Local storage could not be read; refusing to replace existing data'), { statusCode: 503 });
     }
     return {};
 };
@@ -532,7 +535,8 @@ async function appendMonitorEvent(type, payload) {
 
 const apiHandler = async (req, res) => {
     const accessPath = new URL(req.url, `http://${req.headers.host}`).pathname.toLowerCase();
-    const protectedRead = ['/api/monitor', '/api/audit', '/api/versions'].includes(accessPath);
+    const protectedRead = ['/api/monitor', '/api/audit', '/api/versions'].includes(accessPath) ||
+        (accessPath === '/api/session' && new URL(req.url, `http://${req.headers.host}`).searchParams.get('admin') === '1');
     const restrictedOrigin = protectedRead || ['POST', 'OPTIONS'].includes(req.method);
     const suppliedOrigin = req.headers.origin;
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
@@ -968,9 +972,16 @@ const apiHandler = async (req, res) => {
                 await withMutationLock('session_data', async () => {
                 const loaded = await loadSessionData();
                 const store = ensureSessionStore(loaded.data);
+                const requestedTerm = urlObj.searchParams.get('term');
+                if (requestedTerm) store.sessions = store.sessions.filter(s => normalizeSessionTerm(s.term) === normalizeSessionTerm(requestedTerm));
+                store.items = store.sessions.flatMap(s => s.items || []);
                 const stats = buildSessionStats(store);
                 const snapshotMeta = (store.snapshots || []).map((s) => ({ id: s.id, at: s.at, reason: s.reason, by: s.by })).reverse();
-                res.status(200).json({ ...store, snapshots: snapshotMeta, storage: loaded.storage, stats });
+                const sessions = store.sessions.map(s => ({ ...s, revision: sessionRevision(s) }));
+                res.setHeader('Cache-Control', 'no-store');
+                if (protectedRead) res.status(200).json({ ...store, sessions, snapshots: snapshotMeta, storage: loaded.storage, stats });
+                else res.status(200).json({ updatedAt: store.updatedAt, sessions, items: store.items,
+                    revision: requestedTerm ? sessionRevision(store.sessions[0]) : undefined });
                 return;
                 });
                 return;
@@ -1020,7 +1031,22 @@ const apiHandler = async (req, res) => {
                 const loaded = await loadSessionData();
                 const store = ensureSessionStore(loaded.data);
 
+                if (action === 'previewPublication') {
+                    if (!data || !Array.isArray(data.items) || data.items.length > MAX_SESSION_ITEMS) {
+                        res.status(400).json({ error: 'Invalid session payload (items[])' });
+                        return;
+                    }
+                    const plan = planPublication(store, payload);
+                    res.status(200).json({ revision: plan.currentRevision, validation: plan.validation, changes: plan.changes, summary: plan.summary });
+                    return;
+                }
                 if (action) {
+                    if (action === 'duplicateTerm') {
+                        res.status(409).json({ error: 'Створіть копію як чернетку в конструкторі, змініть дати та перегляньте її перед публікацією' });
+                        return;
+                    }
+                    // Capture the state before the first mutation as a recoverable version.
+                    if (!store.snapshots.length) appendSessionSnapshot(store, 'before-first-change', actor);
                     const result = applySessionAction(store, action, payload);
                     appendSessionSnapshot(store, action, actor);
                     const storedPayload = {
@@ -1042,23 +1068,20 @@ const apiHandler = async (req, res) => {
                     res.status(400).json({ error: 'Invalid session payload (items[])' });
                     return;
                 }
-                const term = data.term || 'Session';
-                const studyForm = data.studyForm || '';
-                const incomingItems = (data.items || []).map((item) => normalizeSessionItem({
-                    ...item,
-                    term: item.term || term,
-                    studyForm: item.studyForm || studyForm
-                }));
-                const validation = computeValidationStats(incomingItems);
-                const blockingIssues = validation.conflictsCount + validation.quality.missingDate +
-                    validation.quality.missingTime + validation.quality.missingRoom;
-                if (blockingIssues > 0 && payload.force !== true) {
+                if (!payload.expectedRevision) {
+                    res.status(409).json({ error: 'Спочатку перегляньте зміни перед публікацією' });
+                    return;
+                }
+                const plan = planPublication(store, payload);
+                const { term, validation } = plan;
+                if (validation.blockingCount > 0) {
                     const error = new Error('Session validation failed before publication');
                     error.statusCode = 422;
                     error.validation = validation;
                     throw error;
                 }
 
+                if (!store.snapshots.length) appendSessionSnapshot(store, 'before-first-change', actor);
                 const normalizedTerm = normalizeSessionTerm(term);
                 let session = store.sessions.find((s) => normalizeSessionTerm(s.term) === normalizedTerm);
                 if (!session) {
@@ -1071,29 +1094,8 @@ const apiHandler = async (req, res) => {
                     store.sessions.push(session);
                 }
 
-                const makeKey = (item) => [
-                    item.term || '',
-                    item.studyForm || '',
-                    item.groupHeading || '',
-                    JSON.stringify(item.groups || []),
-                    item.controlType || '',
-                    item.discipline || '',
-                    item.examForm || '',
-                    item.teacher || '',
-                    item.date || '',
-                    item.time || '',
-                    item.room || ''
-                ].join('||');
-
-                const existingKeys = new Set((session.items || []).map(makeKey));
-                let added = 0;
-                incomingItems.forEach((item) => {
-                    const key = makeKey(item);
-                    if (existingKeys.has(key)) return;
-                    existingKeys.add(key);
-                    session.items.push(item);
-                    added += 1;
-                });
+                session.items = plan.items;
+                const { added, changed, removed } = plan.summary;
 
                 const sourceSet = new Set(String(session.sourceFile || '').split(',').map((s) => s.trim()).filter(Boolean));
                 String(data.sourceFile || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((s) => sourceSet.add(s));
@@ -1110,7 +1112,7 @@ const apiHandler = async (req, res) => {
                         action: 'upsert',
                         term,
                         by: actor,
-                        added
+                        added, changed, removed, mode: plan.mode
                     }),
                     snapshots: store.snapshots
                 };
@@ -1120,7 +1122,7 @@ const apiHandler = async (req, res) => {
                 const total = store.sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
                 await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), term, added });
                 await appendAuditEvent(req, 'update', 'session', { term, added, total });
-                res.status(200).json({ success: true, storage, added, count: total, term });
+                res.status(200).json({ success: true, storage, added, changed, removed, count: total, term, revision: sessionRevision(session) });
                 return;
                 });
                 return;
@@ -1971,6 +1973,9 @@ const appendSessionSnapshot = (store, reason, actor) => {
 
 const loadSessionData = async () => {
     const db = await getDb();
+    if (!db && process.env.NODE_ENV === 'production' && (process.env.REDIS_URL || process.env.KV_REST_API_URL)) {
+        throw Object.assign(new Error('Session storage is temporarily unavailable'), { statusCode: 503 });
+    }
     if (db) {
         try {
             if (db.type === 'kv') {
@@ -1985,6 +1990,9 @@ const loadSessionData = async () => {
             }
         } catch (e) {
             console.error('Session DB read error', e);
+            if (process.env.NODE_ENV === 'production') {
+                throw Object.assign(new Error('Session storage could not be read; publication is unavailable'), { statusCode: 503 });
+            }
         }
     }
 
@@ -2205,83 +2213,8 @@ const normalizeSessionTerm = (value) => String(value || '')
     .trim()
     .toLowerCase();
 
-const normalizeSessionItem = (item) => {
-    const clean = (v, max = 1000) => String(v || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-    const teachers = clean(item.teacher || '')
-        .replace(/\s*(,|\/|\|)\s*/g, '; ')
-        .replace(/\s+та\s+/giu, '; ')
-        .split(';')
-        .map((t) => clean(t))
-        .filter(Boolean);
-    return {
-        term: clean(item.term || ''),
-        studyForm: clean(item.studyForm || ''),
-        groupHeading: clean(item.groupHeading || ''),
-        groups: Array.isArray(item.groups) ? item.groups.map((g) => clean(g).toLowerCase()).filter(Boolean) : [],
-        controlType: clean(item.controlType || 'залік').toLowerCase(),
-        discipline: clean(item.discipline || ''),
-        speciality: clean(item.speciality || ''),
-        program: clean(item.program || ''),
-        examForm: clean(item.examForm || ''),
-        teacher: teachers.join('; '),
-        date: clean(item.date || ''),
-        time: clean(item.time || ''),
-        room: clean(item.room || ''),
-        sourceTable: Number.isFinite(Number(item.sourceTable)) ? Number(item.sourceTable) : 0,
-        sourceFile: clean(item.sourceFile || '', 255)
-    };
-};
-
-const computeValidationStats = (items) => {
-    const quality = { missingDate: 0, missingTime: 0, missingRoom: 0, missingTeacher: 0, duplicateRows: 0, teacherAliases: 0 };
-    const byGroupSlot = new Map();
-    const byTeacherSlot = new Map();
-    const byRoomSlot = new Map();
-    const aliasMap = new Map();
-    const dupMap = new Map();
-    const conflictRows = new Set();
-    const teacherNorm = (t) => String(t || '').toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
-
-    items.forEach((it, idx) => {
-        const isExam = it.controlType === 'іспит';
-        if (!it.date) quality.missingDate++;
-        if (isExam && !it.time) quality.missingTime++;
-        if (isExam && !it.room) quality.missingRoom++;
-        if (!it.teacher) quality.missingTeacher++;
-
-        const dkey = `${it.discipline}__${(it.groups || []).join(',')}__${it.controlType}`;
-        dupMap.set(dkey, (dupMap.get(dkey) || 0) + 1);
-
-        it.teacher.split(';').map((t) => t.trim()).filter(Boolean).forEach((t) => {
-            const tn = teacherNorm(t);
-            if (!aliasMap.has(tn)) aliasMap.set(tn, new Set());
-            aliasMap.get(tn).add(t);
-        });
-
-        if (!isExam || !it.date || !it.time) return;
-        (it.groups || []).forEach((g) => {
-            const k = `${g}__${it.date}__${it.time}`;
-            if (!byGroupSlot.has(k)) byGroupSlot.set(k, []);
-            byGroupSlot.get(k).push(idx);
-        });
-        it.teacher.split(';').map((t) => teacherNorm(t)).filter(Boolean).forEach((t) => {
-            const k = `${t}__${it.date}__${it.time}`;
-            if (!byTeacherSlot.has(k)) byTeacherSlot.set(k, []);
-            byTeacherSlot.get(k).push(idx);
-        });
-        if (it.room) {
-            const k = `${it.room.toLowerCase().replace(/\s+/g, '')}__${it.date}__${it.time}`;
-            if (!byRoomSlot.has(k)) byRoomSlot.set(k, []);
-            byRoomSlot.get(k).push(idx);
-        }
-    });
-
-    dupMap.forEach((n) => { if (n > 1) quality.duplicateRows += (n - 1); });
-    aliasMap.forEach((set) => { if (set.size > 1) quality.teacherAliases += (set.size - 1); });
-    [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((m) => m.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => conflictRows.add(i)); }));
-
-    return { conflictsCount: conflictRows.size, quality };
-};
+const normalizeSessionItem = SessionDomain.normalizeItem;
+const computeValidationStats = SessionDomain.validate;
 
 module.exports = apiHandler;
 

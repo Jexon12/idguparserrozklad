@@ -197,7 +197,7 @@
             type: clean(l.study_type),
             ...parseTimeSlot(l)
           }));
-        } catch (e) { return []; }
+        } catch (e) { throw new Error(`Не завантажено групу ${g.Value || g.Key}: ${e.message}. Огляд неповний — повторіть завантаження.`); }
       }));
       results.forEach((arr) => lessons.push(...arr));
     }
@@ -208,6 +208,9 @@
     const d = els.date.value || todayIso();
     els.date.value = d;
     els.meta.textContent = 'Завантаження...';
+    state.isDirty = true;
+    state.lessons = [];
+    render();
     state.lessons = await fetchDayLessons(d);
     state.isDirty = false;
     appendJournal('Оновлення', `Дата ${d}, груп ${state.groups.length}, записів ${state.lessons.length}`);
@@ -672,6 +675,8 @@
 
   function triggerReload() {
     loadScheduleDay().catch((e) => {
+      state.isDirty = true;
+      window.ScheduleApp?.DataFreshness?.mark('error');
       els.meta.textContent = `Помилка: ${e.message}`;
     });
   }

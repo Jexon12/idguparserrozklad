@@ -9,6 +9,14 @@
     'захист': { bg: '#fef3c7', border: '#f59e0b' },
     'диф.залік': { bg: '#ede9fe', border: '#8b5cf6' }
   };
+  if (document.documentElement.classList.contains('dark')) {
+    Object.assign(CONTROL_COLORS, {
+      'залік': { bg: '#064e3b', border: '#10b981' },
+      'іспит': { bg: '#1e3a8a', border: '#3b82f6' },
+      'захист': { bg: '#78350f', border: '#f59e0b' },
+      'диф.залік': { bg: '#4c1d95', border: '#8b5cf6' }
+    });
+  }
   const DRAFT_KEY = 'session_constructor_draft_v1';
   const VIEW_STATE_KEY = 'session_constructor_view_state_v1';
   const SNAPSHOT_KEY = 'session_constructor_snapshots_v1';
@@ -99,7 +107,7 @@
     bulkTime: document.getElementById('bulkTime'),
     bulkRoom: document.getElementById('bulkRoom'),
     applyBulkBtn: document.getElementById('applyBulkBtn'),
-    proPanel: document.getElementById('proPanel'),
+    proPanel: document.getElementById('planningPanel'),
     saveSessionBtn: document.getElementById('saveSessionBtn'),
     loadSessionBtn: document.getElementById('loadSessionBtn'),
     loadSessionFile: document.getElementById('loadSessionFile'),
@@ -153,6 +161,11 @@
   };
   let conflictsWorker = null;
   let conflictRequestId = 0;
+  const Domain = window.ScheduleApp.SessionDomain;
+  let publicationPreview = null;
+  let publicationBaseline = null;
+  let previewGeneration = 0;
+  let publicationBusy = false;
 
   const SharedModel = window.ScheduleApp?.ScheduleModel;
   const SharedImport = window.ScheduleApp?.SessionImport;
@@ -315,6 +328,7 @@
       
       if (!map.has(key)) {
         map.set(key, { 
+          _source: r._source,
           id: r.id || generateId(),
           discipline: d, 
           group: g, 
@@ -462,7 +476,7 @@
         <td data-col-key="teacher2" class="px-2 py-2"><input data-f="teachers2" data-id="${escapeHtml(r.id)}" list="dl-teachers" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.teachers && r.teachers[1] ? r.teachers[1] : '')}"></td>
         <td data-col-key="controlType" class="px-2 py-2"><select data-f="controlType" data-id="${escapeHtml(r.id)}" class="w-full rounded border p-1 bg-white dark:bg-gray-700">${CONTROL_OPTIONS.map((o) => `<option value="${escapeHtml(o)}" ${currentControl === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select></td>
         <td data-col-key="date" class="px-2 py-2"><input data-f="date" data-id="${escapeHtml(r.id)}" type="date" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.date || '')}"></td>
-        <td data-col-key="time" class="px-2 py-2"><input data-f="time" data-id="${escapeHtml(r.id)}" type="time" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.time || '')}"></td>
+        <td data-col-key="time" class="px-2 py-2"><input data-f="time" data-id="${escapeHtml(r.id)}" type="text" aria-label="Час заняття: ${escapeHtml(r.discipline)}" placeholder="10:00-12:00" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.time || '')}"></td>
         <td data-col-key="room" class="px-2 py-2"><input data-f="room" data-id="${escapeHtml(r.id)}" list="dl-rooms" class="w-full rounded border p-1 bg-white dark:bg-gray-700" value="${escapeHtml(r.room || '')}"></td>
         <td data-col-key="action" class="px-2 py-2"><button data-act="del" data-id="${escapeHtml(r.id)}" class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs">Видалити</button></td>
       `;
@@ -500,8 +514,8 @@
     }
     if (els.prevRowsPage) els.prevRowsPage.disabled = state.renderPage <= 0;
     if (els.nextRowsPage) els.nextRowsPage.disabled = state.renderPage >= maxPage;
-    els.uploadBtn.disabled = false;
-    els.uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+    els.uploadBtn.disabled = publicationBusy || !publicationPreview ||
+      publicationPreview.signature !== JSON.stringify(publicationData()) || !document.getElementById('publicationAcknowledged').checked;
     // Update discipline datalist
     const disciplines = Array.from(new Set(state.rows.map((r) => r.discipline).filter(Boolean)));
     updateDatalist('dl-disciplines', disciplines);
@@ -654,12 +668,15 @@
   function setMode(mode) {
     state.mode = mode === 'pro' ? 'pro' : 'basic';
     const isPro = state.mode === 'pro';
+    if (isPro) document.getElementById('editorOptions').open = true;
     if (els.proPanel) els.proPanel.classList.toggle('hidden', !isPro);
     if (els.modeBasicBtn) {
+      els.modeBasicBtn.setAttribute('aria-pressed', String(!isPro));
       els.modeBasicBtn.classList.toggle('bg-violet-600', !isPro);
       els.modeBasicBtn.classList.toggle('text-white', !isPro);
     }
     if (els.modeProBtn) {
+      els.modeProBtn.setAttribute('aria-pressed', String(isPro));
       els.modeProBtn.classList.toggle('bg-violet-600', isPro);
       els.modeProBtn.classList.toggle('text-white', isPro);
     }
@@ -667,6 +684,7 @@
   }
 
   function applyFilters(skipConflictDetect = false) {
+    renderReview();
     const q = clean(els.searchInput.value).toLowerCase();
     const df = selectValues(els.disciplineFilter);
     const gf = selectValues(els.groupFilter);
@@ -683,7 +701,7 @@
     const controlTypeFilterChanged = controlTypeFilterKey !== state.lastControlTypeFilter;
     state.filteredRows = state.rows.filter((r, i) => {
       if (state.filterConflictsOnly && !state.conflictIndices.has(i)) return false;
-      if (state.filterMissingOnly && (!r.date || (!r.time && r.controlType === 'іспит'))) return false;
+      if (state.filterMissingOnly && !Domain.validate([r]).blockingCount) return false;
       if (state.qualityFilter === 'Missing date' && clean(r.date)) return false;
       if (state.qualityFilter === 'Missing time (exam)' && (clean(r.controlType) !== 'іспит' || clean(r.time))) return false;
       if (state.qualityFilter === 'Missing room (exam)' && (clean(r.controlType) !== 'іспит' || clean(r.room))) return false;
@@ -1011,7 +1029,7 @@
 
   function detectConflicts(withStatus = true) {
     if (!conflictsWorker) {
-      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=20260503-7');
+      conflictsWorker = new Worker('/js/workers/session-conflicts-worker.js?v=session-domain-1');
       conflictsWorker.onmessage = (evt) => {
         const data = evt.data || {};
         if (data.requestId !== conflictRequestId) return;
@@ -1042,8 +1060,8 @@
     }
     conflictRequestId += 1;
     conflictsWorker.postMessage({
-      rows: state.filteredRows,
-      rowIds: state.filteredRows.map((r) => String(r.id)),
+      rows: state.rows,
+      rowIds: state.rows.map((r) => String(r.id)),
       requestId: conflictRequestId,
       mode: clean(els.conflictMode?.value || 'soft')
     });
@@ -1309,6 +1327,7 @@
     return {
       ts: new Date().toISOString(),
       mode: state.mode,
+      publicationBaseline,
       fields: {
         sessionTerm: els.sessionTerm.value,
         sessionTermSelect: els.sessionTermSelect?.value || '',
@@ -1332,7 +1351,9 @@
         const time = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         els.draftInfo.innerHTML = `<span class="text-green-600 dark:text-green-400">●</span> Автозбереження: ${time}`;
       }
-    } catch (e) {}
+    } catch (e) {
+      if (els.draftInfo) els.draftInfo.textContent = 'Не вдалося зберегти чернетку в браузері. Завантажте файл чернетки.';
+    }
   }
   let saveDraftTimer = null;
   function saveDraftDebounced() {
@@ -1344,6 +1365,7 @@
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
       const draft = JSON.parse(raw);
+      publicationBaseline = draft.publicationBaseline || null;
       const f = draft.fields || {};
       if (typeof f.sessionTerm === 'string') els.sessionTerm.value = f.sessionTerm;
       if (els.sessionTermSelect && typeof f.sessionTermSelect === 'string') els.sessionTermSelect.value = f.sessionTermSelect;
@@ -1373,6 +1395,12 @@
 
   async function buildFromSchedule() {
     showError('');
+    const sourceOptions = document.getElementById('scheduleSourceOptions');
+    if (!sourceOptions.open) {
+      sourceOptions.open = true;
+      setStatus('Виберіть факультет, період, курси та групи, потім повторіть формування');
+      return;
+    }
     setStatus('Завантаження фільтрів...');
     setProgress(0, 1, 'Підготовка...');
 
@@ -1465,8 +1493,8 @@
     saveDraftDebounced();
   }
 
-  async function loadFromApi() {
-    const term = resolveSessionTerm();
+  async function loadFromApi(sourceTerm = resolveSessionTerm(), copyTerm = '') {
+    const term = sourceTerm;
     if (!term) return showError('Оберіть або введіть назву сесії у шапці, щоб завантажити її з API');
     
     showError('');
@@ -1477,29 +1505,29 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       
-      const items = (data.sessions || []).flatMap(s => s.items || []);
+      const form = clean(els.studyForm.value).toLowerCase();
+      const session = (data.sessions || []).find(s => clean(s.term).toLowerCase() === clean(term).toLowerCase());
+      const items = (session?.items || []).filter(item => clean(item.studyForm).toLowerCase() === form);
       if (!items.length) {
          setStatus(`У сесії "${term}" немає записів або сесію не знайдено.`);
          return;
       }
       
-      const parsed = items.map(item => ({
+      const parsed = items.flatMap((item, index) => (item.groups?.length ? item.groups : [item.groupHeading]).map(group => ({
+          _source: { ...item, eventId: item.eventId || (item.groups?.length > 1 ? `${clean(term)}-${index}-${data.revision}` : '') },
           discipline: item.discipline || '',
-          group: (item.groups && item.groups[0]) || item.groupHeading || '',
+          group: group || '',
           teachers: splitTeachers(item.teacher || ''),
           controlType: CONTROL_OPTIONS.includes(clean(item.controlType).toLowerCase()) ? clean(item.controlType).toLowerCase() : 'залік',
           date: item.date || '',
           time: item.time || '',
           room: item.room || ''
-      }));
+      })));
       
-      if (state.rows.length > 0) {
-        if (confirm("У таблиці вже є записи. Очистити їх перед завантаженням з API? (Натисніть 'Скасувати', щоб додати до існуючих)")) {
-          state.rows = [];
-        }
-      }
-      
-      state.rows = dedupeRows(state.rows.concat(parsed), false);
+      if (state.rows.length && !confirm('Замінити локальну чернетку опублікованими записами вибраної форми? Збережіть файл чернетки, якщо потрібна копія.')) return;
+      publicationBaseline = copyTerm ? null : { term: clean(term).toLowerCase(), revision: data.revision };
+      if (copyTerm) els.sessionTerm.value = copyTerm;
+      state.rows = dedupeRows(parsed, false);
       renderFilters(state.rows);
       applyFilters();
       saveDraftDebounced();
@@ -1510,65 +1538,110 @@
     }
   }
 
-  async function uploadToApi() {
-    showError('');
-    syncFromGrid();
-    applyFilters();
-    const rowsToUpload = state.rows.slice();
-    if (!rowsToUpload.length) {
-      if (!confirm('У таблиці немає записів. Ви впевнені, що хочете завантажити ПОРОЖНЮ сесію в API? Це може призвести до очищення даних на сервері.')) return;
-    }
-    const password = clean(els.adminPassword.value);
-    if (!password) throw new Error('Введіть ADMIN_PASSWORD');
-
-    const payload = {
-      password,
-      actor: clean(els.adminActor.value) || 'session-constructor',
-      data: {
-        sourceFile: els.docxFiles.files?.[0]?.name || 'schedule-based',
-        generatedAt: new Date().toISOString(),
-        term: resolveSessionTerm(),
-        studyForm: clean(els.studyForm.value),
-        items: rowsToUpload.map((r) => ({
-          groupHeading: r.group,
-          groups: [r.group],
-          speciality: '',
-          program: '',
-          controlType: r.controlType || 'залік',
-          discipline: r.discipline,
-          examForm: '',
-          teacher: r.teachers.join('; '),
-          date: r.date || '',
-          time: r.time || '',
-          room: r.room || '',
-          sourceTable: 0,
-          sourceFile: els.docxFiles.files?.[0]?.name || 'schedule-based'
-        }))
-      }
+  function publicationData() {
+    return {
+      term: resolveSessionTerm(), studyForm: clean(els.studyForm.value),
+      sourceFile: els.docxFiles.files?.[0]?.name || 'session-constructor',
+      items: state.rows.map(r => Domain.normalizeItem({ ...r._source, term: resolveSessionTerm(),
+        studyForm: clean(els.studyForm.value), groups: [r.group], groupHeading: r.group,
+        discipline: r.discipline, controlType: r.controlType, teacher: r.teachers.join('; '),
+        date: r.date, time: r.time, room: r.room }))
     };
+  }
 
-    const validationRes = await fetch(API_SESSION, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'validateOnly', data: payload.data })
+  function invalidatePublication() {
+    previewGeneration++;
+    publicationPreview = null;
+    document.getElementById('publicationAcknowledged').checked = false;
+    els.uploadBtn.disabled = true;
+    document.getElementById('publicationChanges').replaceChildren();
+    document.getElementById('publicationSummary').textContent = 'Чернетку змінено. Повторіть перегляд перед публікацією.';
+  }
+
+  function renderReview() {
+    const summary = document.getElementById('reviewSummary');
+    if (!summary) return;
+    const data = publicationData();
+    const signature = JSON.stringify(data);
+    if (publicationPreview && publicationPreview.signature !== signature) invalidatePublication();
+    const check = Domain.validate(data.items);
+    summary.textContent = state.rows.length ? `${state.rows.length} записів · проблем: ${check.blockingCount}. ${check.blockingCount ? 'Виправте проблеми перед публікацією.' : 'Чернетка готова до серверної перевірки.'}${check.quality.unknownDuration ? ` Для ${check.quality.unknownDuration} іспитів вказано лише початок: додайте кінець часу для перевірки тривалості.` : ''}` : 'Додайте записи для перевірки.';
+    const list = document.getElementById('reviewIssues');
+    list.replaceChildren();
+    check.issues.slice(0, 100).forEach(issue => {
+      const li = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'text-left underline text-rose-700 dark:text-rose-300';
+      const row = state.rows[issue.index];
+      button.textContent = `${row?.group || 'Без групи'} · ${row?.discipline || 'Без дисципліни'}: ${issue.message}`;
+      button.addEventListener('click', () => {
+        clearFilterControls(); state.problemsOnly = false;
+        state.sortField = null; state.groupBy = '';
+        const index = state.rows.indexOf(row);
+        state.renderPage = Math.floor(index / state.renderLimit);
+        applyFilters();
+        renderRowDetail(row);
+        document.getElementById('step-edit').scrollIntoView({ behavior: 'smooth' });
+        const input = els.tableBody.querySelector(`input[data-id="${CSS.escape(String(row.id))}"][data-f]`);
+        input?.focus({ preventScroll: true });
+      });
+      li.append(button); list.append(li);
     });
-    const validation = await validationRes.json();
-    if (!validationRes.ok) throw new Error(validation.error || `Validation HTTP ${validationRes.status}`);
-    const quality = validation.quality || {};
-    const blockingIssues = Number(validation.conflictsCount || 0) + Number(quality.missingDate || 0) +
-      Number(quality.missingTime || 0) + Number(quality.missingRoom || 0);
-    if (blockingIssues > 0) {
-      throw new Error(`Публікацію зупинено: конфлікти ${validation.conflictsCount || 0}, без дати ${quality.missingDate || 0}, без часу ${quality.missingTime || 0}, без аудиторії ${quality.missingRoom || 0}`);
-    }
+    if (check.issues.length > 100) { const li = document.createElement('li'); li.textContent = `Ще ${check.issues.length - 100} проблем. Після виправлення список оновиться.`; list.append(li); }
+  }
 
-    const res = await fetch(API_SESSION, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const raw = await res.text();
-    let json = null; try { json = raw ? JSON.parse(raw) : null; } catch (e) {}
-    if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
-    const added = Number(json.added || 0);
-    const total = Number(json.count || 0);
-    if (added === 0) setStatus(`Нових записів не додано (дублікати). Всього: ${total} (${json.term || ''})`);
-    else setStatus(`Успішно: додано ${added}, всього ${total} (${json.term || ''})`);
+  async function publicationRequest(payload) {
+    const response = await fetch(API_SESSION, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || `HTTP ${response.status}`);
+    return json;
+  }
+
+  async function previewPublication() {
+    if (publicationBusy) return;
+    syncFromGrid(); applyFilters(); invalidatePublication();
+    const password = clean(els.adminPassword.value);
+    if (!password) throw new Error('Введіть пароль адміністратора у блоці публікації');
+    const data = publicationData();
+    if (!data.items.length) throw new Error('Порожню чернетку не можна публікувати. Видалення сесії доступне в керуванні сесіями.');
+    const generation = previewGeneration;
+    publicationBusy = true;
+    const button = document.getElementById('previewPublicationBtn'); button.disabled = true;
+    try {
+      const result = await publicationRequest({ action: 'previewPublication', password, mode: 'replaceForm', data,
+        expectedRevision: publicationBaseline?.term === clean(data.term).toLowerCase() ? publicationBaseline.revision : undefined });
+      if (generation !== previewGeneration || JSON.stringify(publicationData()) !== JSON.stringify(data)) return;
+      const summary = result.summary;
+      document.getElementById('publicationSummary').textContent = `${data.term} · ${data.studyForm}: додано ${summary.added}, змінено ${summary.changed}, видалено ${summary.removed}. ${result.validation.blockingCount ? `Публікацію заблоковано: ${result.validation.blockingCount} проблем.` : 'Серверна перевірка пройдена.'}`;
+      const list = document.getElementById('publicationChanges'); list.replaceChildren();
+      const lines = [
+        ...result.validation.issues.map(issue => issue.message),
+        ...result.changes.changed.map(change => `Змінено: ${change.after.groups.join(', ')} · ${change.after.discipline} · ${change.before.date} ${change.before.time} (${change.before.room}) → ${change.after.date} ${change.after.time} (${change.after.room}) · ${change.before.teacher} → ${change.after.teacher}`),
+        ...result.changes.added.map(item => `Додано: ${item.groups.join(', ')} · ${item.discipline} · ${item.date} ${item.time}`),
+        ...result.changes.removed.map(item => `Видалено: ${item.groups.join(', ')} · ${item.discipline} · ${item.date} ${item.time}`)
+      ];
+      lines.forEach(line => { const li = document.createElement('li'); li.textContent = line; list.append(li); });
+      if (!result.validation.blockingCount) publicationPreview = { signature: JSON.stringify(data), revision: result.revision, summary };
+      document.getElementById('step-publish').scrollIntoView({ behavior: 'smooth' });
+    } finally { publicationBusy = false; button.disabled = false; }
+  }
+
+  async function uploadToApi() {
+    if (publicationBusy) return;
+    syncFromGrid(); applyFilters();
+    const data = publicationData();
+    if (!publicationPreview || publicationPreview.signature !== JSON.stringify(data)) throw new Error('Спочатку перевірте та перегляньте актуальні зміни');
+    if (!document.getElementById('publicationAcknowledged').checked) throw new Error('Підтвердьте перегляд змін');
+    publicationBusy = true; els.uploadBtn.disabled = true;
+    try {
+      const result = await publicationRequest({ password: clean(els.adminPassword.value), actor: clean(els.adminActor.value) || 'session-constructor',
+        mode: 'replaceForm', expectedRevision: publicationPreview.revision, data });
+      publicationBaseline = { term: clean(data.term).toLowerCase(), revision: result.revision };
+      invalidatePublication(); saveDraft();
+      document.getElementById('publicationSummary').textContent = `Опубліковано: додано ${result.added}, змінено ${result.changed}, видалено ${result.removed}. Перевірте публічний розклад.`;
+      setStatus('Перевірену версію сесії опубліковано');
+    } catch (error) { invalidatePublication(); throw error; }
+    finally { publicationBusy = false; }
   }
 
   async function clearApiSession(isPurge = false) {
@@ -1609,31 +1682,10 @@
     }
   }
   async function validateOnly() {
-    syncFromGrid();
-    applyFilters();
-    const payload = {
-      action: 'validateOnly',
-      data: {
-        term: resolveSessionTerm(),
-        studyForm: clean(els.studyForm.value),
-        items: state.filteredRows.map((r) => ({
-          groupHeading: r.group,
-          groups: [r.group],
-          controlType: r.controlType || 'залік',
-          discipline: r.discipline,
-          teacher: r.teachers.join('; '),
-          date: r.date || '',
-          time: r.controlType === 'іспит' ? (r.time || '') : '',
-          room: r.room || ''
-        }))
-      }
-    };
-    const res = await fetch(API_SESSION, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const raw = await res.text();
-    let json = null; try { json = raw ? JSON.parse(raw) : null; } catch (e) {}
-    if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
-    const q = json.quality || {};
-    setStatus(`Validate: conflicts=${json.conflictsCount || 0}, missing date=${q.missingDate || 0}, missing room=${q.missingRoom || 0}`);
+    syncFromGrid(); applyFilters();
+    const json = await publicationRequest({ action: 'validateOnly', data: publicationData() });
+    setStatus('Перевірено всі записи: проблем ' + json.blockingCount);
+    document.getElementById('proPanel').scrollIntoView({ behavior: 'smooth' });
   }
 
   function exportExcel() {
@@ -1808,7 +1860,23 @@
   els.sessionTermSelect?.addEventListener('change', () => {
      if (els.sessionTermSelect.value) els.sessionTerm.value = els.sessionTermSelect.value;
   });
-  els.uploadBtn.addEventListener('click', () => uploadToApi().catch((e) => showError(e.message || String(e))));
+  document.getElementById('previewPublicationBtn').addEventListener('click', () => previewPublication().catch(e => {
+    showError(e.message);
+    document.getElementById('publicationSummary').textContent = e.message;
+  }));
+  document.getElementById('publicationAcknowledged').addEventListener('change', (event) => {
+    els.uploadBtn.disabled = publicationBusy || !publicationPreview || !event.target.checked;
+  });
+  document.addEventListener('input', event => {
+    if (event.target.closest('#tableBody') || ['studyForm', 'sessionTerm', 'sessionTermSelect'].includes(event.target.id)) invalidatePublication();
+  });
+  document.addEventListener('change', event => {
+    if (['studyForm', 'sessionTerm', 'sessionTermSelect'].includes(event.target.id)) { invalidatePublication(); renderReview(); saveDraftDebounced(); }
+  });
+  els.uploadBtn.addEventListener('click', () => uploadToApi().catch((e) => {
+    showError(e.message || String(e));
+    document.getElementById('publicationSummary').textContent = e.message || String(e);
+  }));
   els.excelBtn.addEventListener('click', exportExcel);
   els.wordBtn.addEventListener('click', exportWord);
   els.copyBtn.addEventListener('click', () => copyTable().catch((e) => showError(e.message || String(e))));
@@ -2015,6 +2083,7 @@
     liveTimer = setTimeout(() => {
       syncFromGrid();
       saveDraftDebounced();
+      renderReview();
       // Do NOT call detectConflicts/renderTable here — it destroys focus while typing
     }, 400);
   };
@@ -2347,6 +2416,9 @@
     .then(() => {
       // Re-apply draft on top of loaded controls if rows exist
       if (!state.rows.length) restoreDraft();
+      const copySource = new URLSearchParams(location.search).get('copyFrom');
+      const copyTerm = new URLSearchParams(location.search).get('newTerm');
+      if (copySource && copyTerm) loadFromApi(copySource, copyTerm).catch(error => showError(error.message));
       renderFilters(state.rows);
       restoreViewState();
       applyFilters();

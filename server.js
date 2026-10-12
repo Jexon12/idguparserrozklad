@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const zlib = require('zlib');
+const { publicFile } = require('./static-policy');
 
 // Import the Vercel API handler
 const apiHandler = require('./api/index');
@@ -183,15 +184,10 @@ const server = http.createServer(async (req, res) => {
         res.end();
         return;
     }
-    let filePath = pathname === '/' ? '/index.html' : pathname;
-    filePath = path.join(__dirname, filePath);
-
-    // #5: Path traversal protection — ensure resolved path is inside project root
-    const resolvedPath = path.resolve(filePath);
-    const projectRoot = path.resolve(__dirname);
-    if (resolvedPath !== projectRoot && !resolvedPath.startsWith(projectRoot + path.sep)) {
-        res.writeHead(403);
-        res.end('Forbidden');
+    const resolvedPath = publicFile(__dirname, parsedUrl.pathname || '/');
+    if (!resolvedPath) {
+        res.writeHead(404);
+        res.end('File not found');
         return;
     }
 

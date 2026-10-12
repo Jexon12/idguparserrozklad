@@ -49,7 +49,7 @@
       state.versions = results[2].status === 'fulfilled' ? results[2].value : { error: results[2].reason?.message };
       state.audit = results[3].status === 'fulfilled' ? results[3].value : { error: results[3].reason?.message, items: [] };
       state.loadedAt = new Date().toISOString();
-      byId('staffHealth').textContent = state.health.error ? `Помилка: ${state.health.error}` : 'Працює';
+      byId('staffHealth').textContent = state.health.error ? `Помилка: ${state.health.error}` : 'API відповідає';
       byId('staffMonitor').textContent = state.monitor.error ? `Недоступний: ${state.monitor.error}` : `${state.monitor.status || 'ok'} · подій: ${state.monitor.lastEventsCount || 0}`;
       byId('staffVersions').textContent = state.versions.error ? `Недоступні: ${state.versions.error}` : String(state.versions.count || 0);
       if (state.audit.error) byId('staffAuditLog').textContent = 'Увійдіть як адміністратор для перегляду журналу.';

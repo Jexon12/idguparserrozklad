@@ -273,7 +273,7 @@
     });
 
     const generated = data.updatedAt ? new Date(data.updatedAt).toLocaleString('uk-UA') : '—';
-    els.source.textContent = `Оновлено: ${generated} · storage: ${data.storage || 'unknown'} · сесій: ${(data.sessions || []).length}`;
+    els.source.textContent = `Оновлено: ${generated} · сесій: ${(data.sessions || []).length}`;
 
     const groups = uniqSorted(state.items.flatMap((i) => i.groups || []));
     const terms = uniqSorted(state.items.map((i) => i.term));
