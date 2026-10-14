@@ -26,7 +26,9 @@ body.fuaid-schedule{--academic-bg:#f5f7f7;--academic-surface:#fff;--academic-sur
 .campus-data-footer{max-width:1440px;margin:0 auto 20px;padding:0 24px;font:400 13px 'JetBrains Mono',monospace}
 .campus-data-footer>span{font-size:13px!important;background:transparent!important;color:var(--academic-muted)!important;padding:0}
 .fuaid-schedule .campus-navigation{display:flex!important;align-items:center;justify-content:flex-start;gap:10px;margin:0 0 18px;font:400 13px 'JetBrains Mono',monospace;flex-wrap:wrap}
-.campus-navigation .week-nav-btn{display:grid;place-items:center;width:34px;height:34px}
+.campus-navigation .week-nav-btn{display:grid;place-items:center;width:auto;min-width:44px;height:44px;padding:0 10px;flex:0 0 auto;white-space:nowrap}
+.campus-navigation .week-nav-btn[aria-label]{width:44px;padding:0}
+.campus-navigation>span{min-width:0;max-width:100%;overflow-wrap:anywhere}
 .campus-view-toggle{display:flex;gap:3px;margin-left:auto;background:var(--academic-surface-muted);padding:3px;border-radius:6px}
 .campus-view-toggle button{padding:6px 12px;border-radius:4px;font:400 14px Arial,sans-serif;color:var(--academic-muted)}
 .campus-view-toggle button[aria-pressed=true]{background:var(--academic-ink);color:var(--academic-surface)}
