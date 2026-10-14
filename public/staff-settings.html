@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Правила та доступ · Для персоналу</title>
+  <script>if(localStorage.getItem('darkMode')==='true'||(!localStorage.getItem('darkMode')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <link rel="stylesheet" href="/css/tailwind.generated.css?v=a35e94436fcc"><link rel="stylesheet" href="/css/ui-kit.css?v=b0580bc1a952">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">
+<main class="max-w-5xl mx-auto p-4 space-y-4">
+  <header class="rounded-2xl bg-white dark:bg-gray-800 p-5 shadow"><h1 class="text-2xl font-black">Правила установи та доступ персоналу</h1><p class="text-sm text-gray-500 mt-2">Почніть з облікового запису адміністратора, потім задайте погоджені правила та запросіть колег, створивши їхні облікові записи.</p></header>
+  <p id="settingsStatus" role="status"></p>
+  <section id="personalPasswordPanel" class="hidden rounded-2xl bg-white dark:bg-gray-800 p-5 shadow space-y-3"><h2 class="font-bold">Мій пароль</h2><form id="personalPasswordForm" class="grid grid-cols-1 md:grid-cols-3 gap-3"><label>Поточний пароль<input name="currentPassword" type="password" required autocomplete="current-password" class="ui-input block w-full dark:bg-gray-700"></label><label>Новий пароль<input name="password" type="password" required minlength="12" autocomplete="new-password" class="ui-input block w-full dark:bg-gray-700"></label><button class="ui-btn ui-btn-primary self-end">Змінити пароль</button></form></section>
+  <section class="rounded-2xl bg-white dark:bg-gray-800 p-5 shadow space-y-3">
+    <h2 class="text-lg font-bold">Правила сесії</h2>
+    <p class="text-sm text-gray-500">Поки правила не погоджені, залиште значення 0 і порожні години. 0 означає, що обмеження вимкнене. Задані правила спочатку працюють як рекомендації.</p>
+    <form id="rulesForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <label>Тривалість іспиту за замовчуванням, хвилин<input name="examDurationMinutes" type="number" min="0" max="480" value="0" class="ui-input block w-full dark:bg-gray-700"></label>
+      <label>Мінімальна різниця між датами іспитів групи, днів<input name="minExamGapDays" type="number" min="0" max="30" value="0" class="ui-input block w-full dark:bg-gray-700"></label>
+      <label>Максимум іспитів групи на день<input name="maxGroupExamsPerDay" type="number" min="0" max="20" value="0" class="ui-input block w-full dark:bg-gray-700"></label>
+      <label>Максимум іспитів викладача на день<input name="maxTeacherExamsPerDay" type="number" min="0" max="100" value="0" class="ui-input block w-full dark:bg-gray-700"></label>
+      <label>Початок робочого дня<input name="workdayStart" type="time" class="ui-input block w-full dark:bg-gray-700"></label>
+      <label>Кінець робочого дня<input name="workdayEnd" type="time" class="ui-input block w-full dark:bg-gray-700"></label>
+      <label class="md:col-span-2 flex gap-2"><input name="enforcePlanningRules" type="checkbox"><span>Блокувати публікацію за порушення цих правил. Увімкніть після погодження установою.</span></label>
+      <button class="ui-btn ui-btn-primary" type="submit">Зберегти правила</button>
+    </form>
+  </section>
+  <section id="accountsPanel" class="hidden rounded-2xl bg-white dark:bg-gray-800 p-5 shadow space-y-3">
+    <h2 class="text-lg font-bold">Облікові записи колег</h2>
+    <p class="text-sm text-gray-500">Методист редагує власні та спільні чернетки. Відповідальний бачить чернетки для перевірки і публікує. Адміністратор керує всіма даними.</p>
+    <ul id="accountsList" class="space-y-2"></ul>
+    <form id="accountForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <input name="id" type="hidden">
+      <label>Логін<input name="username" required pattern="[a-zA-Z0-9._@-]{3,80}" class="ui-input block w-full dark:bg-gray-700" autocomplete="off"></label>
+      <label>Ім’я та прізвище<input name="name" required class="ui-input block w-full dark:bg-gray-700"></label>
+      <label>Роль<select name="role" class="ui-select block w-full dark:bg-gray-700"><option value="methodist">Методист</option><option value="publisher">Відповідальний за публікацію</option><option value="admin">Адміністратор</option></select></label>
+      <label>Новий пароль, мінімум 12 символів<input name="password" type="password" minlength="12" autocomplete="new-password" class="ui-input block w-full dark:bg-gray-700"><span class="text-xs">Порожній при редагуванні залишає пароль незмінним.</span></label>
+      <label class="flex gap-2"><input name="disabled" type="checkbox">Вимкнути обліковий запис та завершити його сеанси</label>
+      <div class="flex gap-2"><button type="submit" class="ui-btn ui-btn-primary">Зберегти користувача</button><button id="newAccountBtn" type="button" class="ui-btn">Новий користувач</button></div>
+    </form>
+  </section>
+  <section id="staffBackupPanel" class="hidden rounded-2xl bg-white dark:bg-gray-800 p-5 shadow space-y-3">
+    <h2 class="text-lg font-bold">Резервна копія чернеток, правил та доступу</h2>
+    <p class="text-sm text-gray-500">Копія містить хеші паролів і приватні чернетки. Зберігайте її в захищеному місці. Опубліковані сесії експортуються окремо в керуванні сесіями. Відновлення завершує всі сеанси входу.</p>
+    <button id="exportStaffBackup" class="ui-btn">Завантажити резервну копію</button>
+    <label class="block">Файл копії JSON або JSON.GZ<input id="staffBackupFile" type="file" accept=".json,.gz" class="block mt-2"></label>
+    <button id="previewStaffRestore" class="ui-btn">Перевірити відновлення</button>
+    <p id="restoreSummary" role="status"></p>
+    <label class="flex gap-2"><input id="restoreAcknowledged" type="checkbox">Підтверджую заміну чернеток, правил та облікових записів</label>
+    <button id="restoreStaffBackup" disabled class="ui-btn ui-btn-primary disabled:opacity-40">Відновити перевірену копію</button>
+    <button id="exportPreviousStaffBackup" class="ui-btn">Копія стану перед останнім відновленням</button>
+  </section>
+</main>
+<script src="/js/app-shell.js?v=b5cbf8bdc9a7"></script><script src="/js/staff-client.js?v=cdb908eab8a2"></script><script src="/js/staff-settings.js?v=46e1d84e12ce"></script>
+</body></html>

@@ -1,0 +1,1541 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Універсальний розклад занять — перегляд розкладу для студентів та викладачів, зайнятість аудиторій">
+    <meta name="theme-color" content="#1d4ed8">
+    <script>
+        window.__loadTailwindFallback = function () {
+            if (window.__tailwindFallbackLoaded) return;
+            window.__tailwindFallbackLoaded = true;
+            var s = document.createElement('script');
+            s.src = 'https://cdn.tailwindcss.com/3.4.1';
+            document.head.appendChild(s);
+        };
+    </script>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
+    <title>Універсальний Розклад</title>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.sheetjs.com" crossorigin>
+    <link rel="preconnect" href="https://vnz.osvita.net" crossorigin>
+    <link rel="dns-prefetch" href="//vnz.osvita.net">
+    <script src="/js/vendor/vue.global.prod.js?v=4963101441de"></script>
+    <link rel="stylesheet" href="/css/tailwind.generated.css?v=a35e94436fcc" onerror="window.__loadTailwindFallback()">
+    <link rel="stylesheet" href="/css/styles.css?v=ba40711332ed">
+    <link rel="stylesheet" href="/css/ui-kit.css?v=b0580bc1a952">
+    <link rel="stylesheet" href="/css/campus.css?v=3e7461d34b6e">
+
+    <script>
+        // Auto-detect dark mode
+        if (localStorage.getItem('darkMode') === 'true' ||
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <script type="module" src="/js/web-analytics.js?v=b852ccdc0a1d"></script>
+</head>
+
+<body class="app-body fuaid-schedule bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors">
+    <div id="app" class="min-h-screen">
+      <div :class="`mobile-${mobileView}`">
+        <!-- Toast Notification -->
+        <div class="toast" :class="{ show: toastVisible }" role="status" aria-live="polite">
+            <span>{{ toastMessage }}</span>
+            <button v-if="toastActionLabel" @click="runToastAction"
+                class="ml-3 rounded bg-white/20 px-2 py-1 text-xs font-bold underline hover:bg-white/30 focus:outline-none focus:ring-2 focus:ring-white">
+                {{ toastActionLabel }}
+            </button>
+        </div>
+
+        <!-- Global Sticky Status Bar (Component) -->
+        <current-lesson-banner class="current-lesson-strip" :current-lesson-info="currentLessonInfo"></current-lesson-banner>
+
+        <div class="app-content p-4 md:p-8">
+            <!-- Header -->
+            <header class="app-header mb-8 text-center relative">
+                <div class="flex flex-wrap items-center justify-between md:justify-center gap-2">
+                    <button @click="sidebarOpen = true"
+                        type="button" aria-label="Відкрити пошук і фільтри"
+                        class="mobile-menu-btn items-center justify-center p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl">
+                        <campus-icon name="Menu"></campus-icon>
+                    </button>
+                    <h1 class="app-title text-2xl md:text-4xl font-bold text-amber-700 dark:text-amber-400 mb-0 md:mb-2">
+                        <campus-icon name="CalendarDays" class="mobile-title-icon"></campus-icon>
+                        <span class="mobile-title-full">Розклад</span>
+                        <span class="mobile-title-short">Розклад</span>
+                    </h1>
+                    <div class="mobile-view-switch" role="group" aria-label="Щільність розкладу">
+                        <button type="button" @click="setMobileView('minimal')"
+                            :aria-pressed="mobileView === 'minimal'" :class="{ active: mobileView === 'minimal' }">Мінімум</button>
+                        <button type="button" @click="setMobileView('expanded')"
+                            :aria-pressed="mobileView === 'expanded'" :class="{ active: mobileView === 'expanded' }">Деталі</button>
+                    </div>
+                    <button @click="toggleDarkMode"
+                        class="mobile-expanded-action p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl"
+                        :title="isDark ? 'Світла тема' : 'Темна тема'">
+                        <campus-icon :name="isDark ? 'Sun' : 'Moon'"></campus-icon>
+                    </button>
+                    <button @click="showSettingsModal = true"
+                        class="mobile-expanded-action p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition text-xl"
+                        title="Налаштування">
+                        <campus-icon name="Settings"></campus-icon>
+                    </button>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 hidden md:block mt-1">Групи · викладачі · аудиторії</p>
+            </header>
+
+            <!-- Mobile Today/Tomorrow Widget -->
+            <div class="mobile-overview-card md:hidden mb-4 bg-white dark:bg-gray-800 rounded-xl shadow p-3 border border-amber-100 dark:border-gray-700">
+                <div class="mobile-expanded-only grid grid-cols-2 gap-2 text-center mb-2">
+                    <div class="bg-amber-50 dark:bg-amber-900/20 rounded-lg py-2">
+                        <div class="text-xs text-gray-500 dark:text-gray-400">Сьогодні</div>
+                        <div class="font-bold text-amber-700 dark:text-amber-300">{{ (mobileWidgetData && mobileWidgetData.todayCount) || 0 }} пар</div>
+                    </div>
+                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg py-2">
+                        <div class="text-xs text-gray-500 dark:text-gray-400">Завтра</div>
+                        <div class="font-bold text-indigo-700 dark:text-indigo-300">{{ (mobileWidgetData && mobileWidgetData.tomorrowCount) || 0 }} пар</div>
+                    </div>
+                </div>
+                <div v-if="mobileWidgetData && mobileWidgetData.next"
+                    class="rounded-lg border border-amber-100 bg-amber-50/60 p-3 dark:border-gray-700 dark:bg-gray-700/50">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                                Наступна пара · через {{ mobileWidgetData.next.timeLeft }}
+                            </div>
+                            <div class="mt-1 font-bold leading-tight text-gray-900 dark:text-gray-100">
+                                {{ mobileWidgetData.next.discipline }}
+                            </div>
+                        </div>
+                        <span v-if="mobileWidgetData.next.isMoved"
+                            class="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            Перенесено
+                        </span>
+                    </div>
+                    <div class="mobile-next-meta mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+                        <span>🕒 {{ mobileWidgetData.next.date }} · {{ mobileWidgetData.next.start }}–{{ mobileWidgetData.next.end }}</span>
+                        <span v-if="mobileWidgetData.next.cabinet">📍 {{ mobileWidgetData.next.cabinet }}</span>
+                        <span v-if="mobileWidgetData.next.teacher" class="mobile-expanded-only">👨‍🏫 {{ mobileWidgetData.next.teacher }}</span>
+                    </div>
+                    <a v-if="mobileWidgetData.next.onlineUrl" :href="mobileWidgetData.next.onlineUrl"
+                        target="_blank" rel="noopener noreferrer"
+                        class="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-purple-600 px-3 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
+                        📹 Приєднатися онлайн
+                    </a>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400" v-else>
+                    Найближчих пар поки не знайдено
+                </div>
+            </div>
+
+            <!-- MODALS MOVED HERE TO ENSURE SCOPE -->
+
+            <!-- Modal: Admin Link Editor -->
+            <app-modal-shell :open="showAdminModal" title="🔧 Адмін: Посилання" max-width="max-w-md"
+                @close="showAdminModal = false">
+                    <div class="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
+                        <p class="text-xs text-gray-600 dark:text-gray-400 truncate">{{ adminTargetTitle }}</p>
+                        <p class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{{ adminTargetKey }}</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">🔗 Посилання на курс</label>
+                            <input type="text" v-model="adminForm.courseUrl" placeholder="https://moodle..."
+                                class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">📹 Посилання на онлайн
+                                пару</label>
+                            <input type="text" v-model="adminForm.onlineUrl" placeholder="https://zoom.us/..."
+                                class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                    </div>
+                    <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <button @click="showAdminModal = false"
+                            class="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold py-2 px-4 rounded">
+                            Скасувати
+                        </button>
+                        <button @click="saveAdminLinks"
+                            class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
+                            Зберегти (Сервер)
+                        </button>
+                    </div>
+                    </template>
+            </app-modal-shell>
+
+            <!-- Modal: Free Time -->
+            <div v-if="showFreeTimeModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                @click.self="showFreeTimeModal = false">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+                    <div
+                        class="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-indigo-50 dark:bg-indigo-900/30 rounded-t-xl">
+                        <h3 class="font-bold text-lg text-indigo-800 dark:text-indigo-300">🤝 Спільний вільний час</h3>
+                        <button @click="showFreeTimeModal = false"
+                            class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 text-2xl">×</button>
+                    </div>
+
+                    <div class="p-4 overflow-y-auto">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Знайдено в спільні "вікна" для вибраних груп/викладачів (крім вихідних):
+                        </p>
+
+                        <div v-if="commonFreeSlots.length === 0"
+                            class="text-center py-8 text-gray-400 dark:text-gray-500">
+                            На жаль, спільних вікон не знайдено 😔
+                        </div>
+
+                        <div v-else class="space-y-4">
+                            <div v-for="day in commonFreeSlots" :key="day.date"
+                                class="border dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-700">
+                                <div
+                                    class="font-bold text-gray-800 dark:text-gray-200 border-b dark:border-gray-600 pb-1 mb-2">
+                                    {{ day.date }}</div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div v-for="slot in day.slots" :key="slot.pair"
+                                        class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs font-bold px-2 py-1 rounded text-center border border-green-200 dark:border-green-700">
+                                        {{ slot.pair }} пара
+                                        <div class="font-normal text-green-600 dark:text-green-400 text-[10px]">{{
+                                            slot.time }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t dark:border-gray-700 text-right">
+                        <button @click="showFreeTimeModal = false"
+                            class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded">
+                            Закрити
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- Modal: Edit Note -->
+            <dialog ref="lessonHistoryDialog" class="lesson-history-dialog" aria-labelledby="lesson-history-title"
+                @click="($event.target === lessonHistoryDialog) && lessonHistoryDialog.close()">
+                <header class="flex items-center justify-between gap-3 mb-4">
+                    <h2 id="lesson-history-title" class="font-bold text-lg">Попередні заняття</h2>
+                    <button type="button" autofocus class="lesson-number" aria-label="Закрити історію" @click="lessonHistoryDialog.close()">×</button>
+                </header>
+                <template v-if="selectedHistoryLesson">
+                    <p class="font-semibold">{{ selectedHistoryLesson.discipline }}</p>
+                    <p class="text-sm mb-3">{{ selectedHistoryLesson.type }} · {{ selectedHistoryLesson.group || selectedHistoryLesson.entityName }}</p>
+                    <p class="text-sm mb-3">Попередні до {{ selectedHistoryLesson.full_date }} · {{ selectedHistoryLesson.timeStart }}</p>
+                    <p class="text-sm mb-4">За розкладом від {{ numberingStart }}. Скасовані заняття не враховано.</p>
+                    <p v-if="lessonHistoryState === 'loading'" role="status">Завантажуємо попередні заняття…</p>
+                    <div v-else-if="lessonHistoryState !== 'ready'" role="status">
+                        <p>{{ numberingStatus || 'Історія ще недоступна.' }}</p>
+                        <button type="button" class="lesson-number" @click="retryLessonHistory">Повторити завантаження</button>
+                    </div>
+                    <ol v-else-if="previousLessons.length" class="lesson-history-list">
+                        <li v-for="previous in previousLessons" :key="previous.numberKey">
+                            <div class="font-semibold">{{ previous.full_date }} · №{{ lessonNumber(previous) }}</div>
+                            <div>{{ previous.study_time_begin }}–{{ previous.study_time_end }} · {{ previous.study_time }}</div>
+                            <div v-if="previous.teacher">{{ previous.teacher }}</div>
+                            <div v-if="previous.cabinet">Аудиторія: {{ previous.cabinet }}</div>
+                        </li>
+                    </ol>
+                    <p v-else>До цього заняття попередніх у вибраному семестрі не знайдено.</p>
+                    <div class="mt-4 border-t pt-3">
+                        <p>{{ isManualNumber(selectedHistoryLesson) ? 'Номер задано вручну' : 'Номер обчислено за розкладом' }}: {{ lessonNumber(selectedHistoryLesson) || '—' }}</p>
+                        <button type="button" class="lesson-number" @click="editLessonNumber(selectedHistoryLesson)">Змінити номер</button>
+                        <button v-if="isManualNumber(selectedHistoryLesson)" type="button" class="lesson-number" @click="resetLessonNumber(selectedHistoryLesson)">Автоматичний номер</button>
+                    </div>
+                </template>
+            </dialog>
+            <app-modal-shell :open="showNoteModal" title="📝 Нотатка" max-width="max-w-md"
+                header-class="bg-yellow-50 dark:bg-yellow-900/20" @close="showNoteModal = false">
+                    <div class="mb-3">
+                        <p class="text-xs text-yellow-600 dark:text-yellow-400 truncate">{{ currentNoteTitle }}</p>
+                    </div>
+
+                    <div>
+                        <textarea v-model="noteText" rows="5"
+                            placeholder="Введіть ваш запис тут (напр. 'Д/З: прочитати ст. 20')"
+                            class="w-full border dark:border-gray-600 rounded-lg p-3 focus:ring focus:ring-yellow-200 dark:focus:ring-yellow-800 resize-none dark:bg-gray-700 dark:text-white"></textarea>
+                    </div>
+                    <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <button @click="showNoteModal = false"
+                            class="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold py-2 px-4 rounded">
+                            Скасувати
+                        </button>
+                        <button @click="saveNote"
+                            class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded">
+                            Зберегти
+                        </button>
+                    </div>
+                    </template>
+            </app-modal-shell>
+
+
+            <!-- Modal: All Notes Manager -->
+            <div v-if="showAllNotesModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
+                @click.self="showAllNotesModal = false">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+                    <div
+                        class="p-4 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-t-xl flex justify-between items-center">
+                        <h3 class="font-bold text-lg text-yellow-800 dark:text-yellow-300">📋 Всі нотатки</h3>
+                        <button @click="showAllNotesModal = false"
+                            class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 text-2xl">×</button>
+                    </div>
+
+                    <div class="p-4 overflow-y-auto space-y-3">
+                        <div v-if="allNotesList.length === 0" class="text-center text-gray-400 dark:text-gray-500 py-8">
+                            Список нотаток порожній
+                        </div>
+                        <div v-for="n in allNotesList" :key="n.key"
+                            class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded p-3 relative group">
+                            <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{{ n.text }}</p>
+                            <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 font-mono truncate">{{ n.key
+                                }}</div>
+                            <button @click="deleteNote(n.key)"
+                                class="absolute top-2 right-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+
+
+
+
+            <!-- Modal: Schedule Change History -->
+            <div v-if="showChangeHistoryModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
+                @click.self="showChangeHistoryModal = false">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col">
+                    <div
+                        class="p-4 border-b dark:border-gray-700 bg-sky-50 dark:bg-sky-900/20 rounded-t-xl flex justify-between items-center">
+                        <h3 class="font-bold text-lg text-sky-800 dark:text-sky-300">Історія змін</h3>
+                        <button @click="showChangeHistoryModal = false"
+                            class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 text-2xl">×</button>
+                    </div>
+
+                    <div class="p-4 overflow-y-auto space-y-3">
+                        <div v-if="(scheduleChangeLog || []).length === 0"
+                            class="text-center text-gray-400 dark:text-gray-500 py-8">
+                            Поки що змін не зафіксовано
+                        </div>
+
+                        <div v-for="(entry, idx) in (scheduleChangeLog || [])" :key="idx"
+                            class="rounded-lg border dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700">
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                {{ new Date(entry.at).toLocaleString('uk-UA') }} · {{ entry.entityType }}: {{
+                                entry.entityName }}
+                            </div>
+                            <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ entry.discipline }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ entry.date }}</div>
+                            <div class="mt-2 text-sm">
+                                <span class="font-semibold text-gray-600 dark:text-gray-300">
+                                    {{ changeFieldLabel(entry.field) }}:
+                                </span>
+                                <span class="text-red-600 dark:text-red-400">{{ entry.from }}</span>
+                                <span class="mx-1">→</span>
+                                <span class="text-green-600 dark:text-green-400">{{ entry.to }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-2">
+                        <button @click="clearChangeHistory"
+                            class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/40 font-bold py-2 px-4 rounded">
+                            Очистити історію
+                        </button>
+                        <button @click="showChangeHistoryModal = false"
+                            class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded">
+                            Закрити
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- Settings Modal -->
+            <div v-if="showSettingsModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-11/12 max-w-lg shadow-xl relative">
+                    <button @click="showSettingsModal = false"
+                        class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12">
+                            </path>
+                        </svg>
+                    </button>
+
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 dark:text-gray-200">
+                        <span>⚙️</span> Налаштування часу пар
+                    </h3>
+
+                    <div
+                        class="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md mb-4 text-sm text-gray-700 dark:text-gray-300">
+                        Тут ви можете змінити час початку та кінця пар. Ці налаштування збережуться на цьому пристрої.
+                    </div>
+
+                    <div class="mb-6 border-b dark:border-gray-700 pb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold dark:text-gray-200">Сповіщення (за 15/5 хв)</span>
+                            <button @click="requestNotificationPermission"
+                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+                                :class="notificationsEnabled ? 'bg-amber-600' : 'bg-gray-200 dark:bg-gray-700'">
+                                <span
+                                    class="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition"
+                                    :class="notificationsEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            Працює, коли вкладка відкрита (можна згорнути).
+                        </p>
+                    </div>
+
+                    <!-- Auto-Refresh Settings -->
+                    <div class="mb-6 border-b dark:border-gray-700 pb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold dark:text-gray-200">Автооновлення розкладу</span>
+                            <button @click="toggleAutoRefresh"
+                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+                                :class="autoRefreshEnabled ? 'bg-amber-600' : 'bg-gray-200 dark:bg-gray-700'">
+                                <span
+                                    class="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition"
+                                    :class="autoRefreshEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
+                            :class="{ 'opacity-50': !autoRefreshEnabled }">
+                            <span>Перевіряти кожні</span>
+                            <input type="number" min="1" max="60" :value="autoRefreshInterval"
+                                @input="setAutoRefreshInterval($event.target.value)" :disabled="!autoRefreshEnabled"
+                                class="w-16 border dark:border-gray-600 rounded px-2 py-1 text-center dark:bg-gray-700 dark:text-gray-300">
+                            <span>хвилин</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-6 border-b dark:border-gray-700 pb-4">
+                        <div class="font-bold dark:text-gray-200 mb-2">Кастомні назви (аліаси)</div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
+                            <select v-model="aliasType"
+                                class="border dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
+                                <option value="all">Усі типи</option>
+                                <option value="discipline">Дисципліна</option>
+                                <option value="teacher">Викладач</option>
+                            </select>
+                            <input type="text" v-model="aliasSource" placeholder="З"
+                                class="border dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
+                            <input type="text" v-model="aliasTarget" placeholder="На"
+                                class="border dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
+                            <button @click="addAlias"
+                                class="bg-amber-600 text-white rounded px-3 py-1 text-sm hover:bg-amber-700">Додати</button>
+                        </div>
+                        <div class="max-h-28 overflow-y-auto space-y-1">
+                            <div v-if="aliasesList.length === 0" class="text-xs text-gray-400 dark:text-gray-500">Аліасів ще немає</div>
+                            <div v-for="item in aliasesList" :key="item.key"
+                                class="flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
+                                <span class="truncate pr-2">
+                                    <span class="font-semibold">{{ item.source }}</span> → {{ item.value }}
+                                    <span class="text-gray-400">({{ item.type }})</span>
+                                </span>
+                                <button @click="removeAlias(item.key)" class="text-red-500 hover:text-red-700">✕</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                        <div v-for="(time, pairNum) in customTimes" :key="pairNum"
+                            class="flex items-center justify-between">
+                            <span class="font-bold w-16 dark:text-gray-300">{{ pairNum }} пара:</span>
+                            <div class="flex items-center gap-2">
+                                <input type="time" v-model="customTimes[pairNum].start"
+                                    class="border dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
+                                <span class="dark:text-gray-400">-</span>
+                                <input type="time" v-model="customTimes[pairNum].end"
+                                    class="border dark:border-gray-600 rounded px-2 py-1 text-sm dark:bg-gray-700 dark:text-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <button @click="resetCustomTimes" class="text-red-500 hover:text-red-700 text-sm underline">
+                                Скинути
+                            </button>
+                            <button @click="clearLocalData && clearLocalData()"
+                                class="text-red-600 hover:text-red-800 text-sm underline">
+                                Очистити дані
+                            </button>
+                            <button v-if="staffToolsEnabled && !adminMode" @click="toggleAdminLogin"
+                                class="text-gray-300 hover:text-gray-500 text-xs">
+                                Адмін
+                            </button>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button v-if="adminMode" @click="saveGlobalTimes"
+                                class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 shadow transition flex items-center gap-1">
+                                <span>🌍</span> Всім
+                            </button>
+                            <button @click="saveState(); showSettingsModal = false"
+                                class="bg-amber-600 text-white px-4 py-2 rounded hover:bg-amber-700 shadow transition">
+                                Зберегти
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Modal: Report Download -->
+            <div v-if="showReportModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4"
+                @click.self="showReportModal = false">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full flex flex-col">
+                    <div class="p-4 border-b dark:border-gray-700 bg-green-50 dark:bg-green-900/20 rounded-t-xl">
+                        <h3 class="font-bold text-lg text-green-800 dark:text-green-300">📊 Завантажити звіт</h3>
+                        <p class="text-xs text-green-600 dark:text-green-400">Формування Excel-звіту для викладача</p>
+                    </div>
+
+                    <div class="p-4 space-y-4">
+                        <!-- Faculty -->
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Факультет</label>
+                            <select v-model="reportForm.faculty" @change="loadReportChairs"
+                                class="w-full border rounded p-2 focus:ring focus:ring-green-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-green-900 transition-colors">
+                                <option value="">-- Оберіть факультет --</option>
+                                <option v-for="fac in faculties" :key="fac.Key" :value="fac">{{ fac.Value }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Chair -->
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Кафедра</label>
+                            <select v-model="reportForm.chair" @change="loadReportEmployees"
+                                :disabled="!reportForm.faculty"
+                                class="w-full border rounded p-2 focus:ring focus:ring-green-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-green-900 transition-colors disabled:opacity-50">
+                                <option value="">-- Оберіть кафедру --</option>
+                                <option v-for="chair in reportChairs" :key="chair.Key" :value="chair">{{ chair.Value }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Teacher -->
+                        <div>
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Викладач</label>
+                            <select v-model="reportForm.teacher" :disabled="!reportForm.chair"
+                                class="w-full border rounded p-2 focus:ring focus:ring-green-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-green-900 transition-colors disabled:opacity-50">
+                                <option value="">-- Оберіть викладача --</option>
+                                <option v-for="emp in reportEmployees" :key="emp.Key" :value="emp">{{ emp.Value }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Month Range -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">З місяця</label>
+                                <input type="month" v-model="reportForm.monthStart"
+                                    class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">По місяць</label>
+                                <input type="month" v-model="reportForm.monthEnd"
+                                    class="w-full border rounded p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            </div>
+                        </div>
+
+                        <!-- Progress bar -->
+                        <div v-if="isDownloadingReport && reportProgress" class="space-y-2">
+                            <div class="text-sm font-bold text-green-700 dark:text-green-400">{{ reportProgress.progress
+                                }}</div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300"
+                                    :style="{ width: (reportProgress.total ? (reportProgress.current / reportProgress.total * 100) : 0) + '%' }">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-2">
+                        <button @click="showReportModal = false"
+                            class="text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold py-2 px-4 rounded">
+                            Скасувати
+                        </button>
+                        <button @click="downloadReport" :disabled="!isReportFormValid || isDownloadingReport"
+                            class="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-bold py-2 px-4 rounded flex items-center gap-2">
+                            <span v-if="isDownloadingReport"
+                                class="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></span>
+                            <span v-else>📥</span>
+                            {{ isDownloadingReport ? 'Генерація...' : 'Завантажити' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="schedule-layout grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+                <!-- Overlay for the single responsive sidebar -->
+                <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="sidebarOpen = false"></div>
+
+
+                <!-- Sidebar: Controls -->
+                <aside class="app-sidebar lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-fit desktop-sidebar"
+                    :class="{ open: sidebarOpen }" aria-label="Пошук і фільтри розкладу">
+                    <details class="search-disclosure" :open="mobileView === 'expanded' || sidebarOpen || activeEntities.length === 0">
+                    <summary class="search-summary">Пошук і фільтри</summary>
+                    <div class="search-disclosure-content">
+                    <div class="sidebar-mobile-heading flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-lg text-gray-800 dark:text-gray-200">⚙️ Пошук розкладу</h2>
+                        <button @click="sidebarOpen = false" type="button" aria-label="Закрити панель фільтрів"
+                            class="text-gray-500 hover:text-gray-800 dark:hover:text-white text-2xl">×</button>
+                    </div>
+
+                    <div id="mobile-shell-navigation"></div>
+                    <button type="button" class="sidebar-settings secondary-action" @click="showSettingsModal = true; sidebarOpen = false">Налаштування часу пар</button>
+                    <!-- Favorites Quick Access -->
+                    <div v-if="favorites.length > 0" class="mb-6 pb-4 border-b dark:border-gray-700">
+                        <div class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">⭐
+                            Обране</div>
+                        <div class="flex flex-wrap gap-2">
+                            <div v-for="fav in favorites" :key="fav.id + fav.type"
+                                :class="['favorites-chip border', activeFavoriteKey === `${fav.type}:${fav.id}` ? 'bg-amber-200 dark:bg-amber-700 text-amber-900 dark:text-amber-100 border-amber-300 dark:border-amber-500' : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700']"
+                                @click="loadFromFavorite(fav)">
+                                <span>{{ fav.type === 'Група' ? '🎓' : '👨‍🏫' }}</span>
+                                <span>{{ fav.name }}</span>
+                                <button class="remove-fav text-red-400 hover:text-red-600"
+                                    @click.stop="removeFavorite(fav.id, fav.type)">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <button v-if="mode === 'teacher' || staffToolsEnabled" @click="openReportModal"
+                            class="w-full bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
+                            Завантажити звіт
+                        </button>
+                    </div>
+
+                    <!-- Tabs: Student vs Teacher -->
+                    <div class="flex mb-6 border-b">
+                        <button @click="mode = 'student'"
+                            :class="['flex-1 py-2 font-semibold transition', mode === 'student' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
+                            Студент
+                        </button>
+                        <button @click="mode = 'teacher'"
+                            :class="['flex-1 py-2 font-semibold transition', mode === 'teacher' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
+                            Викладач
+                        </button>
+                        <button v-if="staffToolsEnabled" @click="mode = 'occupancy'"
+                            :class="['flex-1 py-2 font-semibold transition', mode === 'occupancy' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-400 hover:text-gray-600']">
+                            Зайнятість
+                        </button>
+                    </div>
+
+                    <!-- Search Bar (Standard Mode Only) -->
+                    <div v-if="mode !== 'occupancy'" class="mb-6 relative">
+                        <label for="schedule-search" class="block text-sm font-bold mb-1">🔍 {{ mode === 'teacher' ? 'Швидкий пошук викладача' : 'Швидкий пошук групи' }}</label>
+                        <input id="schedule-search" type="search" v-model="searchQuery" @input="onSearchInput" @focus="onSearchInput"
+                            role="combobox" aria-autocomplete="list" aria-controls="schedule-search-results"
+                            :aria-expanded="searchResults.length > 0"
+                            :placeholder="mode === 'teacher' ? 'Наприклад: Шевченко...' : 'Наприклад: КН-21...'"
+                            class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+
+                        <!-- Dropdown Results -->
+                        <div v-if="searchResults.length > 0" id="schedule-search-results" role="listbox"
+                            class="absolute z-50 w-full bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-b shadow-lg max-h-60 overflow-y-auto">
+                            <div v-for="(res, idx) in searchResults" :key="idx" @click="selectSearchResult(res)"
+                                @keydown.enter.prevent="selectSearchResult(res)" role="option" tabindex="0"
+                                class="p-2 hover:bg-amber-50 dark:hover:bg-gray-600 cursor-pointer border-b dark:border-gray-600 last:border-b-0 text-sm flex items-center text-gray-800 dark:text-gray-200">
+                                <span class="mr-2 text-lg">{{ res.type === 'group' ? '🎓' : '👨‍🏫' }}</span>
+                                <div>
+                                    <div class="font-bold text-amber-700">{{ res.label ? res.label.split('(')[0] :
+                                        res.value.Value }}</div>
+                                    <div class="search-result-detail text-gray-500 text-xs">{{ res.detail || res.label }}</div>
+                                    <div v-if="res.availability && res.availabilityPeriod === `${dateStart} — ${dateEnd}`" class="search-availability" role="status">
+                                        {{ res.availability }}<br><small>{{ res.availabilityPeriod }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="isSearching" role="status" aria-live="polite" class="absolute right-2 top-8 flex items-center gap-2">
+                            <span class="text-xs text-gray-400 animate-pulse whitespace-nowrap">{{ cacheStatus }}</span>
+                            <div
+                                class="animate-spin h-4 w-4 border-2 border-amber-500 rounded-full border-t-transparent">
+                            </div>
+                        </div>
+                        <div v-if="searchQuery && searchResults.length === 0 && !isSearching && isCacheLoaded"
+                            class="absolute z-50 w-full bg-white border rounded-b shadow-lg p-3 text-sm text-gray-500 text-center">
+                            Нічого не знайдено 😞
+                        </div>
+                    </div>
+
+                    <button v-if="mode !== 'occupancy'" type="button" @click="advancedFiltersOpen = !advancedFiltersOpen"
+                        class="w-full mb-4 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 flex items-center justify-between"
+                        :aria-expanded="advancedFiltersOpen" aria-controls="advanced-schedule-filters">
+                        <span>⚙️ Уточнити пошук</span><span aria-hidden="true">{{ advancedFiltersOpen ? '−' : '+' }}</span>
+                    </button>
+
+                    <div v-if="loadingFilters" class="space-y-4">
+                        <!-- Skeleton Loader -->
+                        <div class="space-y-2">
+                            <div class="h-4 w-1/3 bg-gray-200 dark:bg-gray-700 rounded skeleton"></div>
+                            <div class="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded skeleton"></div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="h-4 w-1/3 bg-gray-200 dark:bg-gray-700 rounded skeleton"></div>
+                            <div class="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded skeleton"></div>
+                        </div>
+                    </div>
+
+                    <div v-else class="space-y-4">
+                        <div id="advanced-schedule-filters" v-show="mode === 'occupancy' || advancedFiltersOpen || activeEntities.length > 0" class="space-y-4">
+                        <!-- Faculty Filter (Common) - Hide in Occupancy -->
+                        <!-- Faculty Filter (Common) - Hide in Occupancy -->
+                        <div v-if="mode !== 'occupancy'">
+                            <label for="schedule-faculty" class="block text-sm font-bold mb-1 dark:text-gray-300">Факультет</label>
+                            <select id="schedule-faculty" v-model="selectedFaculty" @change="onFacultyChange"
+                                class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                <option value="">-- Оберіть факультет --</option>
+                                <option v-for="fac in faculties" :key="fac.Key" :value="fac.Key">{{ fac.Value }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Filter by Lesson Type -->
+                        <div v-if="mode !== 'occupancy' && activeEntities.length > 0">
+                            <label class="block text-sm font-bold mb-1 dark:text-gray-300">Тип пари</label>
+                            <select v-model="lessonTypeFilter"
+                                class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                <option v-for="opt in lessonTypeOptions" :key="opt.value" :value="opt.value">{{
+                                    opt.label }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Student Filters -->
+                        <div v-if="mode === 'student'">
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Форма навчання</label>
+                                <select v-model="selectedEduForm" @change="loadGroups" :disabled="!selectedFaculty"
+                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <option value="">{{ selectedFaculty ? '-- Оберіть форму --' : '-- Спочатку факультет --' }}</option>
+                                    <option v-for="item in eduForms" :key="item.Key" :value="item.Key">{{ item.Value }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Курс</label>
+                                <select v-model="selectedCourse" @change="loadGroups" :disabled="!selectedFaculty || !selectedEduForm"
+                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <option value="">{{ selectedEduForm ? '-- Оберіть курс --' : '-- Спочатку форму --' }}</option>
+                                    <option v-for="item in courses" :key="item.Key" :value="item.Key">{{ item.Value }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Група</label>
+                                <input v-if="groups.length > 8" type="search" v-model="groupListQuery"
+                                    placeholder="Фільтр за назвою групи" aria-label="Фільтр списку груп"
+                                    class="w-full border rounded p-2 mb-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <select v-model="selectedGroup" :disabled="!selectedFaculty || !selectedEduForm || !selectedCourse"
+                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <option value="">{{ selectedCourse ? '-- Оберіть групу --' : '-- Заповніть попередні поля --' }}</option>
+                                    <option v-for="grp in filteredGroups" :key="grp.Key" :value="grp">{{ grp.Value }}</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Teacher Filters -->
+                        <div v-else-if="mode === 'teacher'">
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Кафедра</label>
+                                <select v-model="selectedChair" @change="loadEmployees" :disabled="!selectedFaculty"
+                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <option value="">-- Оберіть кафедру --</option>
+                                    <option v-for="chair in chairs" :key="chair.Key" :value="chair.Key">{{ chair.Value
+                                        }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Викладач</label>
+                                <input v-if="employees.length > 8" type="search" v-model="employeeListQuery"
+                                    placeholder="Фільтр за прізвищем" aria-label="Фільтр списку викладачів"
+                                    class="w-full border rounded p-2 mb-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <select v-model="selectedEmployee" :disabled="!selectedChair"
+                                    class="w-full border rounded p-2 focus:ring focus:ring-amber-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <option value="">-- Оберіть викладача --</option>
+                                    <option v-for="emp in filteredEmployees" :key="emp.Key" :value="emp">{{ emp.Value }}
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        </div>
+
+                        <!-- Occupancy Controls -->
+                        <div v-if="mode === 'occupancy'">
+                            <div>
+                                <label class="block text-sm font-bold mb-1 dark:text-gray-300">Дата аналізу</label>
+                                <input type="date" v-model="occupancyDate"
+                                    class="w-full border rounded p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                            </div>
+
+                            <div v-if="isScanning" class="mt-4">
+                                <div class="text-sm font-bold text-amber-600 mb-1">Сканування...</div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                                    <div class="bg-amber-600 h-2.5 rounded-full transition-all duration-300"
+                                        :style="{ width: (scanProgress.total ? (scanProgress.current / scanProgress.total * 100) : 0) + '%' }">
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 text-center">
+                                    {{ scanProgress.current }} / {{ scanProgress.total }}
+                                    <br>
+                                    {{ scanProgress.text }}
+                                    <span v-if="scanErrors > 0" class="text-red-500 font-bold ml-1">
+                                        (Помилок: {{ scanErrors }})
+                                    </span>
+                                </div>
+                                <button @click="stopScan = true"
+                                    class="mt-2 text-xs text-red-500 underline w-full text-center">
+                                    Зупинити
+                                </button>
+                            </div>
+
+                            <div v-else class="mt-4">
+                                <button @click="startOccupancyScan"
+                                    class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition">
+                                    🚀 Почати сканування
+                                </button>
+                                <p class="text-xs text-gray-500 mt-2 text-center">
+                                    Увага: Це займе певний час (~30с). Ми перевіримо розклад усіх груп.
+                                </p>
+                            </div>
+                            <p v-if="errorMessage" role="alert" class="text-red-500 text-sm mt-2">{{ errorMessage }}</p>
+                        </div>
+
+                        <!-- Notes Manager (New Button) -->
+                        <div v-if="mode !== 'occupancy'" class="pt-4 border-t">
+                            <button @click="showAllNotesModal = true"
+                                class="w-full bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2">
+                                Керувати нотатками
+                            </button>
+                        </div>
+
+                        <!-- Date Range and Add Button (Standard Mode Only) -->
+                        <details class="mb-4">
+                            <summary class="cursor-pointer font-semibold py-2">Резервна копія</summary>
+                            <p class="text-sm mb-2">Нотатки, обране, власні назви та номери занять. Паролі й журнали не включаються.</p>
+                            <button type="button" class="lesson-number" @click="exportPersonalData">Завантажити копію</button>
+                            <label class="block text-sm mt-3">Відновити з JSON<input type="file" accept="application/json,.json" class="block w-full mt-1" @change="restorePersonalData"></label>
+                        </details>
+                        <details class="mb-4">
+                            <summary class="cursor-pointer font-semibold py-2">Нумерація занять</summary>
+                            <label for="numbering-start" class="block text-sm mb-1">Початок семестру</label>
+                            <input id="numbering-start" type="date" v-model="numberingStart" class="w-full border rounded p-2">
+                            <p class="text-sm mt-2">Рахуємо заняття окремо за предметом, типом і групою, без скасованих. Це не номер теми чи роботи.</p>
+                            <p class="text-sm mt-2" role="status">{{ numberingStatus }}</p>
+                            <p class="text-xs mt-2">Дата і ручні номери зберігаються лише в цьому браузері.</p>
+                        </details>
+                        <div v-if="mode !== 'occupancy'" class="space-y-4 pt-4 border-t dark:border-gray-700">
+                            <!-- Quick Date Buttons -->
+                            <div class="flex flex-wrap gap-1">
+                                <button @click="setDateRange('today')" class="quick-date-btn"
+                                    :class="{ active: datePreset === 'today' }">Сьогодні</button>
+                                <button @click="setDateRange('thisWeek')" class="quick-date-btn"
+                                    :class="{ active: datePreset === 'thisWeek' }">Цей тиждень</button>
+                                <button @click="setDateRange('nextWeek')" class="quick-date-btn"
+                                    :class="{ active: datePreset === 'nextWeek' }">Наступний</button>
+                                <button @click="setDateRange('twoWeeks')" class="quick-date-btn"
+                                    :class="{ active: datePreset === 'twoWeeks' }">2 тижні</button>
+                            </div>
+
+                            <!-- Date Range -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-sm font-bold mb-1 dark:text-gray-300">З</label>
+                                    <input type="date" v-model="dateStart"
+                                        class="w-full border rounded p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold mb-1 dark:text-gray-300">По</label>
+                                    <input type="date" v-model="dateEnd"
+                                        class="w-full border rounded p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors">
+                                </div>
+                            </div>
+
+                            <!-- Add Button + Favorite -->
+                            <div class="flex gap-2">
+                                <button @click="addEntity" :disabled="!canAdd || loadingSchedule"
+                                    class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+                                    {{ loadingSchedule ? 'Завантаження…' : '+ Додати' }}
+                                </button>
+                                <button @click="addToFavorites" :disabled="!canAdd" title="Додати до обраного"
+                                    class="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:hover:bg-yellow-800/40 text-yellow-600 dark:text-yellow-400 font-bold py-2 px-3 rounded transition disabled:opacity-30 disabled:cursor-not-allowed">
+                                    ⭐
+                                </button>
+                            </div>
+                            <p v-if="errorMessage" class="text-red-500 text-sm mt-2">{{ errorMessage }}</p>
+                        </div>
+
+                        <!-- Export Buttons -->
+                        <div v-if="Object.keys(groupedSchedule).length > 0"
+                            class="mt-6 pt-4 border-t dark:border-gray-700 space-y-2">
+                            <button @click="exportExcel" :disabled="exportInProgress"
+                                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-60">
+                                {{ exportInProgress ? 'Підготовка…' : `Excel · ${exportLessonCount} занять` }}
+                            </button>
+                            <div class="flex gap-2">
+                                <button @click="exportICal"
+                                    class="flex-1 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:hover:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300 font-bold py-2 px-3 rounded transition text-sm flex items-center justify-center gap-1">
+                                    iCal
+                                </button>
+                                <button @click="shareSchedule"
+                                    class="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-3 rounded transition text-sm flex items-center justify-center gap-1">
+                                    Поділитись
+                                </button>
+                            </div>
+                            <p class="text-center text-[11px] text-gray-400 dark:text-gray-500">
+                                Експортується лише розклад, видимий після фільтрів
+                            </p>
+                        </div>
+                    </div>
+                    </div>
+                    </details>
+                </aside>
+
+                <!-- Main Panel: Results -->
+
+                <!-- Main Panel: Results -->
+                <div class="schedule-main lg:col-span-3 space-y-6">
+
+                    <!-- OCCUPANCY VIEW -->
+                    <div v-if="mode === 'occupancy'">
+                        <div v-if="occupancyResults.length > 0"
+                            class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow transition-colors">
+                            <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                                <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">Зайнятість аудиторій ({{
+                                    occupancyDate
+                                    }})
+                                </h3>
+
+                                <div class="flex gap-2 w-full md:w-auto">
+                                    <input type="text" v-model="occupancySearch" placeholder="Пошук (напр. 110)..."
+                                        class="border rounded px-3 py-1 text-sm focus:ring focus:ring-amber-200 flex-grow dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-amber-900 transition-colors">
+                                    <button @click="showFreeNowOnly = !showFreeNowOnly"
+                                        :class="['text-sm font-bold py-1 px-3 rounded transition whitespace-nowrap',
+                                        showFreeNowOnly ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200']">
+                                        {{ showFreeNowOnly ? 'Усі аудиторії' : 'Лише вільні зараз' }}
+                                    </button>
+                                    <button @click="exportOccupancy"
+                                        class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-1 px-3 rounded transition flex items-center gap-2 whitespace-nowrap">
+                                        <span>📥</span> Excel
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="showFreeNowOnly" class="mb-3 text-xs text-emerald-700 dark:text-emerald-300">
+                                <p v-if="scanErrors > 0 || isScanning" class="text-amber-700 dark:text-amber-300">Потрібне повне сканування без помилок за сьогодні. Неповні дані не підтверджують, що аудиторія вільна.</p>
+                                Поточна пара: <span class="font-bold">{{ currentPairNow || 'поза парами' }}</span>.
+                                Показано вільні аудиторії: {{ freeRoomsNow.length }}.
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div v-for="cab in (showFreeNowOnly ? freeRoomsNow : filteredOccupancyResults)" :key="cab.name"
+                                    class="border rounded-lg p-3 hover:shadow-md transition bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                                    <div
+                                        class="font-bold text-lg text-gray-800 dark:text-gray-200 mb-2 flex justify-between">
+                                        {{ cab.name }}
+                                        <span
+                                            class="text-xs font-normal bg-white dark:bg-gray-600 border dark:border-gray-500 px-1 rounded text-gray-500 dark:text-gray-300">{{
+                                            cab.building || '?' }}</span>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div v-for="slot in [1,2,3,4,5,6,7]" :key="slot"
+                                            class="flex items-center text-xs">
+                                            <div class="w-6 font-bold text-gray-400">{{ slot }}</div>
+                                            <div class="flex-1 h-6 rounded px-2 flex items-center overflow-hidden whitespace-nowrap"
+                                                :class="cab.slots[slot] ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200'">
+                                                <span v-if="cab.slots[slot]" class="truncate">
+                                                    {{ cab.slots[slot].group }} ({{ cab.slots[slot].teacher }})
+                                                </span>
+                                                <span v-else class="text-green-600 font-bold">Вільна</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Scan Empty State or No Matches -->
+                            <div v-if="occupancyResults.length > 0 && (showFreeNowOnly ? freeRoomsNow.length === 0 : filteredOccupancyResults.length === 0)"
+                                class="text-center py-8 text-gray-500">
+                                Нічого не знайдено за запитом "{{ occupancySearch }}" 😞
+                            </div>
+
+                        </div>
+
+                        <div v-else-if="!isScanning"
+                            class="bg-white dark:bg-gray-800 p-12 rounded-xl shadow text-center text-gray-400 dark:text-gray-500 transition-colors">
+                            <p class="text-xl">Дані відсутні</p>
+                            <p v-if="scanErrors > 0">
+                                Сканування завершено, але аудиторій не знайдено.
+                                <br>Спробуйте обрати інший день (будній).
+                            </p>
+                            <p v-else>Натисніть "Почати сканування", щоб перевірити зайнятість</p>
+                        </div>
+
+                    </div>
+
+                    <!-- STANDARD VIEW -->
+                    <div v-else>
+                        <!-- Countdown to Next Lesson -->
+                        <div v-if="nextLessonInfo" class="mobile-expanded-only countdown-banner mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="min-w-0">
+                                <div class="text-xs font-medium opacity-80">⏰ Наступна пара</div>
+                                <div class="font-bold text-lg">{{ nextLessonInfo.discipline }}</div>
+                                <div class="text-sm opacity-90">
+                                    {{ nextLessonInfo.date }} · {{ nextLessonInfo.start }}–{{ nextLessonInfo.end }}
+                                    <span v-if="nextLessonInfo.cabinet"> · 📍 {{ nextLessonInfo.cabinet }}</span>
+                                </div>
+                                <div v-if="nextLessonInfo.teacher" class="text-sm opacity-90">
+                                    👨‍🏫 {{ nextLessonInfo.teacher }}
+                                </div>
+                            </div>
+                            <div class="flex shrink-0 items-center justify-between gap-3 sm:flex-col sm:items-end sm:text-right">
+                                <div class="text-2xl font-bold">{{ nextLessonInfo.timeLeft }}</div>
+                                <a v-if="nextLessonInfo.onlineUrl" :href="nextLessonInfo.onlineUrl"
+                                    target="_blank" rel="noopener noreferrer"
+                                    class="rounded-lg bg-purple-700 px-3 py-2 text-sm font-bold text-white hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-white">
+                                    📹 Онлайн
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Helper message if empty -->
+                        <div v-if="activeEntities.length === 0"
+                            aria-live="polite" class="bg-white dark:bg-gray-800 p-8 md:p-12 rounded-xl shadow text-center text-gray-500 dark:text-gray-400 transition-colors">
+                            <p class="text-5xl mb-4">📅</p>
+                            <p class="text-xl font-bold text-gray-700 dark:text-gray-200">Знайдіть свій розклад</p>
+                            <ol class="mt-4 max-w-md mx-auto text-left space-y-2 list-decimal list-inside">
+                                <li>Оберіть «Студент» або «Викладач».</li>
+                                <li>Введіть групу чи прізвище у швидкому пошуку.</li>
+                                <li>Оберіть результат — розклад додасться автоматично.</li>
+                            </ol>
+                            <a href="#schedule-search" @click="sidebarOpen = true"
+                                class="inline-block mt-5 bg-amber-600 hover:bg-amber-700 text-white font-bold px-5 py-2 rounded-lg">Почати пошук</a>
+                        </div>
+
+                        <!-- Active Entities List -->
+                        <div v-if="activeEntities.length > 0" class="active-schedules flex min-w-0 flex-wrap gap-3" aria-label="Вибрані розклади">
+                            <div v-for="(entity, index) in activeEntities" :key="index"
+                                class="flex min-w-0 max-w-full items-center bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-2xl shadow-sm">
+                                <span v-if="entity.type === 'Викладач'" class="campus-avatar campus-selection-avatar" :style="{'--teacher-color': campusTeacherColor(entity.name)}">{{ campusTeacherInitials(entity.name) }}</span>
+                                <span class="min-w-0 break-words font-medium mr-2" :title="entity.selectionDetail || entity.name">{{ entity.name }}
+                                    <small v-if="entity.selectionDetail" class="block text-xs font-normal">{{ entity.selectionDetail }}</small>
+                                    <small v-if="entity.checkedAt && mobileView === 'expanded'" class="block text-xs font-normal">Перевірено: {{ new Date(entity.checkedAt).toLocaleString('uk-UA') }}</small>
+                                </span>
+                                <span class="shrink-0 text-xs text-gray-500 uppercase mr-3">({{ entity.type }})</span>
+                                <button @click="removeEntity(index)" :aria-label="`Прибрати розклад ${entity.name}`"
+                                    class="shrink-0 text-red-400 hover:text-red-700 font-bold">✕</button>
+                            </div>
+                        </div>
+
+                        <div v-if="activeEntities.length > 0" id="schedule-week" class="schedule-navigation campus-navigation">
+                            <button type="button" @click="shiftWeek(-1)" class="week-nav-btn" aria-label="Попередній тиждень"><campus-icon name="ChevronLeft"></campus-icon></button>
+                            <span>{{ dateStart }} — {{ dateEnd }}</span>
+                            <button type="button" @click="shiftWeek(1)" class="week-nav-btn" aria-label="Наступний тиждень"><campus-icon name="ChevronRight"></campus-icon></button>
+                            <button type="button" @click="scrollToTodaySchedule(true)" class="week-nav-btn">Сьогодні</button>
+                            <div class="campus-view-toggle" role="group" aria-label="Період перегляду">
+                                <button type="button" @click="viewMode = 'cards'" :aria-pressed="viewMode === 'cards'">День</button>
+                                <button type="button" @click="viewMode = 'table'" :aria-pressed="viewMode === 'table'">Тиждень</button>
+                            </div>
+                        </div>
+
+                        <campus-schedule-board v-if="activeEntities.length > 0 && mode !== 'occupancy'"
+                            :days="groupedSchedule" :conflict-days="conflictSchedule" :density="mobileView" :view="viewMode" :entities="activeEntities"
+                            :date-start="dateStart" :date-end="dateEnd" :selected-date="selectedDayDate"
+                            :times="customTimes" :number-for="lessonNumber" :is-active="isActiveLesson"
+                            :get-progress="getLessonProgress" :has-note="hasNote" :get-link="getGlobalLink" :admin="adminMode"
+                            @select="selectedDayDate = $event" @history="openLessonHistory" @note="openNote"
+                            @hide="hideDiscipline" @number="editLessonNumber" @admin="openAdminModal"
+                            @type-filter="lessonTypeFilter = lessonTypeFilter === $event ? '' : $event">
+                        </campus-schedule-board>
+                    </div>
+
+                    <section v-show="mobileView === 'expanded' && mode !== 'occupancy' && groupedSchedule.length > 0" class="schedule-details" aria-label="Аналітика та інструменти">
+                        <!-- Statistics Block -->
+                        <div v-if="activeEntities.length > 0"
+                            class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow mb-6 transition-colors overflow-hidden">
+
+                            <!-- Header & Auto-Refresh Indicator -->
+                            <div
+                                class="px-4 py-3 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-750">
+                                <h3 class="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                    📊 Аналітика
+                                </h3>
+                                <div v-if="autoRefreshEnabled && lastRefreshTime"
+                                    class="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                                    <span class="animate-pulse">●</span> Оновлено: {{ lastRefreshTime }}
+                                </div>
+                            </div>
+
+                            <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <!-- Key Metrics -->
+                                <div class="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{
+                                        scheduleStats.totalPairs }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Пар
+                                    </div>
+                                </div>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{
+                                        scheduleStats.totalHours }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Годин
+                                    </div>
+                                </div>
+                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{
+                                        scheduleStats.avgPairsPerDay }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Пар /
+                                        День
+                                    </div>
+                                </div>
+                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg text-center">
+                                    <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{
+                                        scheduleStats.totalFreeWindows }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Вікон
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="px-4 pb-4 grid md:grid-cols-2 gap-6">
+                                <!-- Type Distribution -->
+                                <div>
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">За типами</h4>
+                                    <div class="space-y-2">
+                                        <div v-for="type in scheduleStats.typeDistribution" :key="type.name"
+                                            class="flex items-center text-sm">
+                                            <div class="w-8 text-xl text-center">{{ getLessonTypeIcon(type.name) }}
+                                            </div>
+                                            <div class="flex-1">
+                                                <div class="flex justify-between mb-1">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{{
+                                                        type.name
+                                                        }}</span>
+                                                    <span class="text-gray-500 dark:text-gray-400 text-xs">{{ type.count
+                                                        }}
+                                                        ({{ type.percent }}%)</span>
+                                                </div>
+                                                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                                    <div class="h-1.5 rounded-full transition-all duration-1000"
+                                                        :class="getLessonTypeClass(type.name).replace('lesson-type-', 'bg-').replace('default', 'gray-400')"
+                                                        :style="{ width: type.percent + '%' }"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Top Subjects -->
+                                <div>
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">Топ дисциплін</h4>
+                                    <div class="space-y-3">
+                                        <div v-for="subj in scheduleStats.topSubjects" :key="subj.name">
+                                            <div class="flex justify-between text-xs mb-1">
+                                                <span class="truncate pr-2 font-medium text-gray-700 dark:text-gray-300"
+                                                    :title="subj.name">{{ subj.name }}</span>
+                                                <span class="text-gray-500 dark:text-gray-400">{{ subj.count }}</span>
+                                            </div>
+                                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                                <div class="bg-amber-500 dark:bg-amber-400 h-1.5 rounded-full transition-all duration-1000"
+                                                    :style="{ width: subj.percent + '%' }"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- Global Controls (Discipline Filter) -->
+                        <div v-if="activeEntities.length > 0"
+                            class="mobile-expanded-only bg-white dark:bg-gray-800 p-4 rounded-xl shadow transition-colors">
+                            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div class="font-bold text-gray-700 dark:text-gray-200">Фільтр (Предмети, Викладачі):
+                                </div>
+                                <div class="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+                                    <button @click="selectedDisciplines = []"
+                                        :disabled="selectedDisciplines.length === 0"
+                                        :class="['text-xs font-medium underline transition', selectedDisciplines.length > 0 ? 'text-red-500 hover:text-red-700 cursor-pointer' : 'text-gray-300 cursor-not-allowed']">
+                                        Скинути фільтр
+                                    </button>
+                                    <button @click="clearAll"
+                                        class="text-xs text-gray-400 hover:text-red-600 font-medium underline">
+                                        Очистити все
+                                    </button>
+                                    <button @click="showChangeHistoryModal = true"
+                                        class="text-xs bg-sky-100 text-sky-700 hover:bg-sky-200 font-bold px-2 py-1 rounded transition">
+                                        Історія змін ({{ (scheduleChangeLog || []).length }})
+                                    </button>
+                                    <button v-if="activeEntities.length > 1" @click="findCommonFreeSlots"
+                                        class="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold px-2 py-1 rounded transition">
+                                        🔍 Знайти вікна
+                                    </button>
+                                    <button @click="openFreeRoomsNow"
+                                        class="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-bold px-2 py-1 rounded transition">
+                                        🟢 Вільні аудиторії зараз
+                                    </button>
+                                    <button @click="shareFavoritesSet"
+                                        class="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold px-2 py-1 rounded transition">
+                                        🔗 Поділитися обраним
+                                    </button>
+                                    <button @click="(openNextLessonInGoogleCalendar ? openNextLessonInGoogleCalendar() : exportICal())"
+                                        class="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1 rounded transition">
+                                        📆 Додати в календар
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mb-3">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">Формат пар:</span>
+                                <button @click="setDeliveryMode && setDeliveryMode('')" :aria-pressed="deliveryModeFilter === ''"
+                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === '' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Усі</button>
+                                <button @click="setDeliveryMode && setDeliveryMode('offline')" :aria-pressed="deliveryModeFilter === 'offline'"
+                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'offline' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки офлайн</button>
+                                <button @click="setDeliveryMode && setDeliveryMode('online')" :aria-pressed="deliveryModeFilter === 'online'"
+                                    :class="['px-2 py-1 rounded text-xs font-semibold border', deliveryModeFilter === 'online' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200']">Тільки онлайн</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <!-- "All" Chip -->
+                                <button @click="selectedDisciplines = []" :class="['px-3 py-1 rounded-full text-sm border transition', 
+                                    selectedDisciplines.length === 0 
+                                    ? 'bg-amber-600 text-white border-amber-600 font-bold shadow-md' 
+                                    : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200']">
+                                    Всі предмети
+                                </button>
+
+                                <!-- Discipline Chips -->
+                                <button v-for="disc in availableDisciplines.filter(item => !hiddenDisciplines.includes(item))" :key="disc" @click="toggleDiscipline(disc)"
+                                    :class="['px-3 py-1 rounded-full text-sm border transition text-left', 
+                                    selectedDisciplines.includes(disc) 
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300 font-semibold shadow-sm ring-1 ring-amber-300' 
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50']">
+                                    {{ disc }}
+                                </button>
+                            </div>
+
+                            <div v-if="availableSubjects.length > 0" class="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Приховати непотрібні предмети</span>
+                                    <button v-if="hiddenDisciplines.length" @click="restoreAllDisciplines"
+                                        class="text-xs font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-300">
+                                        Відновити всі
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button v-for="disc in availableSubjects.filter(item => !hiddenDisciplines.includes(item))"
+                                        :key="`hide-${disc}`" @click="hideDiscipline(disc)"
+                                        class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-left text-xs text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                                        :aria-label="`Приховати предмет ${disc}`">
+                                        🙈 {{ disc }}
+                                    </button>
+                                </div>
+                                <div v-if="hiddenDisciplines.length" class="mt-3 rounded-lg bg-gray-50 p-2 dark:bg-gray-700/60">
+                                    <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Приховані</div>
+                                    <button v-for="disc in hiddenDisciplines" :key="`restore-${disc}`"
+                                        @click="restoreDiscipline(disc)"
+                                        class="mr-2 mt-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-gray-800 dark:text-amber-300"
+                                        :aria-label="`Повернути предмет ${disc}`">
+                                        ↩ {{ disc }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <section id="teacher-calendar" v-if="mode === 'teacher' && activeEntities.length > 0"
+                            class="mobile-expanded-only rounded-xl border border-indigo-100 bg-white p-4 shadow dark:border-indigo-900 dark:bg-gray-800">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Персональний календар</div>
+                                    <h2 class="text-xl font-black text-gray-900 dark:text-gray-100">Заняття викладача</h2>
+                                </div>
+                                <button @click="printTeacherSchedule"
+                                    class="min-h-10 rounded-lg bg-gray-800 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:bg-indigo-600 dark:hover:bg-indigo-700">
+                                    🖨️ Друк тижня
+                                </button>
+                            </div>
+
+                            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                                <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
+                                    <h3 class="font-bold text-indigo-900 dark:text-indigo-200">Сьогодні</h3>
+                                    <div v-if="teacherTodayLessons.length" class="mt-2 space-y-2">
+                                        <div v-for="(lesson, index) in teacherTodayLessons" :key="`today-${index}`"
+                                            class="rounded-lg border border-indigo-100 bg-white p-3 dark:border-indigo-800 dark:bg-gray-800">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="font-bold text-gray-900 dark:text-gray-100">{{ lesson.discipline }}</div>
+                                                <span class="shrink-0 text-sm font-bold text-indigo-700 dark:text-indigo-300">{{ lesson.start }}–{{ lesson.end }}</span>
+                                            </div>
+                                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ lesson.group || 'Групу не вказано' }} · 📍 {{ lesson.cabinet || '—' }}</div>
+                                            <a v-if="getGlobalLink(lesson, 'onlineUrl')" :href="getGlobalLink(lesson, 'onlineUrl')"
+                                                target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex rounded bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">📹 Онлайн</a>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">На сьогодні занять немає.</p>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
+                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Групи викладача</h3>
+                                        <div v-if="teacherGroups.length" class="mt-2 flex flex-wrap gap-2">
+                                            <span v-for="group in teacherGroups" :key="group" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">{{ group }}</span>
+                                        </div>
+                                        <p v-else class="mt-2 text-sm text-gray-400">Групи не знайдено.</p>
+                                    </div>
+                                    <div class="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
+                                        <h3 class="font-bold text-gray-800 dark:text-gray-200">Вікна між парами</h3>
+                                        <div v-if="teacherFreeWindows.length" class="mt-2 space-y-2 text-sm">
+                                            <div v-for="day in teacherFreeWindows" :key="day.date">
+                                                <span class="font-semibold">{{ day.dayName }}, {{ day.date }}:</span>
+                                                {{ day.missing.map(item => `${item.pair} пара`).join(', ') }}
+                                            </div>
+                                        </div>
+                                        <p v-else class="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Вікон у вибраному періоді немає.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+
+                        <!-- Conflicts & Analytics -->
+                        <div v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="mobile-expanded-only grid lg:grid-cols-2 gap-4 mb-4">
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-red-100 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="font-bold text-red-700 dark:text-red-300">Конфлікти розкладу</h4>
+                                    <span class="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-full">
+                                        {{ (conflictSlots || []).length }}
+                                    </span>
+                                </div>
+                                <div v-if="(conflictSlots || []).length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+                                    Конфліктів не знайдено.
+                                </div>
+                                <div v-else class="space-y-2 max-h-44 overflow-y-auto">
+                                    <div v-for="(conf, cidx) in (conflictSlots || []).slice(0, 12)" :key="'conf-' + cidx"
+                                        class="bg-red-50 dark:bg-red-900/20 rounded-lg p-2">
+                                        <div class="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
+                                            {{ conf.dayName }}, {{ conf.date }} · {{ conf.time }}
+                                        </div>
+                                        <div class="text-xs text-gray-700 dark:text-gray-300" v-for="(item, iidx) in conf.items" :key="'item-' + iidx">
+                                            {{ item.entityName }}: {{ item.discipline }} ({{ item.cabinet }})
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-indigo-100 dark:border-gray-700">
+                                <h4 class="font-bold text-indigo-700 dark:text-indigo-300 mb-2">Аналітика навантаження</h4>
+                                <div class="grid grid-cols-2 gap-2 text-sm">
+                                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded p-2">
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">Середнє/день</div>
+                                        <div class="font-bold">{{ (advancedAnalytics && advancedAnalytics.avgDaily) || '0.0' }}</div>
+                                    </div>
+                                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded p-2">
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">Найзавантаженіший</div>
+                                        <div class="font-bold text-xs" :title="advancedAnalytics?.busiest?.name">{{ advancedAnalytics?.busiest?.count || 0 }} пар</div>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 truncate" :title="advancedAnalytics?.busiest?.name">
+                                    Пік: {{ advancedAnalytics?.busiest?.name || '—' }}
+                                </div>
+                                <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 truncate" :title="advancedAnalytics?.lightest?.name">
+                                    Найвільніший: {{ advancedAnalytics?.lightest?.name || '—' }}
+                                </div>
+                                <div class="mt-2">
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Найчастіші пари:</div>
+                                    <div class="flex gap-2 flex-wrap">
+                                        <span v-for="p in (advancedAnalytics?.topPairs || [])" :key="'pair-'+p.pair"
+                                            class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                            {{ p.pair }} пара · {{ p.count }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="smart-day" v-if="activeEntities.length > 0 && (mode !== 'student' || !studentWeekFocus)" class="mobile-expanded-only bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-amber-100 dark:border-gray-700 mb-4 scroll-mt-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-amber-700 dark:text-amber-300">Мій день</span>
+                                <span class="text-2xl font-black">{{ smartDayInsights.score }}/100</span>
+                            </div>
+                            <div class="text-xs text-gray-500">Вікна: {{ smartDayInsights.windows }} · Пізні: {{ smartDayInsights.latePairs }} · Переходи: {{ smartDayInsights.moves }}</div>
+                            <div v-if="smartHeatmap.length" class="overflow-x-auto mt-3">
+                                <div class="grid grid-cols-8 gap-1 min-w-[520px] text-xs text-center">
+                                    <div class="font-bold">Дата</div><div v-for="pair in 7" :key="'hh'+pair" class="font-bold">{{ pair }}</div>
+                                    <template v-for="day in smartHeatmap" :key="day.date">
+                                        <div class="font-bold py-1">{{ day.dateDmy }}</div>
+                                        <div v-for="(count, pairIndex) in day.pairs" :key="day.date + pairIndex" class="rounded py-1" :class="count ? (count > 1 ? 'bg-rose-200 dark:bg-rose-900/40' : 'bg-emerald-200 dark:bg-emerald-900/40') : 'bg-gray-100 dark:bg-gray-700'">{{ count }}</div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                <select v-model="smartSimulationIndex" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-xs md:col-span-2">
+                                    <option value="">What-if: оберіть пару</option>
+                                    <option v-for="(lesson, index) in smartLessonOptions" :key="index" :value="String(index)">{{ lesson.dateDmy }} · {{ lesson.pair }} пара · {{ lesson.discipline }}</option>
+                                </select>
+                                <select v-model.number="smartSimulationDelta" class="rounded-lg border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-xs">
+                                    <option :value="-1">−1 пара</option><option :value="1">+1 пара</option>
+                                </select>
+                            </div>
+                            <div v-if="smartSimulationResult" class="text-xs mt-2 font-bold" :class="smartSimulationResult.delta >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+                                {{ smartSimulationResult.before }} → {{ smartSimulationResult.after }} ({{ smartSimulationResult.delta >= 0 ? '+' : '' }}{{ smartSimulationResult.delta }})
+                            </div>
+                        </div>
+
+                    </section>
+
+                    <div v-if="!loadingSchedule && ((activeEntities.length > 0 && Object.keys(groupedSchedule).length === 0) || (activeEntities.length === 0 && ['offline', 'api-error', 'invalid-range'].includes(scheduleLoadState)))"
+                        class="mx-auto my-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-5 py-6 text-center text-gray-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-gray-200">
+                        <template v-if="scheduleHiddenByFilters">
+                            <div class="font-bold text-amber-800 dark:text-amber-200">Розклад приховано фільтрами</div>
+                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                                Активні: {{ activeScheduleFilters.join(', ') }}.
+                            </div>
+                            <button @click="clearScheduleFilters"
+                                class="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700">
+                                Показати весь розклад
+                            </button>
+                        </template>
+                        <template v-else-if="scheduleLoadState === 'offline'">
+                            <div class="font-bold text-amber-800 dark:text-amber-200">Немає інтернету</div>
+                            <div class="mt-1 text-sm">Перевірте підключення або скористайтеся офлайн-знімком.</div>
+                            <button @click="retryScheduleLoad" class="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white">Повторити</button>
+                            <button @click="loadDemoSchedule" class="ml-2 mt-4 rounded-lg border border-amber-600 bg-white px-4 py-2 text-sm font-bold text-amber-700 dark:bg-gray-800">Демо-дані</button>
+                        </template>
+                        <template v-else-if="scheduleLoadState === 'api-error'">
+                            <div class="font-bold text-red-700 dark:text-red-300">API розкладу недоступний</div>
+                            <div class="mt-1 text-sm">Тимчасова помилка сервера. Запит уже повторювався автоматично.</div>
+                            <button @click="retryScheduleLoad" class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white">Спробувати ще раз</button>
+                            <button @click="loadDemoSchedule" class="ml-2 mt-4 rounded-lg border border-red-500 bg-white px-4 py-2 text-sm font-bold text-red-700 dark:bg-gray-800">Демо-дані</button>
+                        </template>
+                        <template v-else-if="scheduleLoadState === 'invalid-range'">
+                            <div class="font-bold text-red-700 dark:text-red-300">Некоректний період</div>
+                            <div class="mt-1 text-sm">Оберіть не більше 62 днів і перевірте порядок дат.</div>
+                        </template>
+                        <template v-else>
+                            На вибраний період розкладу немає.
+                        </template>
+                    </div>
+
+                    <!-- Schedule Loading Skeleton -->
+                    <div v-if="loadingSchedule" class="space-y-4">
+                        <div v-for="i in 3" :key="i"
+                            class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden p-4 transition-colors">
+                            <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4 skeleton"></div>
+                            <div class="space-y-3">
+                                <div class="h-20 bg-gray-100 dark:bg-gray-700 rounded skeleton"></div>
+                                <div class="h-20 bg-gray-100 dark:bg-gray-700 rounded skeleton"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- End of lg:col-span-3 -->
+            </div> <!-- End of grid -->
+
+
+
+
+
+
+
+            <!-- Footer -->
+            <footer class="mt-12 text-center pb-8 text-gray-400 text-sm">
+                <a href="http://wp-fuaid.zzz.com.ua/r"
+                    class="inline-block text-amber-600 hover:text-amber-800 font-semibold border-b-2 border-transparent hover:border-amber-600 transition mb-2">
+                    ⬅ На головну
+                </a>
+                <div>
+                    <button v-if="staffToolsEnabled" @click="toggleAdminLogin" class="hover:text-gray-600">Admin</button>
+                </div>
+            </footer>
+
+
+        </div> <!-- End of content wrapper -->
+
+      </div> <!-- End of responsive mode -->
+    </div> <!-- End of #app -->
+
+    <script src="/js/utils.js?v=46456b71272e"></script>
+    <script src="/js/app-shell.js?v=b5cbf8bdc9a7"></script>
+  <script src="/js/staff-client.js?v=cdb908eab8a2"></script>
+    <script src="/js/schedule-model.js?v=db7f6f2c8ceb"></script>
+    <script src="/js/reliability.js?v=8919b07a36bd"></script>
+    <script src="/js/schedule-analytics.js?v=49e3959d2d38"></script>
+    <script src="/js/components/current-lesson-banner.js?v=24bb9ebcc3cc"></script>
+    <script src="/js/components/schedule-status-badges.js?v=050e17e61698"></script>
+    <script src="/js/components/app-modal-shell.js?v=1d43109ecd59"></script>
+    <script src="/js/api.js?v=98d2faac2c8d"></script>
+    <script src="/js/search.js?v=103e7bdf53fa"></script>
+    <script src="/js/notes.js?v=1fa00ed3dbcf"></script>
+    <script src="/js/admin.js?v=aa2eeae6d900"></script>
+    <script src="/js/occupancy.js?v=0cf19107a717"></script>
+    <script>
+        // Compatibility fallback for stale cached app.js versions expecting global ReportModule.
+        (function () {
+            if (window.ReportModule) return;
+            const state = {
+                showReportModal: false,
+                isDownloadingReport: false,
+                reportProgress: { current: 0, total: 0, progress: '', done: false, error: null },
+                reportForm: { faculty: '', chair: '', teacher: '', monthStart: '', monthEnd: '' },
+                reportChairs: [],
+                reportEmployees: [],
+                reportError: ''
+            };
+            const methods = {
+                openReportModal() { state.showReportModal = true; },
+                loadReportChairs() { },
+                loadReportEmployees() { },
+                downloadReport() { }
+            };
+            window.ReportModule = {
+                state,
+                methods,
+                computed: { isReportFormValid: { value: false } }
+            };
+            try { window.ScheduleAppReportState = window.ScheduleAppReportState || state; } catch (e) { }
+        })();
+    </script>
+    <script src="/js/personal-data.js?v=88a1f71d733e"></script>
+    <script src="/js/lesson-numbering.js?v=6b98381091bd"></script>
+    <script src="/js/vendor/lucide.min.js?v=3411692820cb"></script>
+    <script src="/js/campus-schedule.js?v=4546cf9912f2"></script>
+    <script src="/js/app.js?v=f9b40f241bcf"></script>
+
+        <script src="/js/app-updates.js?v=759bcf41962e"></script>
+        <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js?v=20260902-1', { updateViaCache: 'none' })
+                        .then(registration => window.ScheduleApp.watchForUpdate(registration))
+                    .catch(registrationError => console.log('SW registration failed: ', registrationError));
+            });
+        }
+    </script>
+    <script src="/js/i18n.js?v=6a86b9c091b8"></script>
+    <script>window.ScheduleI18n && window.ScheduleI18n.applyI18n();</script>
+    <script src="/js/monitor.js?v=b3abc3883244"></script>
+</body>
+
+</html>

@@ -4,3 +4,25 @@ node_modules/
 .env.local
 db.json
 *.rar
+
+# Private runtime files and generated output
+.env
+.env.*
+!.env.example
+**/client_secret*.json
+**/credentials*.json
+**/token*.json
+*.pem
+*.key
+*.token
+*.db
+*.db-*
+*.sqlite*
+*.log
+node_modules*/
+.venv/
+venv/
+__pycache__/
+dist/
+build/
+.wrangler/

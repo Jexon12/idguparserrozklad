@@ -1,0 +1,137 @@
+importScripts('/js/session-domain.js');
+self.onmessage = function (e) {
+  const { rows, mode, requestId, rowIds, rules } = e.data || {};
+  const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+  const idxSet = new Set();
+  const byGroupSlot = new Map();
+  const byTeacherSlot = new Map();
+  const byRoomSlot = new Map();
+  const byGroupExamDay = new Map();
+  const byTeacherExamDay = new Map();
+  const teachersNormMap = new Map();
+  const warningIdxSet = new Set();
+  const warnings = [];
+  let missingDate = 0, missingTime = 0, missingRoom = 0, missingTeacher = 0;
+
+  const teacherNormalize = (t) => clean(t).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
+
+  (rows || []).forEach((r, idx) => {
+    const date = clean(r.date);
+    const time = clean(r.time);
+    const room = clean(r.room).replace(/\s+/g, '').toLowerCase();
+    const group = clean(r.group).toLowerCase();
+    const isExam = clean(r.controlType).toLowerCase() === 'іспит';
+    const teachers = Array.isArray(r.teachers) ? r.teachers : [];
+
+    if (!date) missingDate++;
+    if (isExam && !time) missingTime++;
+    if (isExam && !room) missingRoom++;
+    if (!teachers.length) missingTeacher++;
+
+    teachers.forEach((t) => {
+      const key = teacherNormalize(t);
+      if (!teachersNormMap.has(key)) teachersNormMap.set(key, new Set());
+      teachersNormMap.get(key).add(clean(t));
+    });
+
+    if (!date) return;
+    if (time && (time < '08:00' || time > '18:30')) {
+      warningIdxSet.add(idx);
+      warnings.push({ index: idx, type: 'outsideHours', message: 'Час поза типовим робочим діапазоном' });
+    }
+
+    if (time) {
+      const gk = `${group}__${date}__${time}`;
+      if (!byGroupSlot.has(gk)) byGroupSlot.set(gk, []);
+      byGroupSlot.get(gk).push(idx);
+
+      teachers.forEach((t) => {
+        const tk = `${teacherNormalize(t)}__${date}__${time}`;
+        if (!byTeacherSlot.has(tk)) byTeacherSlot.set(tk, []);
+        byTeacherSlot.get(tk).push(idx);
+      });
+
+      if (room) {
+        const rk = `${room}__${date}__${time}`;
+        if (!byRoomSlot.has(rk)) byRoomSlot.set(rk, []);
+        byRoomSlot.get(rk).push(idx);
+      }
+    }
+
+    if (!byGroupExamDay.has(group)) byGroupExamDay.set(group, []);
+    byGroupExamDay.get(group).push({ idx, date });
+    
+    teachers.forEach((t) => {
+      const key = teacherNormalize(t);
+      if (!byTeacherExamDay.has(key)) byTeacherExamDay.set(key, new Map());
+      if (!byTeacherExamDay.get(key).has(date)) byTeacherExamDay.get(key).set(date, []);
+      byTeacherExamDay.get(key).get(date).push(idx);
+    });
+  });
+
+  [byGroupSlot, byTeacherSlot, byRoomSlot].forEach((m) => m.forEach((arr) => { if (arr.length > 1) arr.forEach((i) => idxSet.add(i)); }));
+
+  const sharedValidation = self.ScheduleApp.SessionDomain.validate(rows || [], rules || {});
+  idxSet.clear();
+  sharedValidation.conflictIndices.forEach(index => idxSet.add(index));
+  if (mode === 'strict') {
+    byGroupExamDay.forEach((arr) => {
+      const parsed = arr.map((x) => ({ ...x, ts: new Date(`${x.date}T00:00:00`).getTime() })).filter((x) => !Number.isNaN(x.ts)).sort((a, b) => a.ts - b.ts);
+      for (let i = 1; i < parsed.length; i++) {
+        const daysDiff = Math.round((parsed[i].ts - parsed[i - 1].ts) / (24 * 3600 * 1000));
+        if (daysDiff <= 1) {
+          [parsed[i - 1].idx, parsed[i].idx].forEach(index => {
+            warningIdxSet.add(index);
+            warnings.push({ index, type: 'examSpacing', message: 'Іспити розташовані близько: перевірте час на підготовку' });
+          });
+        }
+      }
+    });
+  }
+
+  let teacherAliases = 0;
+  teachersNormMap.forEach((set) => { if (set.size > 1) teacherAliases += (set.size - 1); });
+
+  const dups = new Map();
+  (rows || []).forEach((r) => {
+    const k = `${clean(r.discipline).toLowerCase()}__${clean(r.group).toLowerCase()}__${clean(r.controlType).toLowerCase()}`;
+    dups.set(k, (dups.get(k) || 0) + 1);
+  });
+  let duplicateRows = 0;
+  dups.forEach((n) => { if (n > 1) duplicateRows += (n - 1); });
+
+  const overloadIdxSet = new Set();
+  byTeacherExamDay.forEach((dayMap) => {
+    dayMap.forEach((arr) => {
+      if (arr.length > 2) arr.forEach(i => overloadIdxSet.add(i));
+      if (arr.length > 3) arr.forEach((i) => {
+        warningIdxSet.add(i);
+        warnings.push({ index: i, type: 'manyTeacherEvents', message: 'У викладача більше 3 подій на день' });
+      });
+    });
+  });
+
+  byGroupExamDay.forEach((arr) => {
+    const byDate = new Map();
+    arr.forEach((x) => {
+      if (!byDate.has(x.date)) byDate.set(x.date, []);
+      byDate.get(x.date).push(x.idx);
+    });
+    byDate.forEach((indices) => {
+      if (indices.length > 1) indices.forEach((i) => {
+        warningIdxSet.add(i);
+        warnings.push({ index: i, type: 'sameGroupDay', message: 'У групи кілька подій в один день' });
+      });
+    });
+  });
+
+  self.postMessage({
+    requestId,
+    rowIds,
+    conflictIndices: Array.from(idxSet),
+    overloadIndices: Array.from(overloadIdxSet),
+    warningIndices: Array.from(warningIdxSet),
+    warnings,
+    quality: sharedValidation.quality
+  });
+};
