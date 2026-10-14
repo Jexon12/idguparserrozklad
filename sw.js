@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-8bc4cd3f0813';
+const CACHE_NAME = 'schedule-71cdcf8b9f24';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -53,7 +53,7 @@ self.addEventListener('activate', (event) => {
 });
 
 const VERSIONED_ASSETS = [
-  "/css/campus.css?v=3e7461d34b6e",
+  "/css/campus.css?v=b3bd24e84eff",
   "/css/styles.css?v=ba40711332ed",
   "/css/tailwind.generated.css?v=a35e94436fcc",
   "/css/ui-kit.css?v=b0580bc1a952",
