@@ -5,24 +5,24 @@ node_modules/
 db.json
 *.rar
 
-# Private runtime files and generated output
+# Runtime files are never part of a source backup
 .env
 .env.*
 !.env.example
-**/client_secret*.json
-**/credentials*.json
-**/token*.json
 *.pem
 *.key
 *.token
 *.db
-*.db-*
 *.sqlite*
 *.log
+output/
+outputs/
+private/
+scans/
 node_modules*/
 .venv/
+.build-venv/
 venv/
 __pycache__/
 dist/
 build/
-.wrangler/
