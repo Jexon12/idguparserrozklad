@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-7142fba3853a';
+const CACHE_NAME = 'schedule-d23968f1de70';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -67,7 +67,7 @@ const VERSIONED_ASSETS = [
   "/js/components/app-modal-shell.js?v=1d43109ecd59",
   "/js/components/current-lesson-banner.js?v=24bb9ebcc3cc",
   "/js/components/schedule-status-badges.js?v=050e17e61698",
-  "/js/course-live.js?v=7ab16bdb51ef",
+  "/js/course-live.js?v=5e20ef316078",
   "/js/i18n.js?v=6a86b9c091b8",
   "/js/lesson-numbering.js?v=6b98381091bd",
   "/js/monitor.js?v=b3abc3883244",
@@ -79,10 +79,10 @@ const VERSIONED_ASSETS = [
   "/js/schedule-catalog.js?v=8a290252c5ad",
   "/js/schedule-model.js?v=db7f6f2c8ceb",
   "/js/search.js?v=103e7bdf53fa",
-  "/js/session-admin.js?v=ca7cb5ab61be",
+  "/js/session-admin.js?v=010fe49a67d1",
   "/js/session-calendar.js?v=eb890fbabe56",
-  "/js/session-constructor.js?v=b1535e7f3a15",
-  "/js/session-domain.js?v=5d3f5b9a04a6",
+  "/js/session-constructor.js?v=55358ab77b23",
+  "/js/session-domain.js?v=c5df2e2c9e50",
   "/js/session-import-preview.js?v=92c520c7c86b",
   "/js/session-import-ui.js?v=06fcc8d39daa",
   "/js/session-import.js?v=3dd1ff1cef17",

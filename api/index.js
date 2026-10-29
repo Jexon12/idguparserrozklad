@@ -6,6 +6,7 @@ const JobQueue = require('./job-queue');
 const SessionDomain = require('../js/session-domain');
 const { planPublication, revision: sessionRevision } = require('./session-publication');
 const { createStaffService } = require('./staff-service');
+const { checkStaffRate } = require('./staff-rate-limit');
 const {
     createSearchIndex,
     searchIndex,
@@ -603,8 +604,17 @@ const apiHandler = async (req, res) => {
     if (pathname.startsWith('/api/staff/')) {
         if (['/api/staff/auth/login', '/api/staff/auth/bootstrap'].includes(pathname) && req.method === 'POST') {
             const username = String(req.body?.username || '').trim().toLowerCase().slice(0, 80);
-            if (!enforceRateLimit(req, res, 'staff-login-account', { windowMs: 15 * 60000, max: 10 }, username) ||
-                !enforceRateLimit(req, res, 'staff-login-global', RATE_LIMITS.proxy, 'instance')) return;
+            try {
+                const db = await staffDb();
+                for (const [bucket, key, config] of [['staff-login-global', 'instance', RATE_LIMITS.proxy], ['staff-login-account', username, { windowMs: 15 * 60000, max: 10 }]]) {
+                    if (!db) { if (!enforceRateLimit(req, res, bucket, config, key)) return; continue; }
+                    const result = await checkStaffRate(db, bucket, key, config);
+                    res.setHeader('X-RateLimit-Limit', config.max);
+                    res.setHeader('X-RateLimit-Remaining', result.remaining);
+                    res.setHeader('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
+                    if (!result.allowed) { res.setHeader('Retry-After', Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000))); res.status(429).json({ error: 'Too many requests' }); return; }
+                }
+            } catch (error) { console.error('Staff rate limit error', error); res.status(503).json({ error: 'Обмеження входу тимчасово недоступне' }); return; }
         }
         let user;
         try { user = await Staff.currentUser(req); } catch (error) { res.status(503).json({ error: error.message }); return; }
@@ -1071,8 +1081,8 @@ const apiHandler = async (req, res) => {
                     };
                     const storage = await saveSessionData(storedPayload);
                     await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), action, actor });
-                    await appendAuditEvent(req, action, 'session', { actor, ...result });
-                    res.status(200).json({ success: true, storage, ...result });
+                    const audited = await appendAuditEvent(req, action, 'session', { actor, ...result });
+                    res.status(200).json({ success: true, storage, ...result, ...(!audited ? { warning: 'Дію виконано, але записати її до журналу не вдалося. Повідомте адміністратора.' } : {}) });
                     return;
                 }
 

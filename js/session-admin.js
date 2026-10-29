@@ -140,6 +140,8 @@
       const groups = parseGroups(heading);
 
       const rows = child.getElementsByTagNameNS(WORD_NS, 'tr');
+      const header = rows[0] ? [...rows[0].getElementsByTagNameNS(WORD_NS, 'tc')].map(getElementText) : [];
+      if (header.some(value => /груп/iu.test(value)) && header.some(value => /дисципл|предмет/iu.test(value))) throw new Error('Цей формат Word імпортуйте через конструктор сесії, де можна перевірити колонки та рядки.');
       let controlType = '';
       for (let r = 0; r < rows.length; r++) {
         if (r === 0) continue;
@@ -310,6 +312,7 @@
         state.items.push(...rows);
         setParseProgress(i + 1, files.length, `Готово: ${i + 1}/${files.length}`);
       } catch (e) {
+        state.items = []; renderSummary();
         return setStatus(`Помилка парсингу ${files[i].name}: ${e.message}`, true);
       }
     }
@@ -343,7 +346,7 @@
           expectedRevision: preview.revision, expectedRulesRevision: preview.rulesRevision, mode: 'upsert', data
         })
       });
-      setStatus(`Успішно: додано ${safe.added || 0}, змінено ${safe.changed || 0}, всього ${safe.count || 0}`);
+      setStatus(`Успішно: додано ${safe.added || 0}, змінено ${safe.changed || 0}, всього ${safe.count || 0}${safe.warning ? '. ' + safe.warning : ''}`, !!safe.warning);
       await loadStore();
     } catch (e) {
       setStatus(`Помилка завантаження: ${e.message}`, true);
@@ -353,11 +356,13 @@
   const sendTermAction = async (action, extra = {}) => {
     const auth = ensureAdminContext();
     if (!auth) return null;
-    return apiJson('/api/session', {
+    const result = await apiJson('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: auth.password, actor: auth.actor, action, ...extra })
     });
+    if (result.warning) window.alert(result.warning);
+    return result;
   };
 
   const deleteSelectedTerm = async () => {

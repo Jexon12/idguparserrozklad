@@ -169,7 +169,7 @@
           try {
             const res = await fetchApi('GetStudyGroups', { aFacultyID: f, aEducationForm: ef, aCourse: c, aGiveStudyTimes: 'false' });
             (res.studyGroups || []).forEach((g) => groups.push({ ...g }));
-          } catch (e) {}
+          } catch (e) { throw new Error(`Не завантажено групи факультету ${f}, форми ${ef}, курсу ${c}: ${e.message}. Огляд неповний — повторіть завантаження.`); }
         }
       }
     }

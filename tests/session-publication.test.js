@@ -55,3 +55,10 @@ describe('session publication and shared validation', () => {
     expect(domain.validate([item({ teacher: '', groups: [] })]).quality).toMatchObject({ missingTeacher: 1, missingGroup: 1 });
   });
 });
+
+test('publication diff reports changes to all stored fields', () => {
+  const before = item({ speciality: 'Стара', program: 'Одна' });
+  const plan = planPublication(store([before]), { mode: 'replaceForm', data: { term: 'Winter', studyForm: 'денна', items: [item({ speciality: 'Нова', program: 'Друга' })] } });
+  expect(plan.summary.changed).toBe(1);
+  expect(plan.changes.changed[0].after).toMatchObject({ speciality: 'Нова', program: 'Друга' });
+});

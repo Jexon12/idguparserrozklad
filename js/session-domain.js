@@ -151,10 +151,10 @@
     const previous = before.map(normalizeItem), next = after.map(normalizeItem);
     const result = { added: [], removed: [], changed: [] };
     const exact = new Map(), used = new Set();
-    previous.forEach((item, index) => { const id = contentKey(item); if (!exact.has(id)) exact.set(id, []); exact.get(id).push(index); });
+    previous.forEach((item, index) => { const id = JSON.stringify(item); if (!exact.has(id)) exact.set(id, []); exact.get(id).push(index); });
     // Match unchanged rows first; multiple events for a subject must not disappear in a Map.
     const remaining = next.filter(item => {
-      const bucket = exact.get(contentKey(item));
+      const bucket = exact.get(JSON.stringify(item));
       if (!bucket?.length) return true;
       used.add(bucket.pop()); return false;
     });
