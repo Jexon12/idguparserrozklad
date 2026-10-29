@@ -1659,7 +1659,7 @@
       window.ScheduleApp.SessionWorkspace?.published(result);
       invalidatePublication(); saveDraft();
       document.getElementById('publicationSummary').textContent = `Опубліковано: додано ${result.added}, змінено ${result.changed}, видалено ${result.removed}. Перевірте публічний розклад.`;
-      setStatus('Перевірену версію сесії опубліковано');
+      setStatus(result.warning || 'Перевірену версію сесії опубліковано');
     } catch (error) { invalidatePublication(); throw error; }
     finally { publicationBusy = false; }
   }
@@ -1728,31 +1728,26 @@
     if (scope === 'selected') return state.rows.filter((r) => state.selectedRowKeys.has(rowKey(r)));
     return state.filteredRows.slice();
   }
-  function exportWord() {
+  async function exportWord() {
     syncFromGrid();
     const rows = getScopedRows();
     if (!rows.length) return showError('Немає даних для експорту у Word');
-    const grouped = new Map();
-    rows.forEach((r) => {
-      const g = clean(r.group) || '—';
-      if (!grouped.has(g)) grouped.set(g, []);
-      grouped.get(g).push(r);
-    });
-    let body = '';
-    Array.from(grouped.entries()).forEach(([g, list]) => {
-      body += `<h3 style="margin:18px 0 8px 0;">Група: ${escapeHtml(g)}</h3>`;
-      body += '<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%; font-size:12pt;">';
-      body += '<tr><th>№</th><th>Дисципліна</th><th>Викладачі</th><th>Форма контролю</th><th>Дата</th><th>Час</th><th>Аудиторія</th></tr>';
-      list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td><td>${escapeHtml(r.time || '')}</td><td>${escapeHtml(r.room || '')}</td></tr>`; });
-      body += '</table>';
-    });
-    const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri, Arial, sans-serif;"><h2>${escapeHtml(resolveSessionTerm() || 'Сесія')}</h2>${body}</body></html>`;
-    const blob = new Blob([html], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `session_${(resolveSessionTerm() || 'session').replace(/\s+/g, '_')}.doc`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    try {
+      if (!window.JSZip) throw new Error('Не завантажений модуль створення Word');
+      const xml = value => escapeHtml(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+      const paragraph = value => `<w:p><w:r><w:t xml:space="preserve">${xml(value)}</w:t></w:r></w:p>`;
+      const tableRow = cells => `<w:tr>${cells.map(value => `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>${paragraph(value)}</w:tc>`).join('')}</w:tr>`;
+      const headings = ['№', 'Дисципліна', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час', 'Аудиторія', 'Форма іспиту'];
+      const content = [headings, ...rows.map((r, i) => [i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType, r.date, r.time, r.room, r._source?.examForm || ''])].map(tableRow).join('');
+      const zip = new JSZip();
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraph(resolveSessionTerm() || 'Сесія')}<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>${['top','left','bottom','right','insideH','insideV'].map(side => `<w:${side} w:val="single" w:sz="4" w:color="auto"/>`).join('')}</w:tblBorders></w:tblPr>${content}</w:tbl><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body></w:document>`);
+      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = `session_${(resolveSessionTerm() || 'session').replace(/[\\/:*?"<>|\s]+/g, '_')}.docx`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { showError('Експорт Word: ' + error.message); }
   }
 
   async function copyTable() {

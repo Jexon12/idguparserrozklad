@@ -99,3 +99,21 @@ test('import preview recognises columns and requires confirmation before modifyi
   await expect(page.locator('#tableBody tr')).toHaveCount(2);
   await expect(page.locator('#tableBody input[data-f="discipline"]').last()).toHaveValue('Фізика');
 });
+
+test('Word export is a docx that can be imported back for editing', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.route('https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js', route => route.continue());
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#wordBtn').click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.docx$/);
+  const file = await download.path();
+  const zip = await require('jszip').loadAsync(require('fs').readFileSync(file));
+  expect(await zip.file('word/document.xml').async('string')).toContain('Математика');
+  await page.locator('#docxFiles').setInputFiles({ name: download.suggestedFilename(), mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: require('fs').readFileSync(file) });
+  await expect(page.locator('#importSummary')).toContainText('нерозпізнаних 0');
+  await expect(page.locator('#importRows')).toContainText('Математика');
+  await expect(page.locator('#importRows')).toContainText('12а');
+});

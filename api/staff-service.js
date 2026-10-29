@@ -41,13 +41,14 @@ function sessionCookie(token, clear = false) {
 const canRead = (user, draft) => user.role !== 'methodist' || draft.ownerId === user.id || draft.sharedWith.includes(user.id);
 const canEdit = (user, draft) => user.role === 'admin' || draft.ownerId === user.id || draft.sharedWith.includes(user.id);
 const draftMeta = draft => ({ id: draft.id, title: draft.title, term: draft.payload.fields?.sessionTerm || '', studyForm: draft.payload.fields?.studyForm || '', ownerId: draft.ownerId, sharedWith: draft.sharedWith, status: draft.status, version: draft.version, updatedAt: draft.updatedAt, updatedBy: draft.updatedBy, count: draft.payload.rows.length });
-const publicationItems = payload => payload.rows.map(row => domain.normalizeItem({ ...row._source, ...row, groups: [row.group], teacher: (row.teachers || []).join('; '), term: payload.fields.sessionTerm || payload.fields.sessionTermSelect, studyForm: payload.fields.studyForm }));
+const publicationItems = payload => payload.rows.map(row => domain.normalizeItem({ ...row._source, ...row, groups: [row.group], groupHeading: row.group, teacher: (row.teachers || []).join('; '), term: payload.fields.sessionTerm || payload.fields.sessionTermSelect, studyForm: payload.fields.studyForm }));
 function publicationDraft(state, user, payload) {
   const draft = state.drafts.find(d => d.id === payload.draftId);
   if (!draft || !canRead(user, draft)) fail(404, 'Чернетку не знайдено');
   if (draft.version !== payload.expectedDraftVersion) fail(409, 'Серверну чернетку змінив колега. Повторіть перегляд актуальної версії');
-  const signature = rows => JSON.stringify(rows.map(domain.normalizeItem).map(domain.contentKey).sort());
-  if (signature(publicationItems(draft.payload)) !== signature(payload.data.items) ||
+  const signature = rows => JSON.stringify(rows.map(row => JSON.stringify(domain.normalizeItem(row))).sort());
+  const incoming = payload.data.items.map(row => ({ ...row, term: payload.data.term, studyForm: row.studyForm || payload.data.studyForm || '' }));
+  if (signature(publicationItems(draft.payload)) !== signature(incoming) ||
       (draft.payload.fields.sessionTerm || draft.payload.fields.sessionTermSelect) !== payload.data.term) fail(409, 'Публікація не відповідає збереженій чернетці');
   return draft;
 }
@@ -119,6 +120,8 @@ function createStaffService(repo, bootstrapPassword) {
     if (!route.startsWith('/api/staff/')) return false;
     res.setHeader('Cache-Control', 'no-store');
     const body = req.body && typeof req.body === 'object' ? req.body : {};
+    let auditWarning = '';
+    const audit = async (...args) => { if (await repo.audit(...args) === false) auditWarning = 'Дію виконано, але записати її до журналу не вдалося. Повідомте адміністратора.'; };
     try {
       let result;
       if (route === '/api/staff/auth/me' && req.method === 'GET') {
@@ -140,7 +143,7 @@ function createStaffService(repo, bootstrapPassword) {
           return { success: true };
         });
         res.setHeader('Set-Cookie', sessionCookie('', true));
-        await repo.audit(req, 'password-change', { userId: user.id, actor: user.name });
+        await audit(req, 'password-change', { userId: user.id, actor: user.name });
       } else if (route === '/api/staff/rules' && req.method === 'GET') {
         const state = await read(); result = { rules: state.rules, version: state.rulesVersion, stateVersion: state.version };
       } else if (route === '/api/staff/rules' && req.method === 'POST') {
@@ -152,7 +155,7 @@ function createStaffService(repo, bootstrapPassword) {
           state.rulesVersion++;
           return { rules: state.rules, version: state.rulesVersion };
         });
-        await repo.audit(req, 'rules-update', { userId: user.id, actor: user.name });
+        await audit(req, 'rules-update', { userId: user.id, actor: user.name });
       } else if (route === '/api/staff/users') {
         const user = await authorize(req, req.method === 'GET' ? ROLES : ['admin']);
         if (req.method === 'GET') result = { users: (await read()).users.filter(u => !u.disabled || user.role === 'admin').map(safeUser) };
@@ -174,7 +177,7 @@ function createStaffService(repo, bootstrapPassword) {
             state.sessions = state.sessions.filter(s => s.userId !== target.id);
             return { user: safeUser(target) };
           });
-          await repo.audit(req, 'user-update', { userId: user.id, targetId: result.user.id, actor: user.name });
+          await audit(req, 'user-update', { userId: user.id, targetId: result.user.id, actor: user.name });
         } else fail(405, 'Метод не підтримується');
       } else if (route === '/api/staff/backup') {
         const user = await authorize(req, ['admin']);
@@ -205,7 +208,7 @@ function createStaffService(repo, bootstrapPassword) {
               return { success: true };
             });
             res.setHeader('Set-Cookie', sessionCookie('', true));
-            await repo.audit(req, 'staff-restore', { userId: user.id, actor: user.name });
+            await audit(req, 'staff-restore', { userId: user.id, actor: user.name });
           }
         } else fail(405, 'Метод не підтримується');
       } else if (route === '/api/staff/backup/previous' && req.method === 'GET') {
@@ -241,7 +244,7 @@ function createStaffService(repo, bootstrapPassword) {
             if (!current) state.drafts.push(draft);
             return { draft, canEdit: true };
           });
-          await repo.audit(req, 'draft-save', { userId: user.id, actor: user.name, draftId: result.draft.id, version: result.draft.version });
+          await audit(req, 'draft-save', { userId: user.id, actor: user.name, draftId: result.draft.id, version: result.draft.version });
         } else if (req.method === 'DELETE' && draftId) {
           result = await mutate(state => {
             const draft = state.drafts.find(d => d.id === draftId);
@@ -249,10 +252,10 @@ function createStaffService(repo, bootstrapPassword) {
             if (Number(url.searchParams.get('version')) !== draft.version) fail(409, 'Чернетка змінилася');
             state.drafts = state.drafts.filter(d => d.id !== draftId); return { success: true };
           });
-          await repo.audit(req, 'draft-delete', { userId: user.id, actor: user.name, draftId });
+          await audit(req, 'draft-delete', { userId: user.id, actor: user.name, draftId });
         } else fail(405, 'Метод не підтримується');
       } else fail(404, 'Маршрут не знайдено');
-      res.status(200).json(result);
+      res.status(200).json(auditWarning ? { ...result, warning: auditWarning } : result);
     } catch (error) { res.status(error.statusCode || 503).json({ error: error.message }); }
     return true;
   }

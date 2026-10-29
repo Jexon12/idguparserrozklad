@@ -10,6 +10,7 @@
       const response = await fetch(url, { ...options, credentials: 'same-origin', headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
       const result = await response.json();
       if (!response.ok) throw Object.assign(new Error(result.error || `HTTP ${response.status}`), { status: response.status });
+      if (result.warning) window.alert(result.warning);
       return result;
     },
     async refresh() {

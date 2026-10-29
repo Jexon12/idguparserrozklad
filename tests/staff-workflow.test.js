@@ -58,6 +58,8 @@ test('personal accounts, shared drafts, restart, publication and restore use rea
   expect(ready.status).toBe(200);
   const data = { term: payload.fields.sessionTerm, studyForm: payload.fields.studyForm, items: payload.rows.map(row => ({ ...row, groups: [row.group], teacher: row.teachers.join('; '), studyForm: payload.fields.studyForm })) };
   const context = { draftId, expectedDraftVersion: 3, mode: 'replaceForm', data };
+  const altered = { ...context, data: { ...data, items: [{ ...data.items[0], speciality: 'Змінена спеціальність' }] } };
+  expect((await request('/api/session', { ...altered, action: 'previewPublication' }, authorCookie)).status).toBe(409);
   const preview = await request('/api/session', { ...context, action: 'previewPublication' }, authorCookie);
   expect(preview.status).toBe(200);
   const publishBody = { ...context, expectedRevision: preview.json.revision, expectedRulesRevision: preview.json.rulesRevision, actor: 'Фальшиве ім’я' };
