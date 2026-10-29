@@ -214,3 +214,61 @@ test('schedule generation stays with its source controls', async ({ page }) => {
   await expect(page.locator('#parseBtn')).toBeVisible();
   await expect(page.locator('#loadApiBtn')).toBeVisible();
 });
+
+test('normalization keeps incomplete and distinct rows and can be undone', async ({ page }) => {
+  await fixture(page, 'methodist'); await page.goto('/session-constructor.html');
+  await page.evaluate(() => {
+    const editor = window.ScheduleApp.SessionEditor, draft = editor.getDraft(), row = draft.rows[0];
+    draft.rows = [row, { ...row, id: 'incomplete', group: '' }, { ...row, id: 'different', room: '202' }, { ...row, id: 'duplicate' }];
+    editor.applyDraft(draft);
+  });
+  await page.locator('#normalizeBtn').click();
+  expect(await page.evaluate(() => window.ScheduleApp.SessionEditor.getDraft().rows.map(row => [row.group, row.room]))).toEqual([['12а','101'],['','101'],['12а','202']]);
+  await page.locator('#undoBtn').click();
+  expect(await page.evaluate(() => window.ScheduleApp.SessionEditor.getDraft().rows.length)).toBe(4);
+});
+
+test('generated rows are saved immediately and undo restores the previous draft', async ({ page }) => {
+  await fixture(page, 'methodist'); await page.goto('/session-constructor.html');
+  await page.evaluate(() => {
+    window.ScheduleApp.ScheduleCatalog.loadStudentFilters = async () => ({ educForms: [{ Key: 'f', Value: 'денна' }] });
+    window.ScheduleApp.ScheduleCatalog.loadGroups = async () => [{ Key: 'g', Value: '13а' }];
+    window.ScheduleApp.fetchApi = async () => [{ discipline: 'Фізика', employee: 'Петренко', study_type: 'іспит', room: '202' }];
+    const faculty = document.getElementById('facultySelect'); faculty.add(new Option('Факультет', 'f')); faculty.value = 'f';
+    document.getElementById('coursesBox').innerHTML = '<input data-kind="course" value="1" type="checkbox" checked>';
+    document.getElementById('startDate').value = '2027-01-01'; document.getElementById('endDate').value = '2027-01-30';
+  });
+  await page.locator('#scheduleSourceOptions summary').click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#parseBtn').click();
+  await expect(page.locator('#status')).toContainText('Сформовано');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('session_constructor_draft_v1_' + window.ScheduleApp.StaffClient.user.id)).rows[0].discipline)).toBe('Фізика');
+  await page.locator('#undoBtn').click();
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Математика');
+});
+
+test('Course Day reports failed group discovery instead of a complete overview', async ({ page }) => {
+  await page.route('https://**/*', route => route.abort());
+  await page.route('**/api/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith('GetStudentScheduleFiltersData')) return route.fulfill({ json: { faculties: [{Key:'f', Value:'Факультет'}], educForms:[{Key:'e', Value:'Денна'}], courses:[{Key:'1', Value:'1'}] } });
+    if (pathname.endsWith('GetStudyGroups')) return route.fulfill({ status: 503, body: 'Unavailable' });
+    return route.fulfill({ json: {} });
+  });
+  await page.goto('/course-live.html');
+  await expect(page.locator('#facultiesBox input')).toHaveCount(1);
+  await page.locator('#refreshBtn').click();
+  await expect(page.locator('#meta')).toContainText('Огляд неповний');
+});
+
+test('legacy Word importer rejects constructor tables with clear guidance', async ({ page }) => {
+  await fixture(page, 'admin');
+  await page.route('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', route => route.fulfill({ path: require.resolve('jszip/dist/jszip.min.js'), contentType: 'application/javascript' }));
+  await page.goto('/session-admin.html');
+  const zip = new (require('jszip'))();
+  zip.file('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Дисципліна</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Група</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>');
+  await page.locator('details summary').first().click();
+  await page.locator('#docxFiles').setInputFiles({ name: 'export.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: await zip.generateAsync({type:'nodebuffer'}) });
+  await page.locator('#parseFiles').click();
+  await expect(page.locator('#adminStatus')).toContainText('імпортуйте через конструктор');
+});

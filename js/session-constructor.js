@@ -316,43 +316,15 @@
   }
 
   function dedupeRows(rows, ignoreDateTime = false) {
-    const map = new Map();
-    rows.forEach((r) => {
-      const d = normalizeDiscipline(r.discipline);
-      const g = clean(r.group);
-      const ct = clean(r.controlType || 'залік').toLowerCase();
-      const dt = ignoreDateTime ? '' : clean(r.date);
-      const tm = ignoreDateTime ? '' : clean(r.time);
-      
-      if (!d || !g) return;
-      
-      // Ключ залежить від того, чи хочемо ми бачити різні дати як окремі записи
-      const key = `${d}__${g}__${ct}__${dt}__${tm}`;
-      
-      if (!map.has(key)) {
-        map.set(key, { 
-          _source: r._source,
-          id: r.id || generateId(),
-          discipline: d, 
-          group: g, 
-          teachers: new Set(r.teachers || []), 
-          controlType: ct, 
-          date: clean(r.date || ''), 
-          time: clean(r.time || ''), 
-          room: clean(r.room || '') 
-        });
-      } else {
-        const existing = map.get(key);
-        if (r.teachers) splitTeachers(Array.isArray(r.teachers) ? r.teachers.join('; ') : r.teachers).forEach((t) => existing.teachers.add(t));
-        if (!existing.date && r.date) existing.date = clean(r.date);
-        if (!existing.time && r.time) existing.time = clean(r.time);
-        if (!existing.room && r.room) existing.room = clean(r.room);
-      }
-    });
-    return Array.from(map.values()).map((x) => ({
-      ...x,
-      teachers: Array.from(x.teachers).sort((a, b) => a.localeCompare(b, 'uk'))
-    }));
+    const seen = new Set();
+    return rows.filter(row => {
+      if (!clean(row.discipline) || !clean(row.group)) return true;
+      const item = Domain.normalizeItem({ ...row._source, ...row, groups: [row.group], teacher: (row.teachers || []).join('; ') });
+      if (ignoreDateTime) { item.date = ''; item.time = ''; }
+      const key = JSON.stringify(item);
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).map(row => ({ ...row, id: row.id || generateId() }));
   }
 
   function renderFilters(rows) {
@@ -1469,22 +1441,23 @@
       });
     }
 
-    if (state.rows.length > 0) {
-      if (confirm("У таблиці вже є записи. Очистити їх перед формуванням з розкладу? (Натисніть 'Скасувати', щоб просто додати нові записи до існуючих)")) {
-        state.rows = [];
-      }
-    }
-    state.rows = dedupeRows(state.rows.concat(rawRows), true).filter((r) => r.discipline && r.group);
+    syncFromGrid();
+    const replace = state.rows.length > 0 && confirm("У таблиці вже є записи. Очистити їх перед формуванням з розкладу? (Натисніть 'Скасувати', щоб просто додати нові записи до існуючих)");
+    pushUndo();
+    state.rows = (replace ? [] : state.rows).concat(dedupeRows(rawRows, true));
     renderFilters(state.rows);
     applyFilters();
+    saveDraft();
     setStatus(state.rows.length ? `Сформовано ${state.rows.length} записів на базі розкладу` : 'Немає записів у вибраному періоді');
   }
 
   function normalizeAction() {
     syncFromGrid();
-    state.rows = dedupeRows(state.rows.concat(state.filteredRows));
+    pushUndo();
+    state.rows = dedupeRows(state.rows);
     renderFilters(state.rows);
     applyFilters();
+    saveDraft();
   }
 
   function addCustomRow() {
@@ -1543,7 +1516,7 @@
       if (state.rows.length && !confirm('Замінити локальну чернетку опублікованими записами вибраної форми? Збережіть файл чернетки, якщо потрібна копія.')) return;
       publicationBaseline = copyTerm ? null : { term: clean(term).toLowerCase(), revision: data.revision };
       if (copyTerm) els.sessionTerm.value = copyTerm;
-      state.rows = dedupeRows(parsed, false);
+      state.rows = parsed.map(row => ({ ...row, id: generateId() }));
       renderFilters(state.rows);
       applyFilters();
       saveDraftDebounced();
@@ -1632,9 +1605,10 @@
       const summary = result.summary;
       document.getElementById('publicationSummary').textContent = `${data.term} · ${data.studyForm}: додано ${summary.added}, змінено ${summary.changed}, видалено ${summary.removed}. ${result.validation.blockingCount ? `Публікацію заблоковано: ${result.validation.blockingCount} проблем.` : 'Серверна перевірка пройдена.'}`;
       const list = document.getElementById('publicationChanges'); list.replaceChildren();
+      const fieldNames = { term: 'сесія', studyForm: 'форма навчання', groupHeading: 'назва групи', eventId: 'спільна подія', groups: 'групи', controlType: 'контроль', discipline: 'дисципліна', speciality: 'спеціальність', program: 'освітня програма', examForm: 'форма іспиту', teacher: 'викладач', date: 'дата', time: 'час', room: 'аудиторія', sourceTable: 'таблиця джерела', sourceFile: 'файл джерела' };
       const lines = [
         ...result.validation.issues.map(issue => issue.message),
-        ...result.changes.changed.map(change => `Змінено: ${change.after.groups.join(', ')} · ${change.after.discipline} · ${change.before.date} ${change.before.time} (${change.before.room}) → ${change.after.date} ${change.after.time} (${change.after.room}) · ${change.before.teacher} → ${change.after.teacher}`),
+        ...result.changes.changed.map(change => `Змінено: ${change.after.groups.join(', ')} · ${change.after.discipline} · ${Object.keys(change.after).filter(field => JSON.stringify(change.before[field]) !== JSON.stringify(change.after[field])).map(field => `${fieldNames[field] || field}: ${String(change.before[field] || '—')} → ${String(change.after[field] || '—')}`).join('; ')}`),
         ...result.changes.added.map(item => `Додано: ${item.groups.join(', ')} · ${item.discipline} · ${item.date} ${item.time}`),
         ...result.changes.removed.map(item => `Видалено: ${item.groups.join(', ')} · ${item.discipline} · ${item.date} ${item.time}`)
       ];
