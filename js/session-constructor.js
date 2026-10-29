@@ -1833,27 +1833,13 @@
           showError('Невалідний файл сесії: немає масиву rows');
           return;
         }
-        // Restore fields
-        const f = data.fields || {};
-        if (typeof f.sessionTerm === 'string') els.sessionTerm.value = f.sessionTerm;
-        if (els.sessionTermSelect && typeof f.sessionTermSelect === 'string') els.sessionTermSelect.value = f.sessionTermSelect;
-        if (typeof f.studyForm === 'string') els.studyForm.value = f.studyForm;
-        if (typeof f.facultySelect === 'string') els.facultySelect.value = f.facultySelect;
-        if (typeof f.semesterPreset === 'string') els.semesterPreset.value = f.semesterPreset;
-        if (typeof f.startDate === 'string') els.startDate.value = f.startDate;
-        if (typeof f.endDate === 'string') els.endDate.value = f.endDate;
-        if (typeof f.zalikStartDate === 'string') els.zalikStartDate.value = f.zalikStartDate;
-        if (typeof f.zalikEndDate === 'string') els.zalikEndDate.value = f.zalikEndDate;
-        if (typeof f.examStartDate === 'string') els.examStartDate.value = f.examStartDate;
-        if (typeof f.examEndDate === 'string') els.examEndDate.value = f.examEndDate;
-        // Restore rows
-        state.rows = data.rows.map((r) => ({ ...r, teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') }));
-        renderFilters(state.rows);
-        applyFilters();
+        syncFromGrid();
+        if (state.rows.length && !confirm('Замінити поточну чернетку даними з файлу? За потреби спочатку збережіть поточну копію.')) return;
+        document.getElementById('cloudAutosave').checked = false;
+        window.ScheduleApp.SessionEditor.applyDraft(data);
         setMode(data.mode || 'basic');
-        saveDraftDebounced();
         const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('uk-UA') : '';
-        setStatus(`Сесію завантажено з файлу${savedAt ? ' (збережено ' + savedAt + ')' : ''}: ${state.rows.length} записів`);
+        setStatus(`Сесію завантажено з файлу${savedAt ? ' (збережено ' + savedAt + ')' : ''}: ${state.rows.length} записів. Серверне автозбереження вимкнено.`);
         showError('');
       } catch (err) {
         showError('Помилка читання файлу сесії: ' + (err.message || String(err)));
@@ -1870,14 +1856,6 @@
   document.getElementById('clearAllBtn')?.addEventListener('click', () => els.clearDraftBtn?.click());
   document.getElementById('clearApiBtn')?.addEventListener('click', () => clearApiSession(false).catch((e) => showError(e.message || String(e))));
   document.getElementById('purgeApiBtn')?.addEventListener('click', () => clearApiSession(true).catch((e) => showError(e.message || String(e))));
-  document.getElementById('listTermsBtn')?.addEventListener('click', async () => {
-     try {
-       const res = await fetch('/api/session');
-       const data = await res.json();
-       const list = (data.sessions || []).map(s => `${s.term} (${(s.items||[]).length})`).join('\n');
-       alert('Список сесій в API:\n' + (list || 'Порожньо'));
-     } catch(e) { showError(e.message); }
-  });
   els.sessionTermSelect?.addEventListener('change', () => {
      if (els.sessionTermSelect.value) els.sessionTerm.value = els.sessionTermSelect.value;
   });

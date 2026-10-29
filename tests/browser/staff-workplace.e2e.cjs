@@ -167,3 +167,50 @@ test('Word template and export count are available for an empty draft', async ({
   expect(xml).toContain('<w:cantSplit/>');
   expect(xml).not.toContain('Математика');
 });
+
+test('opening a JSON file asks before replacing the current draft', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Математика');
+  const file = { name: 'session.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ fields: { sessionTerm: 'Нова сесія', studyForm: 'денна форма навчання' }, rows: [{ id: 'next', discipline: 'Фізика', group: '13а', teachers: ['Петренко'], controlType: 'залік', date: '', time: '', room: '' }] })) };
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.locator('#loadSessionFile').setInputFiles(file);
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Математика');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#loadSessionFile').setInputFiles(file);
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Фізика');
+  await expect(page.locator('#sessionTerm')).toHaveValue('Нова сесія');
+});
+
+test('opening a previous cloud version pauses autosave until explicitly saved', async ({ page }) => {
+  const { state } = await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#cloudWorkspace')).toBeVisible();
+  await page.locator('#saveCloudDraft').click();
+  await expect(page.locator('#cloudDraftStatus')).toContainText('версія 1');
+  await page.locator('#tableBody input[data-f="room"]').fill('202');
+  await page.locator('#saveCloudDraft').click();
+  await expect(page.locator('#cloudDraftStatus')).toContainText('версія 2');
+  await page.locator('#cloudAutosave').check();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#openCloudDraft').click();
+  await page.locator('#cloudDraftVersion').selectOption('1');
+  await page.locator('#restoreCloudDraftVersion').click();
+  await expect(page.locator('#cloudAutosave')).not.toBeChecked();
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('101');
+  await page.waitForTimeout(2300);
+  expect(state().drafts[0].version).toBe(2);
+  expect(state().drafts[0].payload.rows[0].room).toBe('202');
+  await page.locator('#saveCloudDraft').click();
+  await expect(page.locator('#cloudDraftStatus')).toContainText('версія 3');
+});
+
+test('schedule generation stays with its source controls', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#scheduleSourceOptions #parseBtn')).toHaveCount(1);
+  await expect(page.locator('#scheduleSourceOptions #parseBtn')).toBeHidden();
+  await page.locator('#scheduleSourceOptions summary').click();
+  await expect(page.locator('#parseBtn')).toBeVisible();
+  await expect(page.locator('#loadApiBtn')).toBeVisible();
+});

@@ -65,7 +65,8 @@
     const version = Number(document.getElementById('cloudDraftVersion').value);
     const snapshot = current?.snapshots?.find(value => value.version === version);
     if (!snapshot) throw new Error('Оберіть попередню версію');
-    editor.applyDraft(snapshot.payload); status(`Версію ${version} відкрито локально. Збережіть її для створення нової серверної версії.`);
+    clearTimeout(timer); document.getElementById('cloudAutosave').checked = false;
+    editor.applyDraft(snapshot.payload); status(`Версію ${version} відкрито локально. Автозбереження вимкнено; збережіть її вручну для створення нової серверної версії.`);
   });
   window.addEventListener('session-draft-changed', () => {
     clearTimeout(timer);
