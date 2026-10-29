@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schedule-0ea6a75e4afc';
+const CACHE_NAME = 'schedule-8769cd923a8d';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -81,10 +81,10 @@ const VERSIONED_ASSETS = [
   "/js/search.js?v=103e7bdf53fa",
   "/js/session-admin.js?v=ca7cb5ab61be",
   "/js/session-calendar.js?v=eb890fbabe56",
-  "/js/session-constructor.js?v=f13fc79c1b69",
+  "/js/session-constructor.js?v=9bd1db408fa9",
   "/js/session-domain.js?v=5d3f5b9a04a6",
   "/js/session-import-preview.js?v=92c520c7c86b",
-  "/js/session-import-ui.js?v=aae667404c38",
+  "/js/session-import-ui.js?v=06fcc8d39daa",
   "/js/session-import.js?v=3dd1ff1cef17",
   "/js/session-page.js?v=0b3322e3a0e7",
   "/js/session-workspace.js?v=59deda4537d9",

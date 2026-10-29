@@ -170,16 +170,20 @@
 
 
         <section id="importPreviewPanel" class="hidden rounded-2xl bg-white dark:bg-gray-800 p-4 shadow space-y-3" aria-labelledby="importPreviewTitle">
-            <h2 id="importPreviewTitle" class="font-bold text-lg">Перегляд імпорту перед додаванням</h2>
+            <h2 id="importPreviewTitle" class="font-bold text-lg">Перегляд імпорту</h2>
             <p class="text-sm text-gray-500">Файл ще не змінює чернетку. Зіставте колонки, перевірте нерозпізнані рядки та дублікати. Рядки без дисципліни або групи спочатку не вибрані; їх можна включити для ручного виправлення.</p>
+            <details id="importMappingDetails"><summary class="cursor-pointer font-bold">Налаштування таблиць і колонок</summary>
             <label>Таблиця файлу<select id="importTableSelect" class="ui-select dark:bg-gray-700"></select></label>
             <label>Номер останнього рядка заголовка; 0 — заголовка немає<input id="importHeaderRow" type="number" min="0" class="ui-input dark:bg-gray-700"></label>
             <div id="importColumnMapping" class="grid grid-cols-1 md:grid-cols-4 gap-3"></div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3"><label>Група для рядків без колонки групи<input id="importDefaultGroup" class="ui-input block w-full dark:bg-gray-700"></label><label>Тип контролю, якщо не вказаний у файлі<select id="importDefaultControl" class="ui-select block w-full dark:bg-gray-700"><option value="залік">Залік</option><option value="іспит">Іспит</option><option value="захист">Захист</option><option value="диф.залік">Диф. залік</option></select></label></div>
             <details><summary class="cursor-pointer font-bold">Перші рядки вихідної таблиці</summary><pre id="importRawRows" class="text-xs overflow-auto p-2"></pre></details>
+            </details>
             <p id="importSummary" role="status"></p>
 
             <div class="overflow-x-auto"><table class="text-sm min-w-full"><thead><tr><th>Додати</th><th>Таблиця:рядок</th><th>Дисципліна</th><th>Групи</th><th>Викладач</th><th>Контроль</th><th>Дата і час</th><th>Аудиторія</th><th>Проблеми</th></tr></thead><tbody id="importRows"></tbody></table></div>
+            <label class="block font-bold">Як використати файл<select id="importMode" class="ui-select block dark:bg-gray-700"><option value="add">Додати до чернетки</option><option value="replace">Замінити всі записи чернетки</option></select></label>
+            <p id="importModeSummary" class="text-sm" role="status"></p>
             <label class="flex gap-2"><input id="skipImportDuplicates" type="checkbox" checked>Пропустити точні дублікати</label>
             <label class="flex gap-2"><input id="importReviewed" type="checkbox">Я перевірив зіставлення колонок і включені рядки всіх таблиць</label>
             <button id="applyImport" disabled class="ui-btn ui-btn-primary disabled:opacity-40">Додати вибрані рядки до чернетки</button><button id="cancelImport" class="ui-btn">Скасувати імпорт</button>
@@ -197,6 +201,8 @@
                     <div class="h-8 w-px bg-blue-200 dark:bg-blue-800 mx-1"></div>
                     <button id="excelBtn" class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">Excel</button>
                     <button id="wordBtn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-transform active:scale-95 shadow-sm">Експортувати Word (.docx)</button>
+                    <button id="wordTemplateBtn" class="ui-btn">Порожній шаблон Word</button>
+                    <span id="exportCount" class="text-sm" aria-live="polite"></span>
                     <button id="copyBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm transition-transform active:scale-95 shadow-sm" style="background-color:#0284c7">Копіювати</button>
                     <button id="printBtn" class="px-4 py-2 rounded-xl text-white font-bold text-sm shadow-sm" style="background-color:#6b7280">🖨️ Друк</button>
                     <div class="h-8 w-px bg-blue-200 dark:bg-blue-800 mx-1"></div>
@@ -484,9 +490,9 @@
     <script src="/js/session-import.js?v=3dd1ff1cef17"></script>
     <script src="/js/session-import-preview.js?v=92c520c7c86b"></script>
     <script src="/js/vendor/jszip.min.js?v=acc7e41455a8"></script>
-    <script src="/js/session-constructor.js?v=f13fc79c1b69"></script>
+    <script src="/js/session-constructor.js?v=9bd1db408fa9"></script>
     <script src="/js/session-workspace.js?v=59deda4537d9"></script>
-    <script src="/js/session-import-ui.js?v=aae667404c38"></script>
+    <script src="/js/session-import-ui.js?v=06fcc8d39daa"></script>
 </body>
 </html>
 

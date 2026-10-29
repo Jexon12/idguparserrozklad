@@ -116,4 +116,54 @@ test('Word export is a docx that can be imported back for editing', async ({ pag
   await expect(page.locator('#importSummary')).toContainText('нерозпізнаних 0');
   await expect(page.locator('#importRows')).toContainText('Математика');
   await expect(page.locator('#importRows')).toContainText('12а');
+  const documentXml = await zip.file('word/document.xml').async('string');
+  zip.file('word/document.xml', documentXml.replace('>101</w:t>', '>404</w:t>'));
+  await page.locator('#cancelImport').click();
+  await page.locator('#docxFiles').setInputFiles({ name: 'edited.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: await zip.generateAsync({ type: 'nodebuffer' }) });
+  await expect(page.locator('#importRows')).toContainText('404');
+  await page.locator('#importMode').selectOption('replace');
+  await page.locator('#importReviewed').check();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#applyImport').click();
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('404');
+  await page.locator('#undoBtn').click();
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('101');
+});
+
+test('replace import counts unchanged rows and can be cancelled or undone', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  const rows = [['Група', 'Предмет', 'Викладач', 'Тип контролю', 'Дата', 'Час', 'Аудиторія'], ['12а', 'Математика', 'Іваненко І.І.', 'іспит', '2027-01-10', '10:00-12:00', '101']];
+  await page.evaluate(rows => window.ScheduleApp.SessionImportUI.stage([{ rows }], 'edited.docx'), rows);
+  await expect(page.locator('#importMappingDetails')).not.toHaveAttribute('open', '');
+  await page.locator('#importMode').selectOption('replace');
+  await expect(page.locator('#importModeSummary')).toContainText('на 1 вибраних');
+  await page.locator('#importReviewed').check();
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.locator('#applyImport').click();
+  await expect(page.locator('#importPreviewPanel')).toBeVisible();
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#applyImport').click();
+  await expect(page.locator('#importPreviewPanel')).toBeHidden();
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  await page.locator('#undoBtn').click();
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('101');
+});
+
+test('Word template and export count are available for an empty draft', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#exportCount')).toContainText('1 із 1');
+  const promise = page.waitForEvent('download');
+  await page.locator('#wordTemplateBtn').click();
+  const download = await promise;
+  expect(download.suggestedFilename()).toBe('session_template.docx');
+  const zip = await require('jszip').loadAsync(require('fs').readFileSync(await download.path()));
+  const xml = await zip.file('word/document.xml').async('string');
+  expect(xml).toContain('<w:tblHeader/>');
+  expect(xml).toContain('<w:cantSplit/>');
+  expect(xml).not.toContain('Математика');
 });
