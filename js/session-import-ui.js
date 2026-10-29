@@ -18,14 +18,23 @@
     });
     document.getElementById('importHeaderRow').value = table.config.headerIndex + 1;
   }
+  const mode = document.getElementById('importMode');
+  function updateModeSummary() {
+    const selected = (preview?.entries || []).filter(entry => entry.include && !(entry.duplicate && document.getElementById('skipImportDuplicates').checked));
+    const count = selected.reduce((n, entry) => n + Math.max(entry.row.groups.length, 1), 0);
+    const current = SA.SessionEditor.getDraft().rows.length;
+    document.getElementById('importModeSummary').textContent = mode.value === 'replace' ? `Замінити всі ${current} поточних записів на ${count} вибраних. Дані, яких немає у файлі, не збережуться. Дію можна скасувати кнопкою Undo.` : `До ${current} поточних записів буде додано ${count} вибраних.`;
+    document.getElementById('applyImport').textContent = mode.value === 'replace' ? 'Замінити записи чернетки' : 'Додати вибрані рядки до чернетки';
+  }
   function renderPreview() {
     document.getElementById('importReviewed').checked = false; document.getElementById('applyImport').disabled = true;
     const draft = SA.SessionEditor.getDraft();
     preview = model.build(tables, { sourceFile, term: draft.fields.sessionTerm || draft.fields.sessionTermSelect, studyForm: draft.fields.studyForm,
-      group: document.getElementById('importDefaultGroup').value, controlType: document.getElementById('importDefaultControl').value }, draft.rows.map(row => ({ ...row, groups: [row.group] })));
+      group: document.getElementById('importDefaultGroup').value, controlType: document.getElementById('importDefaultControl').value }, mode.value === 'replace' ? [] : draft.rows.map(row => ({ ...row, groups: [row.group] })));
     document.getElementById('importSummary').textContent = `${sourceFile}: рядків ${preview.entries.length}, нерозпізнаних ${preview.unrecognised}, точних дублікатів ${preview.duplicates}, порожніх ${preview.emptyRows}. Перевірте колонки кожної таблиці.`;
     const rows = preview.entries.map((entry, index) => `<tr class="border-b dark:border-gray-700"><td class="p-2"><input type="checkbox" data-import-include="${index}" ${entry.include ? 'checked' : ''} aria-label="Включити рядок ${entry.rowIndex + 1}"></td><td class="p-2">${entry.tableIndex + 1}:${entry.rowIndex + 1}</td><td class="p-2">${escape(entry.row.discipline)}</td><td class="p-2">${escape(entry.row.groups.join(', '))}</td><td class="p-2">${escape(entry.row.teacher)}</td><td class="p-2">${escape(entry.row.controlType)}</td><td class="p-2">${escape(entry.row.date)} ${escape(entry.row.time)}</td><td class="p-2">${escape(entry.row.room)}</td><td class="p-2 text-amber-700 dark:text-amber-300">${escape([...(entry.duplicate ? ['Точний дублікат'] : []), ...entry.problems].join('; '))}</td></tr>`);
     document.getElementById('importRows').innerHTML = rows.join('');
+    updateModeSummary();
     const table = tables[currentTable];
     document.getElementById('importRawRows').textContent = table.rows.slice(0, 8).map((row, index) => `${index + 1}: ${row.join(' | ')}`).join('\n');
   }
@@ -34,7 +43,8 @@
     stage(inputTables, name) {
       tables = inputTables.filter(table => table.rows.length).map(table => ({ ...table, config: model.detect(table.rows) }));
       if (!tables.length) throw new Error('У файлі немає таблиць');
-      sourceFile = name; currentTable = 0;
+      sourceFile = name; currentTable = 0; mode.value = 'add';
+      document.getElementById('importMappingDetails').open = tables.some(table => !['discipline', 'group', 'teachers', 'controlType', 'date', 'time', 'room'].every(field => table.config.mapping[field] >= 0));
       const select = document.getElementById('importTableSelect'); select.replaceChildren(); tables.forEach((table, index) => select.add(new Option(table.name || `Таблиця ${index + 1}`, String(index))));
       panel.classList.remove('hidden'); renderMapping(); renderPreview(); panel.scrollIntoView({ behavior: 'smooth' });
     }
@@ -42,7 +52,9 @@
   document.getElementById('importTableSelect').onchange = event => { currentTable = Number(event.target.value); renderMapping(); renderPreview(); };
   document.getElementById('importHeaderRow').onchange = event => { tables[currentTable].config.headerIndex = Math.max(-1, Number(event.target.value) - 1); renderPreview(); };
   for (const id of ['importDefaultGroup', 'importDefaultControl']) document.getElementById(id).onchange = renderPreview;
-  document.getElementById('importRows').onchange = event => { const input = event.target.closest('[data-import-include]'); if (input) preview.entries[Number(input.dataset.importInclude)].include = input.checked; };
+  document.getElementById('importRows').onchange = event => { const input = event.target.closest('[data-import-include]'); if (input) { preview.entries[Number(input.dataset.importInclude)].include = input.checked; updateModeSummary(); } };
+  mode.onchange = () => { const included = preview.entries.map(entry => entry.include); renderPreview(); preview.entries.forEach((entry, index) => { entry.include = included[index]; }); document.querySelectorAll('[data-import-include]').forEach(input => { input.checked = preview.entries[Number(input.dataset.importInclude)].include; }); updateModeSummary(); };
+  document.getElementById('skipImportDuplicates').onchange = updateModeSummary;
   document.getElementById('importReviewed').onchange = event => { document.getElementById('applyImport').disabled = !event.target.checked; };
   document.getElementById('cancelImport').onclick = () => { panel.classList.add('hidden'); document.getElementById('docxFiles').value = ''; };
   document.getElementById('applyImport').onclick = () => {
@@ -52,7 +64,8 @@
     const payload = SA.SessionEditor.getDraft();
     const rows = selected.flatMap(entry => (entry.row.groups.length ? entry.row.groups : ['']).map(group => ({ _source: entry.row, id: crypto.randomUUID(), group,
       discipline: entry.row.discipline, teachers: entry.row.teacher.split(';').map(value => value.trim()).filter(Boolean), controlType: entry.row.controlType, date: entry.row.date, time: entry.row.time, room: entry.row.room })));
-    payload.rows = payload.rows.concat(rows); SA.SessionEditor.applyDraft(payload); panel.classList.add('hidden');
+    if (mode.value === 'replace' && !confirm(`Замінити всі ${payload.rows.length} поточних записів чернетки на ${rows.length} вибраних із файлу? Дані, яких немає у файлі, буде втрачено.`)) return;
+    payload.rows = mode.value === 'replace' ? rows : payload.rows.concat(rows); SA.SessionEditor.applyDraft(payload); panel.classList.add('hidden');
     document.getElementById('docxFiles').value = ''; document.getElementById('step-edit').scrollIntoView({ behavior: 'smooth' });
   };
 })();

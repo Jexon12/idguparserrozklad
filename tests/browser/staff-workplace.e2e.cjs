@@ -99,3 +99,118 @@ test('import preview recognises columns and requires confirmation before modifyi
   await expect(page.locator('#tableBody tr')).toHaveCount(2);
   await expect(page.locator('#tableBody input[data-f="discipline"]').last()).toHaveValue('Фізика');
 });
+
+test('Word export is a docx that can be imported back for editing', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.route('https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js', route => route.continue());
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#wordBtn').click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.docx$/);
+  const file = await download.path();
+  const zip = await require('jszip').loadAsync(require('fs').readFileSync(file));
+  expect(await zip.file('word/document.xml').async('string')).toContain('Математика');
+  await page.locator('#docxFiles').setInputFiles({ name: download.suggestedFilename(), mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: require('fs').readFileSync(file) });
+  await expect(page.locator('#importSummary')).toContainText('нерозпізнаних 0');
+  await expect(page.locator('#importRows')).toContainText('Математика');
+  await expect(page.locator('#importRows')).toContainText('12а');
+  const documentXml = await zip.file('word/document.xml').async('string');
+  zip.file('word/document.xml', documentXml.replace('>101</w:t>', '>404</w:t>'));
+  await page.locator('#cancelImport').click();
+  await page.locator('#docxFiles').setInputFiles({ name: 'edited.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: await zip.generateAsync({ type: 'nodebuffer' }) });
+  await expect(page.locator('#importRows')).toContainText('404');
+  await page.locator('#importMode').selectOption('replace');
+  await page.locator('#importReviewed').check();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#applyImport').click();
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('404');
+  await page.locator('#undoBtn').click();
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('101');
+});
+
+test('replace import counts unchanged rows and can be cancelled or undone', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  const rows = [['Група', 'Предмет', 'Викладач', 'Тип контролю', 'Дата', 'Час', 'Аудиторія'], ['12а', 'Математика', 'Іваненко І.І.', 'іспит', '2027-01-10', '10:00-12:00', '101']];
+  await page.evaluate(rows => window.ScheduleApp.SessionImportUI.stage([{ rows }], 'edited.docx'), rows);
+  await expect(page.locator('#importMappingDetails')).not.toHaveAttribute('open', '');
+  await page.locator('#importMode').selectOption('replace');
+  await expect(page.locator('#importModeSummary')).toContainText('на 1 вибраних');
+  await page.locator('#importReviewed').check();
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.locator('#applyImport').click();
+  await expect(page.locator('#importPreviewPanel')).toBeVisible();
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#applyImport').click();
+  await expect(page.locator('#importPreviewPanel')).toBeHidden();
+  await expect(page.locator('#tableBody tr')).toHaveCount(1);
+  await page.locator('#undoBtn').click();
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('101');
+});
+
+test('Word template and export count are available for an empty draft', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#exportCount')).toContainText('1 із 1');
+  const promise = page.waitForEvent('download');
+  await page.locator('#wordTemplateBtn').click();
+  const download = await promise;
+  expect(download.suggestedFilename()).toBe('session_template.docx');
+  const zip = await require('jszip').loadAsync(require('fs').readFileSync(await download.path()));
+  const xml = await zip.file('word/document.xml').async('string');
+  expect(xml).toContain('<w:tblHeader/>');
+  expect(xml).toContain('<w:cantSplit/>');
+  expect(xml).not.toContain('Математика');
+});
+
+test('opening a JSON file asks before replacing the current draft', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Математика');
+  const file = { name: 'session.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ fields: { sessionTerm: 'Нова сесія', studyForm: 'денна форма навчання' }, rows: [{ id: 'next', discipline: 'Фізика', group: '13а', teachers: ['Петренко'], controlType: 'залік', date: '', time: '', room: '' }] })) };
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.locator('#loadSessionFile').setInputFiles(file);
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Математика');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#loadSessionFile').setInputFiles(file);
+  await expect(page.locator('#tableBody input[data-f="discipline"]')).toHaveValue('Фізика');
+  await expect(page.locator('#sessionTerm')).toHaveValue('Нова сесія');
+});
+
+test('opening a previous cloud version pauses autosave until explicitly saved', async ({ page }) => {
+  const { state } = await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#cloudWorkspace')).toBeVisible();
+  await page.locator('#saveCloudDraft').click();
+  await expect(page.locator('#cloudDraftStatus')).toContainText('версія 1');
+  await page.locator('#tableBody input[data-f="room"]').fill('202');
+  await page.locator('#saveCloudDraft').click();
+  await expect(page.locator('#cloudDraftStatus')).toContainText('версія 2');
+  await page.locator('#cloudAutosave').check();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#openCloudDraft').click();
+  await page.locator('#cloudDraftVersion').selectOption('1');
+  await page.locator('#restoreCloudDraftVersion').click();
+  await expect(page.locator('#cloudAutosave')).not.toBeChecked();
+  await expect(page.locator('#tableBody input[data-f="room"]')).toHaveValue('101');
+  await page.waitForTimeout(2300);
+  expect(state().drafts[0].version).toBe(2);
+  expect(state().drafts[0].payload.rows[0].room).toBe('202');
+  await page.locator('#saveCloudDraft').click();
+  await expect(page.locator('#cloudDraftStatus')).toContainText('версія 3');
+});
+
+test('schedule generation stays with its source controls', async ({ page }) => {
+  await fixture(page, 'methodist');
+  await page.goto('/session-constructor.html');
+  await expect(page.locator('#scheduleSourceOptions #parseBtn')).toHaveCount(1);
+  await expect(page.locator('#scheduleSourceOptions #parseBtn')).toBeHidden();
+  await page.locator('#scheduleSourceOptions summary').click();
+  await expect(page.locator('#parseBtn')).toBeVisible();
+  await expect(page.locator('#loadApiBtn')).toBeVisible();
+});

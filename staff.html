@@ -29,6 +29,23 @@
       </div>
     </header>
 
+    <section aria-labelledby="sessionToolsTitle">
+      <h2 id="sessionToolsTitle" class="text-lg font-black mb-3">Підготовка та публікація сесії</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a href="/session-constructor.html" class="block rounded-2xl bg-white dark:bg-gray-800 shadow p-5 border-l-4 border-violet-500 hover:shadow-lg transition">
+          <div class="text-xs font-bold text-violet-700 dark:text-violet-300">ПІДГОТОВКА</div>
+          <h3 class="font-black text-xl mt-1">Конструктор сесії</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Імпорт Word / Excel, редагування чернетки, експорт у Word (.docx) та публікація перевіреної версії.</p>
+        </a>
+        <a href="/session-admin.html" class="block rounded-2xl bg-white dark:bg-gray-800 shadow p-5 border-l-4 border-emerald-500 hover:shadow-lg transition">
+          <div class="text-xs font-bold text-emerald-700 dark:text-emerald-300">КЕРУВАННЯ</div>
+          <h3 class="font-black text-xl mt-1">Адміністрування сесій</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Версії, резервні копії, кошик, відновлення та журнал адміністративних дій.</p>
+        </a>
+      </div>
+    </section>
+
+
     <section aria-labelledby="systemStateTitle" class="rounded-2xl bg-white p-5 shadow dark:bg-gray-800">
       <form id="staffLogin" class="flex flex-wrap gap-2 mb-4">
         <label for="staffPassword">Пароль адміністратора</label>
@@ -80,21 +97,6 @@
       </div>
     </section>
 
-    <section aria-labelledby="sessionToolsTitle">
-      <h2 id="sessionToolsTitle" class="text-lg font-black mb-3">Підготовка та публікація сесії</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <a href="/session-constructor.html" class="block rounded-2xl bg-white dark:bg-gray-800 shadow p-5 border-l-4 border-violet-500 hover:shadow-lg transition">
-          <div class="text-xs font-bold text-violet-700 dark:text-violet-300">ПІДГОТОВКА</div>
-          <h3 class="font-black text-xl mt-1">Конструктор сесії</h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Робоче місце методиста: чернетка, виправлення проблем, перегляд змін і публікація перевіреної версії.</p>
-        </a>
-        <a href="/session-admin.html" class="block rounded-2xl bg-white dark:bg-gray-800 shadow p-5 border-l-4 border-emerald-500 hover:shadow-lg transition">
-          <div class="text-xs font-bold text-emerald-700 dark:text-emerald-300">КЕРУВАННЯ</div>
-          <h3 class="font-black text-xl mt-1">Адміністрування сесій</h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Версії, резервні копії, кошик, відновлення та журнал адміністративних дій.</p>
-        </a>
-      </div>
-    </section>
 
     <section class="rounded-2xl bg-white dark:bg-gray-800 p-5 shadow"><h2 class="text-lg font-bold">Початкове налаштування</h2><p class="text-sm my-2">Створіть особистий обліковий запис адміністратора, задайте правила установи та додайте методистів і відповідальних за публікацію.</p><a href="/staff-settings.html" class="ui-btn ui-btn-primary inline-block">Правила та доступ персоналу</a></section>
     <section aria-labelledby="settingsTitle">
@@ -107,12 +109,12 @@
     </section>
 
     <aside class="rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm">
-      <strong>Доступ:</strong> зміни та публікація захищені серверним паролем адміністратора. Не передавайте його студентам або викладачам.
+      <strong>Доступ:</strong> увійдіть в особистий обліковий запис. Методист готує чернетки, відповідальний публікує, адміністратор керує доступом. Спільний пароль використовується лише до первинного налаштування.
       <a href="/session.html" class="ml-2 font-bold text-amber-800 dark:text-amber-200 underline">Перевірити публічний вигляд сесії</a>
     </aside>
   </main>
   <script src="/js/app-shell.js?v=b5cbf8bdc9a7"></script>
-  <script src="/js/staff-client.js?v=cdb908eab8a2"></script>
+  <script src="/js/staff-client.js?v=c322f1f46b55"></script>
   <script src="/js/staff-portal.js?v=36b36c88f7ad"></script>
 </body>
 </html>

@@ -758,6 +758,7 @@
     }
     if (!skipConflictDetect) detectConflicts(false);
     renderTable(state.filteredRows);
+    updateExportCount();
     renderDaySummary();
     renderCalendar();
     applyColumnVisibility();
@@ -977,6 +978,7 @@
       const id = String(cb.dataset.id);
       if (cb.checked) state.selectedRowKeys.add(id);
       else state.selectedRowKeys.delete(id);
+      updateExportCount();
     });
   }
 
@@ -1659,7 +1661,7 @@
       window.ScheduleApp.SessionWorkspace?.published(result);
       invalidatePublication(); saveDraft();
       document.getElementById('publicationSummary').textContent = `Опубліковано: додано ${result.added}, змінено ${result.changed}, видалено ${result.removed}. Перевірте публічний розклад.`;
-      setStatus('Перевірену версію сесії опубліковано');
+      setStatus(result.warning || 'Перевірену версію сесії опубліковано');
     } catch (error) { invalidatePublication(); throw error; }
     finally { publicationBusy = false; }
   }
@@ -1728,31 +1730,30 @@
     if (scope === 'selected') return state.rows.filter((r) => state.selectedRowKeys.has(rowKey(r)));
     return state.filteredRows.slice();
   }
-  function exportWord() {
+  function updateExportCount() {
+    document.getElementById('exportCount').textContent = `Буде експортовано ${getScopedRows().length} із ${state.rows.length} записів`;
+  }
+  async function exportWord(template = false) {
     syncFromGrid();
-    const rows = getScopedRows();
+    const rows = template ? [{ discipline: '', group: '', teachers: [], controlType: '', date: '', time: '', room: '' }] : getScopedRows();
     if (!rows.length) return showError('Немає даних для експорту у Word');
-    const grouped = new Map();
-    rows.forEach((r) => {
-      const g = clean(r.group) || '—';
-      if (!grouped.has(g)) grouped.set(g, []);
-      grouped.get(g).push(r);
-    });
-    let body = '';
-    Array.from(grouped.entries()).forEach(([g, list]) => {
-      body += `<h3 style="margin:18px 0 8px 0;">Група: ${escapeHtml(g)}</h3>`;
-      body += '<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%; font-size:12pt;">';
-      body += '<tr><th>№</th><th>Дисципліна</th><th>Викладачі</th><th>Форма контролю</th><th>Дата</th><th>Час</th><th>Аудиторія</th></tr>';
-      list.forEach((r, i) => { body += `<tr><td>${i + 1}</td><td>${escapeHtml(r.discipline)}</td><td>${escapeHtml(r.teachers.join('; '))}</td><td>${escapeHtml(r.controlType || '')}</td><td>${escapeHtml(r.date || '')}</td><td>${escapeHtml(r.time || '')}</td><td>${escapeHtml(r.room || '')}</td></tr>`; });
-      body += '</table>';
-    });
-    const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri, Arial, sans-serif;"><h2>${escapeHtml(resolveSessionTerm() || 'Сесія')}</h2>${body}</body></html>`;
-    const blob = new Blob([html], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `session_${(resolveSessionTerm() || 'session').replace(/\s+/g, '_')}.doc`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    try {
+      if (!window.JSZip) throw new Error('Не завантажений модуль створення Word');
+      const xml = value => escapeHtml(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+      const paragraph = (value, header = false) => `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/>${header ? '<w:b/>' : ''}</w:rPr><w:t xml:space="preserve">${xml(value)}</w:t></w:r></w:p>`;
+      const widths = [400, 3500, 1100, 3100, 1500, 1500, 1500, 1200, 1398];
+      const tableRow = (cells, index) => `<w:tr><w:trPr>${index === 0 ? '<w:tblHeader/>' : '<w:cantSplit/>'}</w:trPr>${cells.map((value, i) => `<w:tc><w:tcPr><w:tcW w:w="${widths[i]}" w:type="dxa"/><w:vAlign w:val="center"/>${index === 0 ? '<w:shd w:fill="E6EDF5"/>' : ''}</w:tcPr>${paragraph(value, index === 0)}</w:tc>`).join('')}</w:tr>`;
+      const headings = ['№', 'Дисципліна', 'Група', 'Викладачі', 'Форма контролю', 'Дата', 'Час', 'Аудиторія', 'Форма іспиту'];
+      const content = [headings, ...rows.map((r, i) => [template ? '' : i + 1, r.discipline, r.group, r.teachers.join('; '), r.controlType, r.date, r.time, r.room, r._source?.examForm || ''])].map(tableRow).join('');
+      const zip = new JSZip();
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraph(resolveSessionTerm() || 'Сесія')}<w:tbl><w:tblPr><w:tblW w:w="15198" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="70" w:type="dxa"/><w:bottom w:w="70" w:type="dxa"/><w:left w:w="70" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar><w:tblBorders>${['top','left','bottom','right','insideH','insideV'].map(side => `<w:${side} w:val="single" w:sz="4" w:color="auto"/>`).join('')}</w:tblBorders></w:tblPr><w:tblGrid>${widths.map(width => `<w:gridCol w:w="${width}"/>`).join('')}</w:tblGrid>${content}</w:tbl><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body></w:document>`);
+      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = template ? 'session_template.docx' : `session_${(resolveSessionTerm() || 'session').replace(/[\\/:*?"<>|\s]+/g, '_')}.docx`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { showError('Експорт Word: ' + error.message); }
   }
 
   async function copyTable() {
@@ -1832,27 +1833,13 @@
           showError('Невалідний файл сесії: немає масиву rows');
           return;
         }
-        // Restore fields
-        const f = data.fields || {};
-        if (typeof f.sessionTerm === 'string') els.sessionTerm.value = f.sessionTerm;
-        if (els.sessionTermSelect && typeof f.sessionTermSelect === 'string') els.sessionTermSelect.value = f.sessionTermSelect;
-        if (typeof f.studyForm === 'string') els.studyForm.value = f.studyForm;
-        if (typeof f.facultySelect === 'string') els.facultySelect.value = f.facultySelect;
-        if (typeof f.semesterPreset === 'string') els.semesterPreset.value = f.semesterPreset;
-        if (typeof f.startDate === 'string') els.startDate.value = f.startDate;
-        if (typeof f.endDate === 'string') els.endDate.value = f.endDate;
-        if (typeof f.zalikStartDate === 'string') els.zalikStartDate.value = f.zalikStartDate;
-        if (typeof f.zalikEndDate === 'string') els.zalikEndDate.value = f.zalikEndDate;
-        if (typeof f.examStartDate === 'string') els.examStartDate.value = f.examStartDate;
-        if (typeof f.examEndDate === 'string') els.examEndDate.value = f.examEndDate;
-        // Restore rows
-        state.rows = data.rows.map((r) => ({ ...r, teachers: Array.isArray(r.teachers) ? r.teachers : splitTeachers(r.teachers || '') }));
-        renderFilters(state.rows);
-        applyFilters();
+        syncFromGrid();
+        if (state.rows.length && !confirm('Замінити поточну чернетку даними з файлу? За потреби спочатку збережіть поточну копію.')) return;
+        document.getElementById('cloudAutosave').checked = false;
+        window.ScheduleApp.SessionEditor.applyDraft(data);
         setMode(data.mode || 'basic');
-        saveDraftDebounced();
         const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('uk-UA') : '';
-        setStatus(`Сесію завантажено з файлу${savedAt ? ' (збережено ' + savedAt + ')' : ''}: ${state.rows.length} записів`);
+        setStatus(`Сесію завантажено з файлу${savedAt ? ' (збережено ' + savedAt + ')' : ''}: ${state.rows.length} записів. Серверне автозбереження вимкнено.`);
         showError('');
       } catch (err) {
         showError('Помилка читання файлу сесії: ' + (err.message || String(err)));
@@ -1869,14 +1856,6 @@
   document.getElementById('clearAllBtn')?.addEventListener('click', () => els.clearDraftBtn?.click());
   document.getElementById('clearApiBtn')?.addEventListener('click', () => clearApiSession(false).catch((e) => showError(e.message || String(e))));
   document.getElementById('purgeApiBtn')?.addEventListener('click', () => clearApiSession(true).catch((e) => showError(e.message || String(e))));
-  document.getElementById('listTermsBtn')?.addEventListener('click', async () => {
-     try {
-       const res = await fetch('/api/session');
-       const data = await res.json();
-       const list = (data.sessions || []).map(s => `${s.term} (${(s.items||[]).length})`).join('\n');
-       alert('Список сесій в API:\n' + (list || 'Порожньо'));
-     } catch(e) { showError(e.message); }
-  });
   els.sessionTermSelect?.addEventListener('change', () => {
      if (els.sessionTermSelect.value) els.sessionTerm.value = els.sessionTermSelect.value;
   });
@@ -1898,7 +1877,8 @@
     document.getElementById('publicationSummary').textContent = e.message || String(e);
   }));
   els.excelBtn.addEventListener('click', exportExcel);
-  els.wordBtn.addEventListener('click', exportWord);
+  els.wordBtn.addEventListener('click', () => exportWord());
+  document.getElementById('wordTemplateBtn').addEventListener('click', () => exportWord(true));
   els.copyBtn.addEventListener('click', () => copyTable().catch((e) => showError(e.message || String(e))));
   els.saveSessionBtn?.addEventListener('click', saveSession);
   els.loadSessionBtn?.addEventListener('click', () => els.loadSessionFile?.click());
@@ -1962,7 +1942,7 @@
   els.groupBySelect?.addEventListener('change', applyFilters);
   els.dateFromFilter?.addEventListener('change', applyFilters);
   els.dateToFilter?.addEventListener('change', applyFilters);
-  els.exportScope?.addEventListener('change', saveViewState);
+  els.exportScope?.addEventListener('change', () => { saveViewState(); updateExportCount(); });
   els.problemFilterBtn?.addEventListener('click', () => {
     state.problemsOnly = !state.problemsOnly;
     applyFilters();
@@ -1971,6 +1951,7 @@
     syncFromGrid();
     state.filteredRows.forEach((r) => state.selectedRowKeys.add(rowKey(r)));
     renderTable(state.filteredRows);
+    updateExportCount();
     applyColumnVisibility();
     setStatus(`Виділено ${state.filteredRows.length} відфільтрованих рядків`);
   });
@@ -2238,6 +2219,7 @@
       const key = rowKey(r);
       if (checked) state.selectedRowKeys.add(key);
       else state.selectedRowKeys.delete(key);
+      updateExportCount();
     });
     renderTable(state.filteredRows);
     saveDraftDebounced();

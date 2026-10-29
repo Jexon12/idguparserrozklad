@@ -8,6 +8,8 @@ const digest = text => crypto.createHash('sha256').update(text).digest('hex').sl
 const vendor = path.join(root, 'js/vendor');
 fs.mkdirSync(vendor, { recursive: true });
 fs.copyFileSync(require.resolve('vue/dist/vue.global.prod.js'), path.join(vendor, 'vue.global.prod.js'));
+fs.copyFileSync(require.resolve('jszip/dist/jszip.min.js'), path.join(vendor, 'jszip.min.js'));
+fs.copyFileSync(require.resolve('jszip/LICENSE.markdown'), path.join(vendor, 'jszip.LICENSE'));
 const assets = new Map();
 const analyticsFile = path.join(path.dirname(require.resolve('@vercel/analytics/package.json')), 'dist/index.mjs');
 const analytics = fs.readFileSync(analyticsFile);

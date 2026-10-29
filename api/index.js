@@ -493,9 +493,11 @@ async function appendAuditEvent(req, action, scope, meta = {}) {
             });
             while (list.length > AUDIT_LOG_LIMIT) list.shift();
             await writeJsonKey(db, 'audit_log', list);
+            return true;
         });
     } catch (e) {
         console.error('appendAuditEvent error', e);
+        return false;
     }
 }
 
@@ -1136,8 +1138,8 @@ const apiHandler = async (req, res) => {
                 const storage = await saveSessionData(storedPayload);
                 const total = store.sessions.reduce((sum, s) => sum + ((s.items || []).length), 0);
                 await saveVersion('session', storedPayload, { updatedByIp: getClientIp(req), term, added });
-                await appendAuditEvent(req, 'update', 'session', { term, added, total });
-                return { success: true, storage, added, changed, removed, count: total, term, revision: sessionRevision(session) };
+                const audited = await appendAuditEvent(req, 'update', 'session', { term, added, total });
+                return { success: true, storage, added, changed, removed, count: total, term, revision: sessionRevision(session), ...(!audited ? { warning: 'Сесію опубліковано, але записати дію до журналу не вдалося. Повідомте адміністратора.' } : {}) };
                 });
                 const publicationResult = payload.draftId && !action ? await Staff.withDraftPublication(req, payload, executePublication) : await executePublication();
                 if (publicationResult) res.status(200).json(publicationResult);
